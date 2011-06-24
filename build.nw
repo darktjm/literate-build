@@ -1,0 +1,2948 @@
+% -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+\documentclass[twoside,english]{article}
+\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
+%%% latex preamble
+\RCS $Id$
+\RCS $Revision$
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
+
+\begin{document}
+
+\title{Syntax Highlighting Modular Build System for NoWeb}
+\author{Thomas J. Moore}
+\date{Version 3.7\\Revision \RCSRevision, 2011}
+
+\maketitle
+
+\begin{abstract}
+
+This document describes, implements, and is built using a modular ``literate
+programming\footnote{\url{http://www.literateprogramming.com/articles.html}
+is a good starting point.}'' build system with syntax highlighting,
+based on Norman Ramsey's
+NoWeb\footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}},
+GNU\footnote{\url{http://www.gnu.org}} make, and a number of other freely
+available support tools.
+
+This document is © 2003--2011 Thomas J. Moore.  This document is licensed
+under the Apache License, Version 2.0 (the ``License''); you may not use
+this document except in compliance with the License. You may obtain a copy
+of the License at \url{http://www.apache.org/licenses/LICENSE-2.0}.  Unless
+required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an ``AS IS'' BASIS, WITHOUT WARRANTIES
+OR CONDITIONS OF ANY KIND, either express or implied. See the License for
+the specific language governing permissions and limitations under the
+License. 
+
+\end{abstract}
+
+\tableofcontents
+
+\section{Overview}
+
+Literate programming is a method of programming devised and named by
+Donald Knuth in 1983, along with the tools to help implement that
+method (Web).  It mainly emphasizes writing a human-readable document
+with embedded code rather than the other way around.  Over the years,
+as others have adopted and adapted the style, the same term has been
+used to mean slightly different things, and the tools have emphasized
+different features.  To me, the important features are mixing of
+documentation and code, and reordering of code chunks to match the
+text, rather than the other way around.  Systems which do not display
+the source code and documentation at the same time (e.g. Doxygen,
+perl's pod) and/or do not provide code reordering (e.g. dtx, lgrind,
+code2html) do not support literate programming.  Knuth would probably
+be even pickier, and reject my use of large code chunks, short
+variable names for temporary variables, long sequences of multiple
+code chunks, and multiple source files and programs in a single
+document, as well as my lack of a language-specific symbol cross
+reference and index (in addition to the chunk index).
+
+Knuth felt that programs should be pleasent to read, like documents
+which happen to have executable code in them.  He believed that his
+method would allow creation of programs which are by their nature
+easier to maintain and less error-prone.  Whether or not a document is
+pleasant to read is always very dependent on the writer (and, to a
+lesser extent, the reader).  Easier maintenance and fewer bugs are
+but a pipe dream: people will in fact be even more tempted to ignore
+the source code in favor of the commentary, thus missing obvious bugs.
+Code reordering, and especially small code chunks may also make it
+difficult for some to follow the code to find out what \emph{really}
+gets executed.  My own reasons for doing this are mainly to keep my
+scattered design notes in one place (the source) and to keep the
+design document in sync with the implementation (since they are the
+same thing).  
+
+Creating programs as documents using literate programming principles
+requires a system that supports easy-to-write documentation, and code that
+is both structured like the documentation and actually part of the
+documentation.  For simple programs, a set of tools which support only a
+single source language and a single program file can be used.  As programs
+become more complicated, though, the number of source files may increase,
+and when designing entire products, the number of source languages may
+increase as well.  Current common public documentation standards also
+require a system which produces at least HTML and PDF output. After long
+searching, I have not found any systems which meet these requirements.
+Instead, the closest is the NoWeb package.  It supports \LaTeX{} and HTML
+output, and an arbitrary number of output files and source languages.
+However, it does little to make the code look like part of the
+documentation.  The code in this document serves to provide a build
+system that includes syntax-highlighted code, at the very least.
+
+While the build system could simply be a carefully crafted shell script, a
+makefile is used instead.  This allows use of implicit rules and the
+system-wide [[CC]] and [[CFLAGS]] defaults.  The default chunk is set to the
+makefile, requiring no chunk name to extract.
+% Begin-doc build-doc
+To build, place the NoWeb source files into their own directory (optionally
+extracting them from the document you are reading first), extract the
+makefile, and make using GNU make:
+
+% Uses \jobname instead of \emph{<this file>} so that cut & paste works mostly
+\begin{quote}{\ttfamily
+\begin{rawhtml}
+<!-->
+\end{rawhtml}
+\ifpdf
+\#{} if your PDF viewer supports attachments, save the attachment\\*
+\#{} otherwise, use pdftk:\\*
+pdftk \jobname.pdf unpack\_files output .\\*
+\else
+\begin{rawhtml}
+<-->
+\end{rawhtml}
+uudecode \jobname.html\\*
+\#{} if uudecode chokes, use this instead:\\*
+\#{} tr '\textbar$\sim$m`' '<>- ' < \jobname.html | uudecode -o \jobname.tar.gz\\*
+gzip -dc \jobname.tar.gz | tar xf -\\*
+\fi
+\#{} then extract the makefile and build
+notangle -t8 build.nw > makefile\\*
+make install
+}\end{quote}
+
+If NoWeb is not available, but perl is, the following code can be copied and
+pasted into a text file using a reasonable document viewer and made
+executable as an imperfect, but adequate [[notangle]] replacement:
+
+\input{perl-notangle.tex} %%% doc
+% End-doc build-doc
+
+As noted below, additional makefile components are created in separate files.
+% Begin-doc build-doc
+Additional build configuration can be done in \texttt{makefile.config}
+before installing (in particular, the install locations).  This file can be
+generated using either \texttt{make makefile.config} or \texttt{make -n}.
+On the other hand, to avoid having to modify this file after cleaning,
+\texttt{makefile.config.local} can be created for this purpose instead.
+% End-doc build-doc
+
+\subsection{Makefile}
+
+The makefile is for building the support files, executable binaries, and
+printable source code (HTML and PDF), maybe installing them, and cleaning up
+afterwards. Configuration information, variable definitions, and
+miscellaneous rules are extracted from not only this NoWeb file, but also
+any others that use it. The makefile itself can be used to include that
+information, but to simplify makefile extraction, all of that information is
+kept in separate files.  Modules that wish to extend the makefile can do so
+using [[<<makefile.config>>]] for user-adjustable variables,
+[[<<makefile.vars>>]] for any other variable definitions, and
+[[<<makefile.rules>>]] for new rules.  Some configuration variables may need
+values before the configuration file is built, though, so defaults are
+included in the makefile, to be overridden by the configuration file.  Note
+that any variable which does not depend on unknowns (noweb chunks or
+variables not yet defined) should be defined using GNU make's ``simply
+expanded'' variable flavor (i.e., [[:=]] instead of plain [[=]]) for
+improved performance.  This has a disadvantage in that overriding simply
+defined variables will require overriding any of its dependents as well, but
+the performance improvement is usually worth it.
+
+\lstset{language=make}
+<<*>>=
+<<makefile>>
+@
+
+<<makefile>>=
+# See makefile.config for variables to override
+# Put local config in makefile.config or makefile.config.local
+<<Common NoWeb Warning>>
+<<Defaults for [[makefile.config]]>>
+-include makefile.config
+-include makefile.config.local
+
+<<Defaults for [[makefile.vars]]>>
+
+-include makefile.vars
+
+all: misc bin doc
+
+# keep intermediate files
+.SECONDARY:
+# mark a few phonies - not really necessary
+.PHONY: all misc bin doc install clean distclean
+
+bin: $(LIB_FILES) $(EXEC_FILES)
+
+doc: $(DOC_FILES)
+
+misc: $(MISC_FILES)
+
+-include makefile.rules
+@
+
+<<Common NoWeb Warning>>=
+# GENERATED FILE:  DO NOT EDIT OR READ THIS FILE
+# Instead, read or edit the NoWeb file(s) from which this was generated,
+# listed below.  Copyright notice and license terms can be found there.
+# $Id$
+@
+
+\lstset{language=txt}
+<<Sources>>=
+$Id$
+@
+
+\lstset{language=make}
+<<makefile.rules>>=
+<<Common NoWeb Warning>>
+install: misc bin
+	mkdir -p $(DESTDIR)$(BIN_DIR)
+	for x in $(EXEC_FILES); do \
+           rm -f $(DESTDIR)$(BIN_DIR)/$$x; \
+           cp -p $$x $(DESTDIR)$(BIN_DIR); \
+         done
+	<<Install other files>>
+
+clean:
+	<<Clean temporary files>>
+	rm -f makefile.{config,vars,rules}
+
+distclean: clean
+	<<Clean built files>>
+	<<Remove makefile>>
+@
+
+<<makefile.config>>=
+# Installation prefix to apply to all install locations
+DESTDIR:=
+# Installation directory for binaries
+BIN_DIR:=/usr/local/bin
+@
+
+<<makefile.vars>>=
+<<Common NoWeb Warning>>
+MAKEFILES:=makefile makefile.config makefile.vars makefile.rules
+EXEC_FILES = <<Executables>>
+
+LIB_FILES = <<Libraries>>
+
+DOC_FILES = <<Source Code Documentation Files>>
+
+MISC_FILES = <<Plain Files>>
+
+@
+
+<<Install other files>>=
+@
+
+<<Plain Files>>=
+\
+@
+
+The makefile can make itself, as well.  This is dependent only on its source
+file; there is little point in making this dependent on the included files,
+as they will be automatically rebuilt as needed, anyway.  A quick check
+before writing out the file ensures that a blank or otherwise seriously
+invalid makefile will never be created due to errors in the source file.
+
+<<makefile.config>>=
+# The name of the file containing the makefile
+BUILD_NOWEB:=build.nw
+@
+
+<<Defaults for [[makefile.config]]>>=
+BUILD_NOWEB=build.nw
+@
+
+<<makefile>>=
+makefile: $(BUILD_NOWEB)
+	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
+	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
+	    env -i $(MAKE) -n -f- /dev/null >/dev/null
+	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
+@
+
+<<Remove makefile>>=
+rm -f makefile
+@@echo
+@@echo Regenerate the makefile with:
+@@echo notangle -t8 $(BUILD_NOWEB) \> makefile
+@
+
+Generating the other files requires the ability to correctly assemble them
+from all the other NoWeb files.
+
+<<makefile.config>>=
+# The name of the source files
+# Any time you change this, makefile.* should be removed and rebuilt
+NOWEB:=$(wildcard *.nw)
+@
+
+<<Defaults for [[makefile.config]]>>=
+NOWEB:=$(wildcard *.nw)
+@
+
+\subsection{Merging Sources}
+
+From these files, an order of building must be derived.  This is done using
+a dependency tree created from special comments in the source files.  These
+comments are at the beginning of a line, and are of the form
+\texttt{\%\%\% requires \emph{X}}, where \emph{X} is either the name of a
+NoWeb file or the name with the \texttt{.nw} removed.  Top-level build files
+are those on which no others depend.  The tree order consists of the
+top-level files, followed by their direct dependencies, in the order found
+in those files, followed by those files' direct dependencies, and so forth,
+with no file repeated.
+
+Finding the dependency directives requires [[grep]], and removing the
+pattern requires [[sed]].  Due to the sloppiness of the patterns and other
+parsing, no file names can contain colons or spaces.  This is all done using
+GNU make's internal functions so that the results can be easily used in
+other rules.
+
+<<Defaults for [[makefile.vars]]>>=
+NOWEB_DEPS:=$(shell grep '^%%% requires ' $(NOWEB) /dev/null | \
+                    sed 's/%%% requires //;s/[[:space:]]*\(%.*\)*$$//;s/:/ /')
+@
+
+After the dependencies are found, they are separated into files which depend
+on others ([[NOWEB_UPPER]]), and files which are depended on
+([[NOWEB_LOWER]]).   The files whilch are depended on may be specified
+without the \texttt{.nw} extension, so the filesystem is checked for the
+file, and \texttt{.nw} is added if the file does not exist.  If it still
+does not exist after tacking on \texttt{.nw}, the missing file is an error.
+
+<<Defaults for [[makefile.vars]]>>=
+# return rest of words of parm 2, starting at parm 1
+rest = $(wordlist $1,$(words $2),$2)
+
+# return every other word of parm, starting with first
+ret_other = $(word 1,$1) $(if $(word 3,$1),$(call ret_other,$(call rest,3,$1)))
+
+NOWEB_UPPER:=$(call ret_other,$(NOWEB_DEPS))
+
+NOWEB_LOWER_BASE:=$(call ret_other,$(wordlist 2,$(words $(NOWEB_DEPS)),$(NOWEB_DEPS)))
+
+NOWEB_LOWER:=$(foreach f,$(NOWEB_LOWER_BASE),$(if $(wildcard $f),$f,\
+                                           $(if $(wildcard $f.nw),$f.nw, \
+					   $(error $f and $f.nw not found))))
+@
+
+Next, the tree is traversed, from top to bottom.  The top is simply the list
+of files on which no other files depend.  There must be at least one file at
+the top, or nothing will work correctly.  Then, each file in the list is
+checked for as-yet unfulfilled dependencies to tack on.  No dependency may
+appear before files upon which it depends, so the dependecies are repeatedly
+tacked onto the start of the list and stripped from the rest until the tree
+settles.
+
+<<Defaults for [[makefile.vars]]>>=
+NOWEB_HIGHEST:=$(filter-out $(NOWEB_LOWER),$(NOWEB))
+
+$(if $(NOWEB_HIGHEST),,$(error Invalid dependency tree))
+
+# return words from parm #3 in positions of parm #2 which match parm #1
+match_words = $(if $(filter $1,$(word 1,$2)),$(word 1,$3)) \
+  $(if $(word 2,$2),$(call match_words,$1,$(call rest,2,$2),$(call rest,2,$3)))
+
+# return only unique words in parm, keeping only first occurrence
+uniq = $(if $1,\
+  $(firstword $1) $(call uniq,$(filter-out $(firstword $1),$(call rest,2,$1))))
+
+# tack dependencies to left
+predeps = $(call uniq, $(foreach f,$1,\
+	        $(call match_words,$f,$(NOWEB_UPPER),$(NOWEB_LOWER))) $1)
+
+# true if lists not equal
+listne = $(strip $(if $1,$(if $2,$(if $(filter $(word 1,$1),$(word 1,$2)), \
+                $(call listne,$(call rest,2,$1),$(call rest,2,$2)), \
+	          y1), y2), $(if $2, y3)))
+
+# expand dependencies until there are no more
+tree = $(if $(call listne,$1,$(call predeps,$1)), \
+           $(call tree,$(call predeps,$1)), $1)
+
+NOWEB_ORDER:=$(call tree,$(NOWEB_HIGHEST))
+
+ifeq ($(PROJECT_NAME),)
+PROJECT_NAME:=$(subst .nw,,$(firstword $(NOWEB_HIGHEST)))
+endif
+@
+
+<<makefile.config>>=
+#Set to override the automatically determined project name
+#PROJECT_NAME=
+@
+
+<<makefile.rules>>=
+prtree:
+	@echo Project: $(PROJECT_NAME)
+	@echo Highest: $(NOWEB_HIGHEST)
+	@echo Upper: $(NOWEB_UPPER)
+	@echo Lower: $(NOWEB_LOWER)
+	@echo Order: $(NOWEB_ORDER)
+@
+
+So, to generate a file, all of these NoWeb files are concatenated, in
+reverse order, and passed into [[notangle]].  The makefile components in
+particular need to be checked for errors in mostly the same way as the main
+makefile.
+
+<<makefile>>=
+makefile.config: $(NOWEB_ORDER)
+	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
+	notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	-notangle -t8 -R$@ $^ > $@
+
+makefile.vars: makefile.config
+	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
+	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
+	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
+
+makefile.rules: makefile.vars
+	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
+	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
+	                                     $(NOWEB_ORDER) 2>/dev/null | \
+	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
+@
+
+Building plain files is done the same way, but without the complicated
+checks, assuming that no additional processing needs to be done.  For files
+where additional processing is necessary, additional dependencies on the
+[[misc]] target, as well as [[<<Install other files>>]] can be used to add
+files with special build rules.
+
+<<makefile.rules>>=
+$(MISC_FILES): $(NOWEB_ORDER)
+	-notangle -R$@ $^ >$@
+@
+
+<<Clean built files>>=
+rm -f $(MISC_FILES)
+@
+
+\subsection{Additional Features}
+
+It may also be useful to build a tar file for building on systems where
+NoWeb is not present.  This is meant to be a convenience, for building
+binaries only, and not for distribution.  That means neither the source
+documentation nor any means to build the source documentation will be
+included.  Since it is not possible to distinguish between soft links
+created for building and soft links to other NoWeb files, no attempt will be
+made to force link dereferencing, either.
+
+<<makefile.rules>>=
+$(PROJECT_NAME)-src.tar.gz: $(BUILD_SOURCE)
+	@# needs GNU tar
+	tar czf $(PROJECT_NAME)-src.tar.gz $(BUILD_SOURCE)
+@
+
+<<makefile.vars>>=
+BUILD_SOURCE=$(NOWEB) $(MAKEFILES) $(MISC_FILES) <<Build Source>>
+
+@
+
+<<Clean built files>>=
+rm -f $(PROJECT_NAME)-src.tar.gz
+@
+
+It may also be useful to get some source code statistics.  Code counts
+include all code chunks, but do not include the chunk name/start line or the
+terminating [[@]].  Hidden sections are not included; they are delimited by
+\texttt{<!-\,->} and \texttt{<-\,->} on their own line.
+
+<<makefile.rules>>=
+count:
+	@for x in $(NOWEB); do \
+	   echo $${x}:; \
+	   <<Count lines in [[$$x]]>> \
+         done
+	@echo "Tangled output:"
+	@wc -l $(MISC_FILES) <<Files to Count>>
+	      </dev/null | sort -k1n
+@
+
+<<Count lines in [[$$x]]>>=
+tl=`cat $$x | wc -l`; \
+bl=`grep -c '^[[:space:]]*$$' $$x`; \
+hl=`sed -n -e '/^<!-->$$/{:a p;n;/^<-->$$/!ba;}' < $$x | wc -l`; \
+cl=`sed -n -e '/^@<<.*>>=/{:a n;/^@[^@]/b;/^@$$/b;/^[[:space:]]*$$/!p;ba;}' \
+           -e '/^<!-->$$/{:b n;/^<-->$$/!bb;}' < $$x | wc -l` ; \
+echo " Lines: $$tl:"; \
+echo "  $$cl code, $$((tl-bl-hl-cl)) doc, $$hl hidden, $$bl blank";
+@
+
+Finally, there is a rule to check the consistency of the NoWeb source.
+Checking the list of chunks which are not specifically referenced requires
+human intervention, so all root chunks are printed out for review.  The list
+of missing chunks should always be accurate, though.  The terminating [[@]]
+for code chunks isn't required by the NoWeb syntax when writing multiple
+consecutive code chunks, but it is required by some of the document
+converters.
+
+<<makefile.rules>>=
+check:
+	@$(NOROOTS) $(NOWEB) | sed 's/@<<//;s/@>>//;' | sort | while read x; do \
+          echo "Root: $$x"; \
+          notangle -R"$$x" $(NOWEB) >/dev/null; \
+        done
+	@for f in $(NOWEB); do \
+	   lno=1 gotat=y; \
+           while read -r x; do \
+             case "$$x" in \
+                "@<<"*"@>>"=) \
+                   test "$$gotat" || echo "$$f: $$prev not terminated by @"; \
+                   gotat=; \
+                   prev="$${lno}: $$x";; \
+                @|@[^@]*) \
+                   gotat=y; \
+             esac; \
+             lno=$$((lno+1)); \
+           done < "$$f"; \
+	 done
+@
+
+\section{Binaries}
+
+Building the binaries is pretty simple, using automatic rules.  Support is
+provided here for plain text executable scripts and C executables.  In order
+to ensure a consistent build rule for all C files, the default
+C-to-executable rule is blanked out.  Executables are assumed to have one
+mainline source, named the same as the executable but with a \texttt{.c}
+extenstion.  All local libraries built from local sources are linked into
+every executable.
+
+Since all C files share the same rule, a hook ([[C_POSTPROCESS]]) is
+provided for doing further modifications to the code before compilation.
+The hook is in the form of a GNU make function call, which takes the target
+file name as an argument.  It is expected to return an appropriate pipeline
+for that target.  Scripts, on the other hand, are easy enough to modify
+using separate rules.
+
+<<Executables>>=
+$(C_EXEC) $(SCRIPT_EXEC) \
+@
+
+<<makefile.vars>>=
+SCRIPT_EXEC=<<Script Executables>>
+
+C_EXEC=<<C Executables>>
+
+CFILES:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.c>>/{s/@<<//;s/@>>//;p;}')
+HEADERS:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.h>>/{s/@<<//;s/@>>//;p;}')
+COFILES:=$(patsubst %.c, %.o, $(CFILES))
+@
+
+<<Build Source>>=
+$(SCRIPT_EXEC) \
+@
+
+<<makefile.config>>=
+# Set to -L for #line, but lose code indentation
+USE_LINE:=-L
+@
+
+<<makefile.rules>>=
+$(SCRIPT_EXEC): $(NOWEB)
+	-notangle -R$@ $(NOWEB_ORDER) >$@
+	chmod +x $@
+
+# C_POSTPROCESS can be used to add boilerplate code
+$(HEADERS): $(NOWEB)
+	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
+
+$(CFILES): $(NOWEB)
+	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
+
+%: %.c
+
+%.o: %.c
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@ $<
+
+%: %.o
+	$(CC) -o $@ $< $(LDFLAGS) -L. $(LOCAL_LIBS) $(EXTRA_LDFLAGS)
+@
+
+<<Files to Count>>=
+$(CFILES) \
+@
+
+<<Clean temporary files>>=
+rm -f *.[choa]
+@
+
+<<Clean built files>>=
+rm -f $(EXEC_FILES)
+@
+
+<<Script Executables>>=
+\
+@
+
+<<C Executables>>=
+\
+@
+
+<<Build Source>>=
+$(CFILES) $(HEADERS) \
+@
+
+The local libraries are built using a chunk naming convention.
+[[<<Library [[name]] Members>>]] chunks contain a plain listing of included
+object files.  No support for shared libraries is provided at this time.
+Ideally, this should ensure that libraries dependent on others are listed
+earlier in the library order.  Instead, the list is printed in reverse
+order, so the least dependent libraries are printed first.
+
+<<makefile.vars>>=
+# Old sed barfs on T and use of ; to separate commands with labels:
+#   sed -n 's/@<<Library \[\[\(.*\)]] Members>>/\1/;T;p'
+# so use grep instead
+LOCAL_LIBS_BASE:=$(shell $(NOROOTS) $(NOWEB_ORDER) | \
+        grep '@<<Library \[\[\(.*\)]] Members@>>' | \
+           sed 's/@<<Library \[\[\(.*\)]] Members@>>/\1/' | tac)
+LOCAL_LIBS:=$(LOCAL_LIBS_BASE:%=-l%)
+LOCAL_LIB_FILES:=$(LOCAL_LIBS_BASE:%=lib%.a)
+@
+
+<<makefile.rules>>=
+$(C_EXEC): $(LOCAL_LIB_FILES)
+@
+
+While it would be nice to not have to generate yet another support file for
+this, notangle is required for this to work.  One of the goals of this
+system is to be able to generate a source tarball that does not depend on
+notangle.
+
+<<makefile.rules>>=
+#define build-lib
+#lib$(1).a: $(2)
+#	rm -f $$@
+#	ar cr $$@ $$^
+#	ranlib $$@
+#endef
+#
+#$(foreach l,$(LOCAL_LIBS_BASE),$(eval $(call build-lib,$l, \
+#     $(shell notangle -R'Library [[$l]] Members' $(NOWEB_ORDER) 2>/dev/null))))
+@
+
+Instead, [[makefile.libs]] is generated with the macros expanded.
+
+<<makefile.rules>>=
+MAKEFILES+=makefile.libs
+-include makefile.libs
+makefile.libs: makefile.rules
+	for x in $(LOCAL_LIBS_BASE); do \
+	   printf %s lib$$x.a:; \
+	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
+	   printf '\n\trm -f $$@\n'; \
+	   printf '\tar cr $$@ $$^\n'; \
+	   printf '\tranlib $$@\n'; \
+	done > $@
+@
+
+<<Clean temporary files>>=
+rm -f makefile.libs
+@
+
+Of course it might be useful to also provide installation rules for selected
+libraries, as well as their support files (header files and API
+documentation), but that is left for a future revision.
+
+<<Libraries>>=
+$(LOCAL_LIB_FILES) \
+@
+
+In addition to distributed binaries, test binaries may be built and
+executed.  Other than checking return codes, no interpretation of test
+results is supported.  It is intended primarily for manual testing.  Sample
+binaries may be placed under these rules, as well.
+
+<<makefile.rules>>=
+test-bin: $(TEST_EXEC) $(TEST_EXEC_SUPPORT)
+
+$(TEST_EXEC):  $(LIB_FILES)
+
+test: test-bin
+	set -e; for f in $(TEST_EXEC); do echo running $$f:; ./$$f; done
+@
+
+<<makefile.vars>>=
+TEST_EXEC=<<Test Executables>>
+
+TEST_C_EXEC=<<C Test Executables>>
+
+TEST_SCRIPT_EXEC=<<Test Scripts>>
+
+TEST_EXEC_SUPPORT=<<Test Support Executables>>
+
+TEST_C_EXEC_SUPPORT=<<C Test Support Executables>>
+
+TEST_SCRIPT_EXEC_SUPPORT=<<Test Support Scripts>>
+
+@
+
+<<Test Executables>>=
+$(TEST_C_EXEC) $(TEST_SCRIPT_EXEC) \
+@
+
+<<C Test Executables>>=
+\
+@
+
+<<Test Scripts>>=
+\
+@
+
+<<Test Support Executables>>=
+$(TEST_C_EXEC_SUPPORT) $(TEST_SCRIPT_EXEC_SUPPORT) \
+@
+
+<<C Test Support Executables>>=
+\
+@
+
+<<Test Support Scripts>>=
+\
+@
+
+<<makefile.rules>>=
+$(TEST_C_EXEC_SUPPORT) $(TEST_C_EXEC): $(LOCAL_LIB_FILES)
+$(TEST_C_EXEC): $(TEST_C_EXEC_SUPPORT)
+
+$(TEST_SCRIPT_EXEC) $(TEST_SCRIPT_EXEC_SUPPORT): $(NOWEB)
+	-notangle -R$@ $(NOWEB_ORDER) >$@
+	chmod +x $@
+
+@
+
+<<Clean temporary files>>=
+rm -f $(TEST_EXEC) $(TEST_C_EXEC:%=%.c) $(TEST_EXEC_SUPPORT) \
+        $(TEST_C_EXEC_SUPPORT:%=%.c)
+@
+
+\subsection{Support Files}
+
+Since [[noroots]] may not be on the target system, for example when using
+the tar file, a close equivalent is provided.  In fact, when building just
+the code, it is likely that the only part of NoWeb required is [[notangle]].
+For this, an equivalent can be provided in [[perl]], which is installed on
+most modern UNIX systems by default.  It is not a perfect emulation, but
+it should be close enough.  It is presented as a pastable document, rather
+than a NoWeb source chunk, so that reasonable document viewers can extract
+it fairly easily.
+
+<<makefile.config>>=
+# The noroots command is used to extract file names from $(NOWEB)
+# The following works well enough in most cases if noweb is missing
+NOROOTS=$(shell if type -p noroots >/dev/null 2>&1; then \
+                  echo noroots; \
+                else \
+		  echo 'sh -c "sed -n '\''/^@<<.*@>>=\$$/{s/=\$$//;p;}'\'' \$$* \
+		                 | sort -u" /dev/null';  \
+                fi)
+@
+
+% Begin-doc perl-notangle
+\begin{quote}
+\footnotesize
+\begin{verbatim}
+#!/bin/sh
+#!perl
+# This code barely resembles noweb's notangle enough to work for simple builds
+eval 'exec perl -x -f "$0" "$@"'
+  if 0;
+
+my $chunk = '*';  my $tab = 0; my ($inchunk, %chunks);
+
+while($#ARGV > 0 && $ARGV[0] =~ /^-.*/) {
+  if($ARGV[0] =~ /^-R/) {
+    $chunk = $ARGV[0];
+    $chunk =~ s/-R//;
+  } elsif($ARGV[0] =~ /^-t(.*)/) {
+    $tab = $1;
+  }
+  shift ARGV;
+}
+
+# Extract raw chunks
+while(<>) {
+  if(/^@<<(.*)@>>=$/) {
+    $inchunk = $1;
+  } elsif(/^@( |$)/) {
+    $inchunk = "";
+  } elsif($inchunk ne "") {
+    $chunks{$inchunk} .= $_;
+  }
+}
+# Substitute chunks with indentation simulation
+my $chunkout = $chunks{$chunk};
+while($chunkout =~ /(?:^|\n)(|[^\n]*[^\n@])(?:@<<((?:[^>\n]|>[^>\n])*)@>>)/) {
+  my $cv = $chunks{$2};
+  my $ws = $1;
+  $cv =~ s/\n$//;
+  $ws =~ s/\S/ /g;
+  $cv =~ s/\n/$&$ws/g;
+  $chunkout =~ s/(^|[^@])(@<<(([^>\n]|>[^>\n])*)@>>)/$1$cv/;
+}
+$chunkout =~ s/@(@<<|@>>)/\1/g;
+$chunkout =~ s/((^|\n)\t*) {$tab}/$1\t/g if($tab gt 0);
+print $chunkout;
+\end{verbatim}
+\end{quote}
+% End-doc perl-notangle
+
+In order to avoid having to duplicate function prototypes in the main code
+and a header, the prototypes are generated automatically using
+cproto\footnote{\url{http://invisible-island.net/cproto/}}.
+
+\lstset{language=make}
+<<makefile.rules>>=
+$(COFILES): $(HEADERS) cproto.h
+
+cproto.h: $(CFILES)
+	echo >$@
+	cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $(CFILES) >$@.new 2>/dev/null
+	mv -f $@.new $@
+
+
+static_proto_rule=$1: $(1:%.o=%.c.static_proto)
+$(foreach f,$(COFILES),$(eval $(call static_proto_rule,$f)))
+cproto.h: $(CFILES:%=%.static_proto)
+%.c.static_proto: %.c
+	echo >$@
+	notangle -R$<.static_proto $(NOWEB_ORDER) >$@.new 2>/dev/null || :
+	cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $< >>$@.new 2>/dev/null
+	mv -f $@.new $@
+@
+
+<<Build Source>>=
+cproto.h \
+@
+
+<<Clean temporary files>>=
+rm -f cproto.h.new *.c.static_proto{,.new}
+@
+
+<<makefile.vars>>=
+C_POSTPROCESS = | sed '/^\#include "cproto.h"/a \#include "$1.static_proto"'
+@
+
+<<Build Source>>=
+$(CFILES:%=%.static_proto) \
+@
+
+\subsection{Support Chunks}
+
+In addition, C files can all take advantage of the fact that most headers
+are harmless to include, so it's easier to just include everything
+everywhere.  The prototypes cannot be included in this list, because they
+really need to come last.
+
+\lstset{language=C}
+<<Common C Includes>>=
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
+#include <errno.h>
+@
+
+<<Common C Header>>=
+/*
+  <<Common NoWeb Warning>>
+*/
+<<Common C Includes>>
+#include "cproto.h"
+static const char version_id[] = <<Version Strings>>;
+@
+
+<<Version Strings>>=
+"$Id$\n"
+@
+
+Some of those prototypes are hard to enable, but here are a few extra flags
+to help.
+
+\lstset{language=make}
+<<makefile.vars>>=
+EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
+                -D_XOPEN_SOURCE_EXTENDED=1
+@
+
+\section{PDF Code Documentation}
+
+Building the PDF code documentation is simple: just convert to \LaTeX{}
+using [[noweave]], and then convert to PDF using [[pdflatex]].  [[pdflatex]]
+needs to be invoked repeatedly until the cross references settle down.  Of
+course the figures need to be converted to the appropriate format, too.
+Rules are provided for EPS, xfig, and dia diagrams, since they can be stored
+in-line in the NoWeb source; additional rules can be provided for other
+image formats.
+
+<<Source Code Documentation Files>>=
+$(patsubst %.nw,%.pdf,$(NOWEB)) \
+@
+
+<<makefile.rules>>=
+figs=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $1)
+pdf_figrule=$(basename $1).pdf: $(patsubst %,%.pdf,$(call figs,$1))
+$(foreach f,$(NOWEB),$(eval $(call pdf_figrule,$f)))
+
+%.pdf: %.tex
+	set -e; \
+	while :; do \
+              pdflatex $< >/dev/null; \
+              fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+        done
+	@fgrep -i overfull $*.log || :
+	@fgrep -i underfull $*.log | fgrep -v vbox || :
+@
+
+<<makefile.vars>>=
+LATEX_REDO_MSG:="LaTeX Warning: Label(s) may have changed."
+
+FIGS:=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $(NOWEB))
+FIGS_EPS:=$(patsubst %, %.eps, $(FIGS))
+FIGS_PDF:=$(patsubst %, %.pdf, $(FIGS))
+FIGS_DIA:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.dia>>/{s/@<<//;s/@>>//;p;}')
+FIGS_XFIG:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.fig>>/{s/@<<//;s/@>>//;p;}')
+FIGS_EPS_RAW:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.eps>>/{s/@<<//;s/@>>//;p;}')
+@
+
+<<makefile.rules>>=
+$(FIGS_DIA): $(NOWEB)
+	notangle -R$@ $(NOWEB_ORDER) | gzip >$@
+
+%.eps: %.dia
+	dia -e $@ $<
+
+$(FIGS_EPS_RAW): $(NOWEB)
+	notangle -R$@ $(NOWEB_ORDER) >$@
+
+$(FIGS_XFIG): $(NOWEB)
+	notangle -R$@ $(NOWEB_ORDER) >$@
+
+%.eps: %.fig
+	fig2dev -L eps $< $@
+
+%.pdf: %.eps
+	epspdf $< 2>/dev/null || epstopdf $<
+	# epstopdf gives no return code on errors, so:
+	pdfinfo $@ >/dev/null
+@
+
+<<Clean temporary files>>=
+rm -f *.{log,aux,out,toc,lof,tex,dia,eps} $(FIGS_PDF)
+@
+
+<<Clean built files>>=
+rm -f *.pdf
+@
+
+\subsection{Pretty Printing Wrapper}
+
+Or at least it should be simple, but some additional adjustments of the
+standard NoWeb process need to be made.  For one thing, NoWeb does not
+pretty-print code chunks natively, so pretty-printing the code chunks
+requires a bit of work.  A generic code chunk formatter filter for NoWeb is
+used for this.  Like all noweb filters, it just sucks in the marked up form
+of the NoWeb source and spits out the same, with modifications.  The
+language is tracked so that the formatter can behave differently depending
+on language.
+
+<<makefile.vars>>=
+DOC_SCRIPTS=<<Source Doc Scripts>>
+
+@
+
+<<makefile.rules>>=
+$(DOC_SCRIPTS): $(NOWEB)
+	-notangle -R$@ $(NOWEB_ORDER) >$@
+	chmod +x $@
+@
+
+<<Clean temporary files>>=
+rm -f $(DOC_SCRIPTS)
+@
+
+<<Source Doc Scripts>>=
+nwhlchunk \
+@
+
+\lstset{language=perl}
+<<nwhlchunk>>=
+#!/bin/sh
+#!perl
+<<Common NoWeb Warning>>
+eval 'exec perl -x -f "$0" "$@"'
+  if 0;
+
+use strict;
+
+<<Initialize [[nwhlchunk]]>>
+
+while(<STDIN>) {
+  print $_; # print most lines
+  <<Process lines from NoWeb token stream>>
+}
+@
+
+Language is determined by scanning for language settings from the listings
+package, which may be commented out if the listings package isn't currently
+being used.
+
+<<Initialize [[nwhlchunk]]>>=
+my $lang = 'txt';
+@
+
+<<Process lines from NoWeb token stream>>=
+# [^{] is to prevent self-match
+if(/lstset{language=(?:.*\])?([^}]*)[^{]*/) {
+  $lang = lc $1;
+}
+@
+
+A code chunk begins with the chunk name, which can be ignored.  After that,
+all lines are sucked in as part of the code, until the end of the chunk.
+
+<<Process lines from NoWeb token stream>>=
+if(/^\@begin code/) {
+  # skip @defn
+  $_ = <STDIN> or last;
+  print $_;
+  # skip @nl
+  $_ = <STDIN> or last;
+  print $_;
+  # accumulate code in $code
+  my $code = '';
+  <<Accumulate code for highlighting>>
+  <<Highlight accumulated code>>
+}
+@
+
+Chunk references ([[@use]]) are replaced with a marker in the code that
+should work with most dumb code formatters.  The marker is later replaced by
+the [[@use]] in the output stream.  The marker can be any unique string that
+isn't likely to appear in code.  No matter what is chosen, some bits of code
+will probably need to be modified to ensure the pattern never appears.  For
+now, this uses tripled caret ([[^]]) characters.  Other characters that
+might've worked are doubled or tripled at signs ([[@]]), tildes ([[~]]), or
+backticks ([[`]]).  Index definitions are moved to the bottom of the chunk
+rather than being marked and replaced like [[@use]]; this removes the
+immediate context, but also eliminates highlighter confusion.
+
+<<Initialize [[nwhlchunk]]>>=
+my $marker = '^'.'^^';
+@
+
+<<Accumulate code for highlighting>>=
+# accumulate @use in @use
+my @use;
+# accumulate index defns in $end
+my $end = '';
+while(<STDIN>) {
+  if(/^\@text/) {
+    s/^\@text //;
+    s/\n//;
+    $code .= $_;
+  } elsif($_ eq "\@nl\n") {
+    $code .= "\n";
+  } elsif(/^\@index ((local|)defn|nl)/) {
+    $end .= $_;
+  } elsif(/^\@(use|index|xref)/) {
+    $code .= $marker;
+    push @use, $_;
+  } elsif(/^\@end/) {
+    push @use, $end . $_;
+    last;
+  } else {
+    print STDERR " ????? " . $_ . " ?????\n";
+  }
+}
+@
+
+The prettifier is passed in on the command line; it takes one (additional)
+argument - the name of the current language.  It takes raw code (with
+markers for chunk references), and returns pretty code.  Steps must be taken
+by the prettifier to ensure that the markers remain intact.  The output of
+the prettifier is placed in the NoWeb stream as [[@literal]]
+lines\footnote{Ramsey says I should write a new back end for this purpose,
+and has deprecated the [[@literal]] directive for this reason.  Writing an
+entire back end just to reformat the code chunks a bit seems extreme,
+though.  As of 2.11b, the directive still works.}; markers are replaced by
+the appropriate [[@use]] line from [[$use]].
+
+The whole reason this was written in perl, rather than shell or awk, was to
+get speed (which awk already gave over the shell) and bidirectional pipes.
+This requires the [[open2()]] function.  In addition, the command is passed
+as individual arguments, gaining a little more speed by not calling the
+shell to parse the command at every invocation.
+
+<<Initialize [[nwhlchunk]]>>=
+use FileHandle;
+use IPC::Open2;
+@
+
+<<Highlight accumulated code>>=
+my ($pid, $reader, $writer);
+$pid = open2($reader, $writer, @ARGV, $lang);
+
+print $writer $code;
+close $writer;
+
+while(<$reader>) {
+  while((my $m = index($_, $marker)) >= 0) {
+    if($m > 0) {
+      print '@literal ' . substr($_, 0, $m) . "\n";
+    }
+    print shift @use;
+    $_ = substr($_, $m + length($marker));
+  }
+  if(length($_) > 1) { # 1 == just \n
+    print '@literal ' . $_;
+  }
+  print "\@nl\n";
+}
+print shift @use; # the end
+close $reader;
+waitpid $pid, 0;
+@
+
+\subsection{Pretty Printing with [[highlight]] and [[framed]]}
+
+So, to use the [[highlight]]\footnote{\url{http://www.andre-simon.de}}
+utility with this wrapper, an additional wrapper script needs to be made.
+It runs [[highlight]] and massages the output a bit.
+
+\lstset{language=sh}
+<<Source Doc Scripts>>=
+latexhl \
+@
+
+<<latexhl>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+<<Highlight background color>>
+highlight --out-format=latex -S $1 -E `pwd` -f | sed -n '
+ # removes 1st 2 lines (setting font & spacing - already done)
+ 3 {
+  :a
+   # remove last few lines (just extra whitespace & restoring font/spacing)
+   /^\\mbox{}$/bb
+   # detexify triple-^
+   s/\(\\textasciicircum \)\1\1/^''^^/g
+   # remove unnecessary fill on every line
+   s/\\hspace\*{\\fill}\\\\$//
+   # add strut to first line
+   3s/$/\\strut{}/
+   # use {} instead of single space to terminate TeX cmds
+   s/\(\\[a-z][a-z]*\) /\1{}/g
+   # remove last CR by tacking on % to last line; requires deferred print
+   x;3!p;n
+   ba
+  :b
+   3b
+   g;s/$/%/;p
+ }'
+@
+
+To make [[highlight]] do its job, background color needs to be supported as
+well.  To do this, a box-type environment that sets background colors and
+can span pages is needed.  The [[framed]] package comes close, but requires
+a bit of work to get the chunk to associate strongly with its header line.
+Without moving the code margin outside of the frame, it also extends the
+color box too far to the left.  In the interest of simplicity, though, it
+will be used instead of writing an equivalent replacement.
+
+One problem to watch out for with [[framed]] is that if a code chunk starts
+at the bottom of a page, it is sometimes not broken at subsequent page
+boundaries.  These chunks can be detected by scanning the \LaTeX{} log for
+\texttt{Overfull $\backslash$vbox} messages.  This can be cured by inserting
+an explicit [[\break]] before the affected code chunk.  All [[\break]]
+commands should be revisited regularly to make sure they are still necessary
+as the document changes.  Of course this could also be taken as a sign that
+it is time to break the code chunk into smaller chunks, but sometimes
+breaking things up just for the sake of making them smaller just makes
+things messier.
+
+<<Highlight background color>>=
+echo '\begin{framed}\advance\leftskip-\codemargin%'
+@
+
+<<latexhl>>=
+echo '\end{framed}%'
+@
+
+\lstset{language=TeX}
+<<Framed Code Preamble>>=
+\usepackage{framed}
+\setlength\FrameSep{0pt}
+\setlength\FrameRule{0pt}
+% nwdoit is the code header & flag indicating pass <= 2
+% nwdoita is a flag indicating pass #1
+\let\nwdoit\relax\let\nwdoita\relax
+\def\FrameCommand#1{%
+  \ifx\nwdoit\relax%
+    % 3rd+ pass is subsequent pages - no code header
+    \hskip\codemargin\colorbox{bgcolor}{#1}%
+  \else%
+    % 1st pass is invisible sizing pass, but only on older TeX.  How to tell?
+    % 2nd pass is 1st page
+    \vbox{\vbox{\nwdoit}\colorbox{bgcolor}{#1}}%
+    \ifx\nwdoita\relax%
+      \global\let\nwdoit\relax%
+     % comment/uncomment next line if TeX newer/older
+%    \else%
+      \global\let\nwdoita\relax%
+    \fi%
+  \fi}
+\renewenvironment{framed}%
+  {\MakeFramed {\advance\hsize-2\fboxsep\advance\hsize-\codemargin%
+   \FrameRestore}}%
+  {\endMakeFramed}
+@
+
+\lstset{language=sed}
+<<Insert code header into frame>>=
+/\\nwbegincode/s/\(sublabel{[^}]*}\)\(.*\)/\1\\def\\nwdoita{}\\def\\nwdoit{\2}%/
+@
+
+The color itself comes from [[highlight]]'s style file output.  This is
+further adjusted to make sure all code has a visible background color, to
+easily distinguish code from documentation.  This is done by generating the
+style file on standard output instead of \texttt{latexhl.sty}, and adjusting
+with [[sed]].
+
+\lstset{language=sh}
+<<Generate [[latexhl.sty]]>>=
+# Replace white bg by really light gray to distinguish code from text
+highlight ${theme:+-s $theme} -S c -L -I < /dev/null | \
+  egrep 'newcommand|definecolor' | \
+    sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty
+@
+
+<<Clean temporary files>>=
+rm -f *.sty
+@
+
+Finally, a few syntax changes need to be made for [[highlight]].  First, a
+language definition for highlighting sed comments is provided.  Second, the
+C language gets multi-line macros highlighted like regular source, and
+support for 64-bit integer constants.   Finally, data types are being
+highlighted using the listings package's [[moreemph]] directive, so these
+directives are extracted and inserted into the keyword highlight list.  This
+is actually done by using the name of the chunk containing all of these data
+types, so they are properly combined ahead of time.
+
+This code has several issues.  First, since it needs to modify the
+existing C language definition, it makes an assumption on its
+location.  This assumption is easily overridden using [[HL_DATA_DIR]],
+though.  Second, it requires the ability to override/add only a few
+language definitions, which in turn requires the -E option which was
+eliminated in highlight 3.0.  Finally, it makes assumptions about the
+language definition format which are not true in much older versions
+or any versions using pure Lua (3.0 and above).  In short, this will
+only work with the versions of highlight I've tested, which include
+2.x releases.
+
+<<Adjust [[highlight]] language defs>>=
+mkdir -p langDefs
+# sed language only supports comments
+# #include supported for HDF
+echo '$SL_COMMENT=regex(^\s*(#(?!include\W)))' > langDefs/sed.lang
+# c language needs a lot of help
+hl_kw="`printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
+        sed -e 's/[[:space:]]//g;s/,/ /g;s/%.*//;\$!s/\$/\\\\/'`"
+sed < ${HL_DATA_DIR:-/usr/share/highlight}/langDefs/c.lang -e '
+   # remove cont to fully highlight multi-line macros
+   s/.*CONTINUATIONSYMBOL.*//
+   # fix preproc expression
+   /DIRECTIVE/s/#/regex(^\\s*(#))/
+   # add some kws to kwb using old listings package moreemph decls
+   /KW_LIST(kwb)/a\'"${hl_kw}"'
+   # same thing, but newer versions of highlight
+   /KEYWORDS(kwb)/a\'"${hl_kw}"'
+   # change number RE to include UL, LL, ULL, etc.
+   $a\$DIGIT=regex((?:0x|0X)[0-9a-fA-F]+|\\d*[.]?\\d+(?:[eE][\\-+]\\d+)?[lLuU]*)
+   ' > langDefs/c.lang
+@
+
+<<Clean temporary files>>=
+rm -rf langDefs
+@
+
+\subsection{Pretty Printing with [[listings]]}
+
+Or, since the commands from the listings package are used anyway, the
+listings package could be used instead.  To do this, [[nwbegincode]] and
+[[nwendcode]] need to be changed to the listings package equivalents. Then,
+all commands within the code are escaped using ctrl-G, a character not
+likely in text and easily specified within sed.  The escape character must
+be activated using [[\lstset{escapechar=^^G}]] in the preamble.
+
+\lstset{language=sed}
+<<Change [[nwcode]] to [[listings]]>>=
+s/^\(.*\)\(\\nwbegincode{[0-9]*}\)\(.*\)$/\1\\begin{lstlisting}\n\a\3\a/
+/\\def\\nwend/!s/^\(.*\)\(\\nwendcode\)\(.*\)$/\\end{lstlisting}\1\3/
+@
+
+\lstset{language=sh}
+<<Source Doc Scripts>>=
+addlistings \
+@
+
+<<addlistings>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+# use the ctrl-g escape (\a = ann = bell)
+sed -e 's/\^\^\^/\a\0\a/g
+        # insert dummy escapes into potential listing ender tokens
+        s/\\end{lstlisting}/\\\a\aend{lstlisting}/g
+        s/\\nwbegincode/\\\a\anwbegincode/g
+        s/\\nwendcode/\\\a\anwendcode/g'
+@
+
+\lstset{language=TeX}
+<<Preamble Adjustments for [[listings]]>>=
+% Use ^G for escape char - not likely in document
+\lstset{escapechar=^^G}
+@
+
+The appropriate language definitions need to be loaded at the end of the
+\LaTeX{} preamble.  This includes comment highlighting for [[sed]] and
+selecting the appropriate default sublanguages.
+
+<<Preamble Adjustments for [[listings]]>>=
+% Stuff for the listings package
+% note: lstloadlanguages seems broken in some versions
+%\lstloadlanguages{C,sh,[gnu]make,[LaTeX]TeX} %,sed
+% Most of sed can't be expressed in the listings package - no regexes
+\lstdefinelanguage{sed}{morecomment=[f]\#}
+\lstdefinelanguage{txt}{}
+\lstset{defaultdialect=[gnu]make,defaultdialect=[LaTeX]TeX}
+%The supplied HTML def has no dialect, so setting this creates infinite loop
+%\lstset{defaultdialect=[ext]HTML}
+\lstset{language=C}
+@
+
+A few additional adjustments need to be made for those languages.  In
+particular, some keywords are missing, and some standard data types are
+missing.  Also, the data types provided by the used libraries need to be
+highlighted.  The data type adjustments are applied when using [[highlight]]
+as well, since the [[moreemph]] directives are parsed out.
+
+<<Preamble Adjustments for [[listings]]>>=
+% HTML doesn't bold enctype
+\lstdefinelanguage[ext]{HTML}[]{HTML}{morekeywords={enctype,public,xml}}
+% Known data types
+\lstset{moreemph={<<Known Data Types>>
+}}
+@
+
+<<Known Data Types>>=
+% C
+regex_t,regmatch_t,FILE,va_list,pollfd,pthread_t,%
+pthread_mutex_t,pthread_cond_t,uid_t,gid_t,mode_t,pid_t,time_t,socklen_t,%
+sockaddr_in,sockaddr,off_t,utimbuf,%
+@
+
+Plus of course the [[highlight]] style file needs to be converted into the
+appropriate listings package directives.
+
+\lstset{language=sed}
+<<Change [[highlight]] style to [[listings]] style>>=
+s/\[1\]//;s/#1//
+s/^[^{]*{[^}]*}$/\0{}/
+s/\\text\(color[^}]*}\){\(.*\)}/\\\1\2/
+s/\\bf{\(.*\)}/\\bfseries\1/
+s/\\it{\(.*\)}/\\itshape\1/
+# highlight never generates this, anyway
+s/\\underline{\(.*\)}/\\sffamily\1/
+@
+
+\lstset{language=TeX}
+<<Preamble Adjustments for [[listings]]>>=
+\lstset{backgroundcolor=\color{bgcolor}}
+\lstset{basicstyle=\hlstd\footnotesize,keywordstyle=\hlkwa,emphstyle=\hlkwb,%
+        commentstyle=\hlcom,stringstyle=\hlstr,directivestyle=\hldir}
+@
+
+Finally, some general appearance adjustments are made.  The entire listing
+is shifted over a bit, and the font layout is set for minimum mangling.
+
+<<Preamble Adjustments for [[listings]]>>=
+\lstset{columns=[l]fixed,framexleftmargin=1.5em,framexrightmargin=1em}
+@
+
+\subsection{Additional Output Adjustments}
+
+Now that code chunks can be pretty-printed, a few more adjustments need to
+be made.  Underscores in chunk names (such as when the chunk name is a file
+name) need to be escaped.  The code to do this was copied from the NoWeb
+FAQ, with minor quoting changes and disabling for chunk names with embedded
+code.
+
+\lstset{language=sed}
+<<Escape underscores in chunk names>>=
+{/\[\[/!s/_/\\\\_/g}
+@
+
+<<Adjust use/def chunk names>>=
+/^@use /<<Escape underscores in chunk names>>;/^@defn /<<Escape underscores in chunk names>>
+@
+
+There is little point in separating consecutive code chunks with a lot of
+white space, so the excess whitespace added by NoWeb needs to be removed.
+
+<<Reduce interchunk whitespace>>=
+/\\nwendcode{}\\nwbegindocs/{
+  N;N
+  /\\lstset/{s/$/%/;N;}
+  /\\nwenddocs/{s/\\nwbegindocs.*docspar\n\n//;s/\\nwenddocs{}//;}
+}
+@
+
+Then, the \LaTeX{} preamble needs to be added.  Except for the overall
+document style, this is mostly the same for all documents.  This means that
+the first line, the document style, must come before the common preamble.
+Rather than looking for that particular line, a special comment is replaced:
+
+\begin{quote}
+\begin{verbatim}
+ %%% latex preamble
+\end{verbatim}
+\end{quote}
+
+The following script does this, and brings all of the above together.  The
+highlight theme can be selected using a command-line parameter. Selection of
+the listings package versus just [[highlight]] is done by prefixing the
+highlight theme name with [[list:]].
+
+\lstset{language=make}
+<<makefile.config>>=
+# Highlight theme for PDF/HTML formatted source code
+# Blank uses default highlight style; prefix w/ list: to use listings package
+HL_THEME:=
+@
+
+<<makefile.rules>>=
+%.tex: %.nw nw2latex
+	./nw2latex $< $@ "$(HL_THEME)"
+@
+
+<<Source Doc Scripts>>=
+nw2latex \
+@
+
+<<makefile.rules>>=
+nw2latex: latexhl nwhlchunk addlistings
+@
+
+\lstset{language=sh}
+<<nw2latex>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+noweb="$1"
+outf="$2"
+theme="$3"
+
+# prefix theme with "list:" to enable lstlistings
+uselst="${theme%%:*}"
+if [ "list" = "$uselst" ]; then
+  theme="${theme#list:}"
+else
+  uselst=
+fi
+
+<<Prepare for weave>>
+(
+  ln=`grep -n '^%%% latex preamble' "$noweb" | cut -d: -f1 | head -n 1`
+  head -n $ln "$noweb"
+  cat <<"EOF"
+<<preamble.tex>>
+EOF
+  tail -n +$((ln+1)) "$noweb"
+) | <<Pre-process before weave>>
+  noweave -filter 'sed -e "<<Adjust use/def chunk names>>"' \
+          -filter "./nwhlchunk $filt" \
+          -delay -index - | <<Post-process latex after weave>>
+            sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
+@
+
+<<Prepare for weave>>=
+<<Generate [[latexhl.sty]]>>
+if [ -z "$uselst" ]; then
+  <<Adjust [[highlight]] language defs>>
+  filt=./latexhl
+  postproc='<<Insert code header into frame>>'
+else
+  filt=./addlistings
+  postproc='<<Change [[nwcode]] to [[listings]]>>'
+  # -i is a GNU sed dependency
+  sed -i -e '<<Change [[highlight]] style to [[listings]] style>>' latexhl.sty
+fi
+@
+
+The \LaTeX{} preamble is fairly straightforward.  The [[fontenc]],
+[[inputenc]], and [[babel]] packages are pretty much required anywhere.  The
+[[geometry]] package allows this document to fit in fewer pages by reducing
+the margins.  The [[noweb]] package is obviously needed for the NoWeb
+output.  The [[rcs]] package is included to easily incorporate those nasty
+\$-heavy RCS/CVS/SVN keywords. The [[ifpdf]] package is needed for using
+this \LaTeX{} source with non-PDF output.  The standard PDF font packages
+are used to reduce the PDF size and hopefully look smoother on a greater
+number of operating systems.  The [[listings]] and [[color]] packages and
+the [[latexhl]] highlight theme file are required for color syntax
+highlighting.  The [[headings]] package gives more informative headers and
+footers by default.  The [[hyperref]] package gives hyperlinks in the PDF
+file.  Links are made less distracting by replacing the red outline box with
+dark blue-colored text, and URL links are colored the same way.  The
+[[multitoc]] package provides multi-column tables of contents, which once
+again is to reduce the number of pages a bit.
+
+\lstset{language=TeX}
+<<preamble.tex>>=
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage{rcs}
+\usepackage{ifpdf}
+\ifpdf
+% Use standard fonts for PDF output
+\usepackage{courier}
+\usepackage[scaled]{helvet}
+\usepackage{mathptmx}
+\fi
+\usepackage{noweb}
+\usepackage{babel}
+\usepackage{graphicx}
+% change "never defined" to "imported"
+\makeatletter
+\def\@nwlangdepnvd{imported}
+\makeatother
+\ifpdf
+% Use pdf figs by default (hack)
+\makeatletter
+\def\Gin@extensions{.pdf}
+\makeatother
+\fi
+\usepackage{listings}
+\usepackage[usenames]{color}
+\usepackage{latexhl}
+%
+\pagestyle{headings}
+%
+% Hyperlink it!
+\definecolor{darkblue}{rgb}{0,0,0.3}
+\usepackage[colorlinks=true,linkcolor=darkblue,urlcolor=darkblue]{hyperref}
+%
+% Multi-column table of contents
+\usepackage[toc,lof]{multitoc}
+@
+
+% there were some issues on older TeX; not sure any more:
+%% Get "Bad space factor(0)" if this isn't here (very strange)
+%\makeatletter
+%\@savsf=1
+%\makeatother
+
+Then, some adjustments need to be made for NoWeb.  NoWeb's [[\setupcode]]
+does some adjustments to \LaTeX{} layout that override the code
+highlighting, so that is disabled.  NoWeb tries too hard to keep code chunks
+on one page, so some adjustments are made to those parameters.  Finally, the
+NoWeb cross reference listings are adjusted a bit and the code size is made
+smaller.
+
+<<preamble.tex>>=
+% Code formatting is done by highlight/lstlisting, not noweb
+\def\setupcode{\Tt}
+
+% This is from the noweb FAQ
+% Allow code chunks to span pages
+\def\nwendcode{\endtrivlist \endgroup}
+%\def\nwendcode{\endtrivlist \endgroup \vfil\penalty10\vfilneg}
+%
+% Allow docs to be split from code chunks
+\let\nwdocspar=\smallbreak
+%\let\nwdocspar=\par
+%
+% try a little harder to keep code chunks on one page
+\nwcodepenalty=1000
+%
+% Code can be huge, so make it smaller (smallcode, scriptsizecode, footnotesizecode)
+% Make chunk index useful (longchunks)
+% Remove xrefs from chunks themselves (noidentxref)
+\noweboptions{footnotesizecode,longchunks,noidentxref}
+@
+
+One other thing I usually do for code is to allow line breaks after
+underscores.
+
+<<preamble.tex>>=
+% break lines after _
+\toks0=\expandafter{\_}
+\edef\oldunderscore{\the\toks0}
+\def\_{\oldunderscore\discretionary{}{}{}}
+@
+
+Finally, the syntax highlighter adjustments need to be made.
+
+<<preamble.tex>>=
+<<Preamble Adjustments for [[listings]]>>
+% for highlight
+\ifpdf
+<<Framed Code Preamble>>
+\fi
+@
+
+\subsection{Attaching Files}
+
+In addition to the adjustments for appearance, the source files need to be
+attached.  Attachments are done using the \LaTeX [[embedfile]] package.
+Any files in addition to the source files can be attached using its
+[[\\embedfile]] command.
+
+<<preamble.tex>>=
+\ifpdf
+\usepackage{embedfile}
+\fi
+@
+
+<<Pre-process before weave>>=
+(att_nwo="`echo $noweb_order | \
+                 sed -e 's/\\([-_a-zA-Z.]*\\) */\\\\\\\\embedfile{\\1}%\\\\n/g'`"
+ sed -e 's/^\\begin{document}/'"$att_nwo&/") | \
+@
+
+\subsection{User Documentation}
+
+One challenge with literate programming is to provide separate user-level
+documentation that keeps track of the source code as well as the design
+documentation.  For this, a few code reinsertion tricks are used.  First,
+plain text chunks can be extracted, highlighted, and reinserted using the
+syntax:
+
+\begin{quote}{\ttfamily
+$\backslash$input\{\emph{file}.tex\} \% \emph{language}
+}\end{quote}
+
+Rather than actually generate an additional file, the input directive is
+replaced with what would have been the contents of that file.  This also
+allows the file to only contain contents given the source and any
+dependencies, rather than also including contents from sources which extend
+the contents.  This is done after weaving, since the text is always literal,
+but a preprocessing step is required to avoid NoWeb substitutions during the
+weave.  The sed script to generate the sed script cannot be done in a
+backtick expression, because the argument list may overflow.  Generating the
+script to a file also reduces the number of backslash escapes required.
+
+<<Pre-process before weave>>=
+sed '/^\\input{.*\.tex} % [^ ]*$/{s/\[\[/@\0/g;s/<</@\0/g;}' | \
+@
+
+<<For each reinserted code chunk>>=
+sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/;T;p' $noweb_order | sort -u | \
+    while read -r lang f; do
+      fesc=$(printf %s "$f" | sed 's/[][\\.*?^$]/\\\0/g')
+@
+
+<<Prepare for weave>>=
+<<Compute dependency tree for [[$noweb]]>>
+trap "rm -f /tmp/latexhl.*.$$" 0
+<<For each reinserted code chunk>>
+  printf %s\\n "/^\\\\input{${fesc}\\.tex} % $lang\$/{s/.*/%/;a\\%\\"
+  eval notangle '-R"$f"' $noweb_order 2>/dev/null | \
+    if [ -z "$uselst" ]; then
+      ./latexhl $lang | <<Insert latexhl output directly>>
+    else
+      printf %s\\n '\begin{lstlisting}'
+      ./addlistings $lang
+      printf %s\\n '\end{lstlisting}'
+    fi | sed 's/\\/\\\\/g;s/$/\\/' | sed '$s/.$//'
+  echo '}'
+done > /tmp/latexhl.fmt.$$
+@
+
+<<Insert latexhl output directly>>=
+sed 's/^\\begin{framed}[^%]*/\\begin{quote}\\codemargin=0pt&\\begin{webcode}/;
+     s/^\\end{framed}/\\end{webcode}&\\end{quote}/'
+@
+
+<<Post-process latex after weave>>=
+sed -f /tmp/latexhl.fmt.$$ | \
+@
+
+Finding the dependency tree is harder than it needs to be, since the POSIX
+shell's scoping and variable expansion rules are inadequate.  Two functions
+are needed in order to expand word lists correctly using [[eval]].  Updating
+the upper-level variables also requires the return to be variable
+assignments that are made at the upper level using [[eval]].
+
+<<Compute dependency tree for [[$noweb]]>>=
+noweb_order="$noweb"
+noweb_deps="$noweb"
+function next_level_loop() {
+  noweb_order="$1"
+  shift
+  noweb_deps=
+  for x; do
+    test -f "$x" || x="$x.nw"
+    case "$noweb_order" in
+      "$x"|*" $x"|"$x "*|*" $x "*) ;;
+      *)
+        noweb_deps="$noweb_deps $x"
+        noweb_order="$x $noweb_order"
+        ;;
+    esac
+  done
+  echo noweb_deps="'$noweb_deps'"
+  echo noweb_order="'$noweb_order'"
+}
+
+function next_level() {
+  noweb_order="$1"
+  shift
+  noweb_req=`sed -n 's/^%%% requires //;T;s/[[:space:]]*\(%.*\)*$//;p' "$@"`
+  eval next_level_loop \"\$noweb_order\" $noweb_req
+}
+while [ -n "$noweb_deps" ]; do
+  eval `eval next_level \"\$noweb_order\" $noweb_deps`
+done
+@
+
+Second, excerpts from the documentation can be reinserted in a similar
+manner. These excerpts are surrounded with begin and end comments, which
+must be at the beginning of the line:
+
+\begin{quote}{\ttfamily
+\% Begin-doc \emph{chunk-name}\\*
+\ldots\\*
+\% End-doc \emph{chunk-name}
+}\end{quote}
+
+The chunk name should consist only of alphanumeric characters, minus signs,
+and underscores.  Insertion is done using a special input command again,
+which has more percents to distinguish it from the directives above:
+
+\begin{quote}{\ttfamily
+$\backslash$input\{\emph{chunk-name}.tex\} \%\%\% doc
+}\end{quote}
+
+This is done before weaving so that NoWeb formatting can be done on this, as
+well.  It requires two passes in case the chunks are out of order or in
+different files.  The first pass extracts the chunks, and the second pass
+replaces any remaining unresolved internal references.
+
+<<Prepare for weave>>=
+eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/;T;p'\' $noweb_order | \
+  sort -u | while read c; do
+    printf %s\\n "/^\\\\input{${c}\\.tex} %%% doc\$/{s/.*/%/;a\\%\\"
+    eval sed -n "'/^% Begin-doc $c\$/,/^% End-doc $c\$/{
+                  /^% Begin-doc $c\$/!{/^% End-doc $c\$/!"'{
+                    s/\\/\\\\/g;s/$/\\/;p;};};}'\' $noweb_order | sed '$s/.$//'
+    echo '}'
+  done > /tmp/latexhl.doc.$$
+while grep '^\\\\input{.*\.tex} %%% doc\\$' /tmp/latexhl.doc.$$ >/dev/null; do
+  sed -e '
+     s/\^/^\\\\/;s/doc\$/doc\\\\\$/;s^/%/^/%\\\\/^;h;s/$/\\\\/
+     :a x;s/\\\\//g;/\\$/!{x;s/$/\\/;n;b};x;n;h;s/\\/\\\\/g;s/$/\\/;ba' \
+              < /tmp/latexhl.doc.$$ >/tmp/latexhl.doc2.$$
+  sed -f /tmp/latexhl.doc2.$$ /tmp/latexhl.doc.$$ >/tmp/latexhl.doc3.$$
+  mv /tmp/latexhl.doc3.$$ /tmp/latexhl.doc.$$
+done
+@
+
+<<Pre-process before weave>>=
+sed -f /tmp/latexhl.doc.$$ | \
+@
+
+C API documentation requires reinsertion of the function prototype,
+formatted as C code.  Integration into a full API documentation package is
+beyond the scope of the current document (previous revisions had their own
+implementation of an API documentation program, but that was for Ada).
+Instead, only the prototype reinsertion is supported.  To insert a
+prototype, reference it using a specially formatted comment:
+
+\begin{quote}{\ttfamily
+\% \emph{function} prototype
+}\end{quote}
+
+This is done by gently extracting the prototype from [[cproto.h]] using sed.
+For prototypes which do not appear in [[cproto.h]], the chunk
+[[<<C Prototypes>>]] may be expanded as well, but only out of the same source
+file. The sed script separates arguments by comma and terminates by close
+parenthesis (which means that callbacks require typedefs).  The code is
+reinserted with each argument on a separate line, aligned by the first
+argument, i.e. after the left parenthesis.  This is done by converting the
+text before the parenthesis into spaces, and stripping off the text not to
+be printed every pass until there is nothing left to print.
+
+\lstset{language=sed}
+<<Format a prototype from [[cproto.h]]>>=
+# strip trailing semicolon to make pattern simpler (never gets readded)
+s/;//;
+# create spaces out of all text up to first paren and append full proto
+h;s/[^(]/ /g;s/(.*/ /;G;
+# remove up to first paren plus up to end of first parameter
+s/[^ ][^(]*([^),]*[),] *//;
+# strip off 2nd+ parameters & print first line
+x;s/\(([^,)]*[,)]\).*/\1/;p;x;
+# loop until no more saved text to print
+:a
+/^ *$/b;
+# save, strip off 2nd+ paramters & print
+h;s/\(^ *[^,)]*[,)]\).*/\1/;p;
+# retrieve, strip off 1st parameter, and loop
+g;s/[^ ][^),]*[),] *//;
+ba;
+@
+
+\lstset{language=make}
+<<makefile.rules>>=
+ifneq ($(CFILES),)
+nw2latex: cproto.h
+endif
+@
+
+\lstset{language=sh}
+<<For each reinserted C prototype>>=
+sed -n 's/^% \([_a-zA-Z0-9]*\) prototype$/\1/;T;p' "$noweb" | while read f; do
+@
+
+<<Extract and format a C prototype from [[cproto.h]]>>=
+notangle -R"C Prototypes" 2>/dev/null "$noweb" | \
+  sed -n "/[^_[:alnum:]]$f(/{"'
+            <<Format a prototype from [[cproto.h]]>>
+          }' - cproto.h
+@
+
+<<Prepare for weave>>=
+<<For each reinserted C prototype>>
+  printf %s\\n "/^% $f prototype\$/{a\\%\\"
+  <<Extract and format a C prototype from [[cproto.h]]>> | \
+    if [ -z "$uselst" ]; then
+      ./latexhl C | <<Insert latexhl output directly>>
+    else
+      printf %s\\n '\begin{lstlisting}'
+      ./addlistings C
+      printf %s\\n '\end{lstlisting}'
+    fi | sed 's/\\/\\\\/g;s/$/\\/' | sed '$s/.$//'
+  echo '}'
+done >> /tmp/latexhl.fmt.$$
+@
+
+\subsection{Include Directive Processing}
+
+Finally, a method to include an arbitrary NoWeb file is provided.  The only
+way to weave and tangle such files correctly is to insert the contents of
+the file in place of the include directive.  Since [[\include]] has other
+side effects (it forces a page break), only [[\input]] is supported.  The
+syntax is very specifically defined in order to avoid conflicts with other
+[[\input]] directives.  Namely, it must not have any following text, and the
+file name must end in \texttt{.nw}.
+
+<<Insert included NoWeb files>>=
+awk 'function readfile(f) {
+  while(getline < f) {
+    if($0 ~ /^\\input{[^}]*\.nw}$/) {
+      sub(".*{", ""); sub("}", "");
+      fname = $0;
+      if(index(fname, "/") != 0 && index(f, "/") >= 0) {
+        fdir = f;
+        sub("[^/]*$", "", fdir);
+        fname = fdir fname;
+      }
+      readfile(fname);
+      close(fname);
+    } else
+      print;
+  }
+}
+BEGIN { readfile("-") }'
+@
+
+<<Pre-process before weave>>=
+<<Insert included NoWeb files>> | \
+@
+
+%tangle needs more thought - need to incorporate into docs
+%< <Pre-process before tangle> >=
+%< <Insert included NoWeb files> >
+%@
+
+\section{HTML Code Documentation}
+
+The NoWeb file is intended to be written in \LaTeX{}, and converted to HTML
+after and/or during the weave process.
+
+\subsection{HTML from TeX4ht}
+
+One way to generate HTML would be to use
+TeX4ht\footnote{\url{http://www.cse.ohio-state.edu/~gurari/TeX4ht/}}.  It is
+supposed to produce output very similar to what [[pdflatex]] produces,
+because it uses \LaTeX{} as its underlying engine.  Once again a wrapper
+script ([[nwtex2html]]) is needed.
+
+\lstset{language=make}
+<<Source Code Documentation Files>>=
+$(patsubst %.nw,%.html,$(NOWEB)) \
+@
+
+<<makefile.rules tex4ht>>=
+%.html: %.tex $(FIGS_EPS) nwtex2html
+	./nwtex2html $< $@ "$(HL_THEME)"
+@
+
+<<Clean built files>>=
+rm -f *.html
+@
+
+A configuration file is needed to set extended options.  In particular, the
+[[\color]] command behaves oddly, so an attempt is made to treat it mostly
+like [[\textcolor]] instead.  Even then, the background color doesn't show
+through, so it's forced by placing all code the class [[lstlisting]] and
+setting the color in the style sheet.  Overriding the code environments and
+doing some other fine tuning for TeX4ht is done in the preamble.
+
+\lstset{language=TeX}
+<<myhtml.cfg>>=
+\Preamble{xhtml,uni-html4,css-in,$splitstyle,graphics-,Gin-dim+}
+% attempted bug fix for tex4ht color
+\HAssign\textcolornest=0
+\makeatletter
+\def\reset@color{
+  \ifnum\textcolornest>0\gHAdvance\textcolornest by -1\HCode{</span>}\fi
+  \special{color pop}
+}
+\makeatother
+\Configure{color}{
+   \gHAdvance\textcolorN by 1
+   \HCode{<span id="textcolor\textcolorN">}
+   \Configure{SetHColor}{%
+   \gHAdvance\textcolornest by 1%
+   \Css{span\#textcolor\textcolorN{color:\HColor}}}
+}
+% end bug fix
+\begin{document}
+  \Css{.lstlisting {`<<Extract HTML CSS for current theme's background>>`
+                    margin-left: 10pt; margin-right: 10pt;}}
+\EndPreamble
+@
+
+\lstset{language=sh}
+<<Extract HTML CSS for current theme's background>>=
+highlight -S c ${theme:+-s $theme} -I </dev/null | \
+  sed -n -e '/pre.hl/{s/.*{//;s/}.*//;
+             s/\(background-color:#\)ffffff/\1fafafa/;
+             s/#/\\\\#/g;
+             s/font-size.*/font-size: smaller;/
+             p;}'
+@
+
+\lstset{language=TeX}
+<<preamble.tex>>=
+\ifpdf
+\else
+% Following is for tex4ht only
+\newenvironment{framed}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
+%\renewenvironment{lstlisting}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
+
+\noweboptions{webnumbering,nomargintag}
+
+% Minimize mangling by tex4ht:
+\lstset{columns=flexible}
+% make spaces in chunk names into nbsp
+\toks0=\expandafter{\setupmodname}
+\edef\oldsetupmodname{\the\toks0}
+\def\setupmodname{\oldsetupmodname\catcode`\ =13}
+\fi
+@
+
+The script just calls [[htlatex]] in its own directory (because it generates
+a lot of the same aux files as [[pdflatex]]), cleans up the HTML a bit, and
+tacks on the NoWeb source in compressed, uuencoded form.  It depends on a
+working TeX4ht configuration, which is unfortunately mostly undocumented and
+easily broken.  Configuring TeX4ht is beyond the scope of this document.
+
+\lstset{language=sh}
+<<Source Doc Scripts>>=
+nwtex2html \
+@
+
+<<nwtex2html>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+tex="$1"
+base="${1%.tex}"
+noweb="$base.nw"
+outf="$2"
+theme="${3#*:}"
+
+figs=`sed -n '/^\\\\includegraphics/{s/.*{\\(.*\\)}\$/\\1.eps/;p;}' $tex`
+texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/;T;p' "$tex"`
+
+# Exit on error
+set -e
+
+# Done in its own dir to avoid stomping on .pdf aux files
+dir=html.$$
+rm -rf $dir
+mkdir $dir
+trap "rm -rf `pwd`/$dir" 0
+for x in $noweb $tex $figs $texi *.sty; do ln -s ../$x $dir; done
+cd $dir
+
+if [ y = "$HTML_SPLIT" ]; then
+  splitstyle=frames,3
+else
+  splitstyle=fn-in
+fi
+cat <<EOF > myhtml.cfg
+<<myhtml.cfg>>
+EOF
+
+# runs latex 3x, regardless
+htlatex $1 myhtml >&2
+
+mv *.png .. 2>/dev/null || :
+for x in *.html; do
+  case "$x" in
+    "$outf") is_outf=y ;;
+    *) is_outf=n ;;
+  esac
+  perl -e '<<Post-process TeX4ht output using perl>>' "$base" $is_outf <"$x" >"../$x"
+done
+
+<<Compute dependency tree for [[$noweb]]>>
+(
+  <<Print attachments as HTML comment>>
+) >>"../$outf"
+@
+
+<<Print attachments as HTML comment>>=
+# Attach original file as comment
+# adds 64 to <>- to avoid HTML comment escapes
+echo "<!--"
+at="`sed -n -e 's/^\\\\embedfile.*{\([^}]*\)}%*$/\1/;T;p' $noweb | sort -u`"
+echo begin 644 ${noweb%.*}.tar.gz
+eval tar chf - $noweb_order $at | gzip | \
+  uuencode "${noweb%.*}".tar.gz | tail -n +2 | tr '<>-' '|~m'
+echo "-->"
+@
+
+<<Clean temporary files>>=
+rm -rf html.[1-9]*
+@
+
+The HTML cleanup is done using a perl script, once again because awk and sed
+are too slow for at least one of the tasks.
+
+\lstset{language=perl}
+<<Post-process TeX4ht output using perl>>=
+use strict;
+
+<<Initialize TeX4ht post-processor>>
+
+while(<STDIN>) {
+  <<Post-process TeX4ht line>>
+  print;
+}
+@
+
+<<Initialize TeX4ht post-processor>>=
+my $is_outf = $ARGV[1] eq "y";
+@
+
+<<Post-process TeX4ht line>>=
+if(?^<html ?) {
+  print "<!--\n";
+  print "Generated using noweb+tex4ht;" .
+        " original .nw source attached in comment at end\n";
+  if($is_outf) {
+    print "\n";
+    print "Extract with uudecode, or, if uudecode chokes, use:\n";
+    print "   tr '\''|~m\`'\'' '\''<>- '\'' | uudecode -o '\''$base.nw.gz'\''\n";
+    print "-->\n";
+  } else {
+    print "of top-level HTML (see that for details on how to extract). -->\n";
+  }
+}
+@
+
+That task, in particular, is to compress the number of color styles.  TeX4ht
+produces a new color style for every use of color, even if it is the same
+color as a previous use.  To fix this, the color styles are extracted from
+the CSS file, and a hash array is built to associate each with the first
+style of the same color.  Then, all duplicates are filtered from the CSS
+file and converted to the first version in the HTML.
+
+<<Copy TeX4ht CSS to stdout>>=
+# way too many color styles are generated: merge them
+open CSS,"<$base.css";
+
+while(<CSS>) {
+  if(/^span#textcolor(\d+)(\{.*\})/) {
+    my ($colorno, $colordef) = ($1, $2);
+
+    $textcolor[$colorno] = $rootcolor{$colordef} || $colorno;
+
+    if($textcolor[$colorno] == $colorno) {
+      $rootcolor{$colordef} = $colorno;
+      print;
+    }
+  } else {
+    print;
+  }
+}
+
+close CSS;
+@
+
+<<Initialize TeX4ht post-processor>>=
+my $base = $ARGV[0];
+
+my @textcolor;
+my %rootcolor;
+@
+
+<<Initialize TeX4ht post-processor>>=
+my $spn = "<span id=\"textcolor";
+@
+
+<<Post-process TeX4ht line>>=
+foreach my $x(/$spn(\d+)/g) {
+  s/$spn$x"/$spn$textcolor[$x]"/g;
+}
+@
+
+The next post-processing task is to reduce the number of files to one, if
+possible.  This is done by in-lining the CSS.  TeX4ht will do this with the
+right option, but only if run twice, which effectively runs \LaTeX{} six
+times.  Instead, it is just generated directly into the output file during
+hash table generation.
+
+<<Post-process TeX4ht line>>=
+if(?<meta name=\"date?) {
+  print;
+  print "<style type=\"text/css\">\n<!--\n";
+  <<Copy TeX4ht CSS to stdout>>
+  print "//-->\n</style>\n";
+  next;
+}
+@
+
+The remainder of the adjustments are minor tweaks to the HTML output.
+
+<<Post-process TeX4ht line>>=
+# tex4ht inserts a newline before each chunk
+# no easy way to deal right now, so leave it
+@
+
+<<Post-process TeX4ht line>>=
+# tex4ht splits lines mid-tag; rejoin at least the span tags
+while(/<span $/) {
+  s/\n//;
+  $_ .= <STDIN>;
+}
+@
+
+<<Post-process TeX4ht line>>=
+# Merge consecutive spans on same line w/ same class into one span
+while(s%(<span class="[^"]*">)([^<]*)</span>\1%\1\2%) {};
+@
+
+<<Post-process TeX4ht line>>=
+# Remove plain text spans
+s%<span class="ecrm-0900">([^<]*)</span>%\1%g;
+@
+
+<<Post-process TeX4ht line>>=
+# I prefer mostly plain text for the web, so:
+# remove ligatures
+s/&#xFB01;/fi/g;s/&#xFB02;/fl/g;
+# remove hex nbsp
+s/&#x00A0;/\&nbsp;/g;
+# remove unicode quotes
+s/&#8217;/'\''/g;s/&#8216;/`/g;
+@
+
+<<Post-process TeX4ht line>>=
+# remove trailing space
+s/ *$//;
+@
+
+\subsection{HTML from [[l2h]]}
+
+Another way is to use NoWeb's included [[l2h]] filter.  This once again
+requires some filtering, which is complicated enough that it's done in a
+separate script ([[nw2html]]) instead of inline in the makefile.  In
+addition, highlighting of chunks must produce HTML, so a small conversion
+script ([[htmlhl]]) is used.  This uses the ordered list output, as the
+ordered list CSS can be adjusted more easily to look like the \LaTeX{}
+output.
+
+\lstset{language=sh}
+<<Source Doc Scripts>>=
+nw2html \
+htmlhl \
+@
+
+<<htmlhl>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+echo '<ol class="code">'
+highlight -l --ordered-list -S $1 -E `pwd` -f | \
+    sed 's%^</li>$%<li></li>%;s/<li[^>]*>/<li><pre>/;s%</li>%</pre></li>%'
+echo '</ol>'
+@
+
+\lstset{language=make}
+<<makefile.vars>>=
+FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
+@
+
+<<makefile.rules l2h>>=
+nw2html:  htmlhl nwhlchunk
+
+%.html: %.nw $(FIGS_PNG) nw2html
+	./nw2html $< $@ "$(HL_THEME)"
+@
+
+<<Clean built files>>=
+rm -f *.png
+@
+
+The wrapper script tacks on a similar header to what the TeX4ht script
+produces, but using the direct HTML output of [[highlight]] for the CSS, and
+making adjustments to make the HTML appear at least vaguely similar to the
+PDF.
+
+\lstset{language=sh}
+<<nw2html>>=
+#!/bin/sh
+<<Common NoWeb Warning>>
+
+noweb="$1"
+outf="$2"
+theme="$3"
+
+# tex version allows list: prefix - ignore if there
+theme="${theme#list:}"
+
+<<Adjust [[highlight]] language defs>>
+
+
+(
+# This replaces l2h's header
+echo "<html><!--
+Generated using noweb; original .nw source attached as tar.gz in comment at end
+Extract with uudecode, or, if uudecode chokes, use:
+   tr '|~m\`' '<>- ' | uudecode -o '${noweb%.*}.tar.gz'
+-->
+ <head>
+<meta name=\"generator\" content=\"noweave -html -filter l2h, highlight\">
+  <style type=\"text/css\">"
+highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
+  # replace white bg with very light gray to distinguish from text
+  s/\(background-color:#\)ffffff/\1fafafa/g
+  # remove extra junk from block style
+  /pre.hl/{
+     s/pre.hl/ .code/
+     s/font-size:.*;/font-size: smaller;/
+     p
+     # make links look like normal text
+     s/.code/\0 a/;s/margin.*;//
+     p
+     }
+  # fix class names
+  /^\./{s/^/.code /;s/\.hl\././;p;}'
+# display code within chunk names correctly
+echo "code {font-style: normal;}"
+# display code chunk immediately below chunk name
+echo "pre.defn {margin-bottom: 0;}"
+# use same margins as LaTeX
+echo ".code {margin-left: 10pt; margin-right: 10pt; margin-top: 0; padding: 1px}"
+# squeeze lines together
+echo ".code li,pre {margin-top: 0; margin-bottom: 0;}"
+# make chunk refs more legible by removing underline
+echo ".code a {text-decoration: none;}"
+echo "pre.dfn a {text-decoration: none;}"
+# option: line #s or not (leave both in HTML for user to see)
+echo ".code li {display: block;}"
+echo "/* either above line to remove line #s, or make space for line #s with: */"
+echo "/* .code {margin-left: 2em;} */"
+# option: border or not (leave both in HTML for user to see)
+echo "/* optional: add border around code */"
+echo "/* .code {border: thin solid black;} */"
+echo "  </style>"
+) >"$outf"
+@
+
+Next, it runs [[noweave]] with the [[l2h]] filter.  This filter runs after
+the highlighter.  The index generator tries to make switching to a code
+chunk also show the documentation by passing [[-docanchor 10]] to [[noidx]].
+This places anchors 10 lines above the code chunk, regardless of what is
+actually there.  This can be very bad, so instead, [[@xref]] is removed
+using a filter after [[-index]], and then [[nodix]] is called directly using
+another filter, but without that [[-docanchor]] option.  If readers want to
+read the documentation for a code chunk, they will need to just scroll up
+manually.   In any case, post processing of the HTML is required.  After the
+document is generated, the source is once again tacked on as an HTML comment.
+
+<<nw2html>>=
+<<Prepare for weave>>
+( (
+  ln=`grep -n '^%%% latex preamble' "$noweb" | cut -d: -f1 | head -n 1`
+  head -n $ln "$noweb"
+  cat <<"EOF"
+<<preamble.l2h>>
+<<preamble.tex>>
+EOF
+  <<Further l2h preamble>>
+  tail -n +$((ln+1)) "$noweb"
+) | <<Pre-process before weave>>
+  noweave -html -filter './nwhlchunk ./htmlhl' -filter l2h -index \
+          -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx - | \
+         <<Post-process HTML after weave>>
+         cat
+
+<<Print attachments as HTML comment>>
+) >>"$outf"
+@
+
+\lstset{language=sed}
+<<Filter out noidx results>>=
+/^@nl/{
+  h;
+:a
+  n;
+  /^@nl/{H;ba};
+  /^@index begin/{
+    :b
+      n;
+      /^@index end/b;
+      bb;
+  };
+  x;p;g;
+};
+/^@index begin/{
+  :b
+    n;
+    /^@index end/b;
+    bb;
+};
+/^@xref/!p
+@
+
+The \LaTeX{} preamble is supplemented with directives for [[l2h]], which are
+comments in the form \texttt{\% l2h \emph{directive} \emph{token}
+\emph{arguments}}.  A new command, [[\hypertxt]], is introduced as well,
+because doing hyperrefs with custom text requires an optional argument, and
+optional arguments are not supported by [[l2h]] directives.  The RCS keyword
+commands must be inserted by extracting them from the original file, or they
+will end up coming from the build document every time.
+
+\lstset{language=TeX}
+<<preamble.tex>>=
+\usepackage{comment}
+\excludecomment{rawhtml}
+% for l2h, since it doesn't understand opt args
+\def\hypertxt#1#2{\hyperref[#1]{#2}}
+@
+
+<<preamble.l2h>>=
+% Overrides for noweb's l2h
+%
+% Things it doesn't understand
+% template is {, A=arg, [=optarg, C=optarg/save, ==assign, +=white, (=..)
+% l2h macro hypertxt 2 <a href="###$1">#2</a>
+% l2h macro url 1 <a href="#$1">#$1</a>
+% l2h substitution ref * A{
+% l2h envblock centering center
+% l2h ignore discretionary {{{
+% l2h ignore nwcodepenalty =
+% l2h ignore edef A{
+% l2h ignore excludecomment {
+% l2h ignore the
+% l2h ignore toks A={
+% l2h ignore lstset {
+% l2h ignore lstloadlanguages {
+% l2h ignore lstdefinelanguage [{[{{
+% l2h ignore definecolor {{{
+% l2h ignore ifpdf
+% l2h ignore bkframefalse
+% l2h ignore bkcounttrue
+% l2h ignore ,
+% l2h ignore break
+% l2h substitution textbar |
+% l2h substitution sim ~
+% l2h ignoreenv webcode
+% l2h macro input 1 <!-- input #$1 -->
+% l2h substitution backslash \
+% l2h ignore embedfile [{
+% \RCS still needs to go into header to get stripped out properly
+% l2h ignore RCS
+%
+% doesn't understand extensionless image names, or that I want png
+% l2h argblock includegraphics <img#src=" .png"><br/> [
+%
+% I prefer my footnotes shrunken and italicized
+% l2h argblock footnote <font#size=2><b>[</b><em> </em><b>]</b></font>
+%
+% l2h ignore select@language {
+@
+
+\lstset{language=sh}
+<<Further l2h preamble>>=
+grep '^\\RCS \$' "$noweb" | while IFS= read -r l; do
+  l="${l#*\$}"
+  l="${l%\$*}"
+  echo "% l2h macro RCS${l%%:*} 0 ${l#*:}"
+done
+echo "% l2h substitution jobname ${noweb%.*}"
+@
+
+The first required filter is one supplied with [[l2h]]:  generating the
+hyperlinked table of contents.
+
+<<Post-process HTML after weave>>=
+htmltoc -1234 | \
+@
+
+Next, the hidden sections must be removed.  The top-level table of contents
+entries may as well be removed at the same time.  These are always the
+document title and the abstract, which are not in the \LaTeX{} table of
+contents, either.
+
+<<Post-process HTML after weave>>=
+sed -n -e '<<Filter noweave output with removal>>' | \
+@
+
+\lstset{language=sed}
+<<Filter noweave output with removal>>=
+# strip out all before first header (title)
+/<h1>/,${
+  #strip out comment blocks delimited by <!--> & <--> on their own line
+  # this is sort of unsafe, but it works for this document
+  /^<!-->$/{
+   :a
+    n
+    /^<-->$/bb
+    ba
+   :b
+    n
+  }
+  #strip out the first top-level TOC - always title + abstract
+  /^<tableofcontents>/{
+   :c p;n;/^ *<li>/!bc
+   :d n;/^ *<li>/!bd; n
+  }
+  p
+}
+@
+
+Then the title needs to actually be reinserted as the HTML document title.
+
+\lstset{language=sh}
+<<Post-process HTML after weave>>=
+sed -e '<<Filter noweave output without removal>>' | \
+@
+
+\lstset{language=sed}
+<<Filter noweave output without removal>>=
+# finish up head, copying 1st header as title
+1{
+  h
+  s/h1>/title>/g
+  s/<a name=[^>]*>//
+  s%</a>%%
+  s%/title>%\0\n </head>\n<body>%
+  p
+  x
+}
+@
+
+Some adjustments need to be made to code chunk headers.  This allows them to
+be inset and gives them similar appearance to the \LaTeX{} output.
+
+<<Filter noweave output without removal>>=
+# Give style to pre directives around defn start, and limit pre to 1 line
+/<dfn>/{
+  s/<pre>/<pre class="dfn">/;s%$%</pre>%
+ :a
+  # newer versions of highlight added "hl " to the class names
+  s/class="hl /class="/g
+  # Use same bracket style as LaTeX (<sigh> w3m/links/IE hate this)
+  # mathematical seems lowered, so use discouraged non-mathematical
+  #s/<i>&lt;/<i>\&#x2329;/g; s%&gt;</i>%\&#x232A;</i>%g
+  #s/<dfn>&lt;/<dfn>\&#x3008;/; s%&gt;\(.*</dfn>\)%\&#x3009;\1%
+  n;/^<\/pre>/!ba
+  s%^</pre>%%
+}
+@
+
+Finally, there are some miscellaneous minor tweaks.
+
+<<Filter noweave output without removal>>=
+# shrink & italicize "defined here" bits (from %def directives or autodefs)
+s%\(<blockquote>\)\(Defines\)%\1<font size=1><em>\2%g
+# it is hard to determine end of above group, so make HTML a litte bad
+s%\(</blockquote>\)%</em></font>\1%g
+@
+
+<<Filter noweave output without removal>>=
+# strip out diagrams from index
+# actually, it would better to strip out all hidden section chunks
+s%^<li>.*\.dia&gt;</i></a>:.*%%
+@
+
+<<Filter noweave output without removal>>=
+# strip out *s on their own line - not sure what that is all about
+s%<a name=[^>]*>\*</a>$%%
+s/<br>\*$/<br>/
+@
+
+<<Filter noweave output without removal>>=
+# Yet another useful subst, but w3m/links/IE hate it
+#s/---/&mdash;/g
+@
+
+<<Filter noweave output without removal>>=
+# l2h puts marks where hrefs point to, but that is not really necessary
+s%<b>\[\*\]</b>%%g;s/\[\*\]//g
+@
+
+<<Filter noweave output without removal>>=
+# l2h does not handle quotes at all, so just remove duplicate
+#s/``/\&#8216;/g;s/'\'\''/\&#8217;/g
+s/``/`/g;s/'\'\'/\''/g
+@
+
+One of those minor tweaks is to move the footnotes into their own section at
+the bottom of the document.  Since [[sed]] is not up to the task, [[awk]] is
+used.
+
+\lstset{language=sh}
+<<Post-process HTML after weave>>=
+awk '<<Move noweave filtering with awk>>' | \
+@
+
+\lstset{language=awk}
+<<Move noweave filtering with awk>>=
+# May as well just move footnotes to the bottom
+BEGIN {
+  # uses FS to extract footnote text
+  FS="<font size=2><b>.</b><em>|</em><b>.</b></font>";
+  # odd is 1 if previous footnote spanned lines
+  odd=0;
+  # fn is the footnote counter
+  fn=0;
+  # fnt is the complete text of all footnotes
+  fnt="";
+}
+# if NF > 1, a footnote has been detected
+# odd is set to 1 if a footnote spans lines
+NF > 1 || odd {
+  # accumulate non-footnote text into ln
+  ln="";
+  i=0;
+  if(odd) ft=ft "\n";
+  while(i < NF) {
+    i++;
+    if(i > 1 && i % 2 == odd) {
+      fn++;
+      ln=ln "<sup><a href=\"#fn" fn "\">" fn "</a></sup>";
+      ft=ft "\n<hr/>\n<a name=\"fn" fn "\"><b>" fn "</b>.</a> "; 
+    }
+    if(i % 2 == odd) ft = ft $i; else ln = ln $i;
+  }
+  if(!odd || NF > 1) print ln;
+  if(NF % 2 == 0) odd = 1 - odd;
+}
+# dump all footnotes at the end
+$0 ~ "</body>" {
+  print "<hr/><h3>Footnotes</h3>" ft
+  print
+}
+# print everything that is not a footnote
+NF <= 1 && !odd && ($0 !~ "</body>")
+@
+
+Copying in the highlighted code must be done after [[noweave]] is finished,
+or else it would need raw HTML sentinels.
+
+\lstset{language=sh}
+<<nw2html>>=
+# insert highlighted extracted chunks/files
+<<For each reinserted code chunk>>
+  printf '%s\\\n' '/<!-- input '"$fesc"'.tex --> <!-- '$lang'-->/{
+       s/<!--.*-->//;i'
+  eval notangle '-R"$f"' $noweb_order 2>/dev/null | ./htmlhl $lang | \
+    sed '$!s/$/\\/'
+  printf '}\n'
+done >/tmp/latexhl.fmt.$$
+# insert highlighted C prototypes
+<<For each reinserted C prototype>>
+  printf '%s\\\n' "/<!-- $f prototype-->/{
+       s/<!--.*-->//;i"
+  <<Extract and format a C prototype from [[cproto.h]]>> | ./htmlhl C | \
+    sed '$!s/$/\\/'
+  echo '}'
+done >> /tmp/latexhl.fmt.$$
+sed -i -f /tmp/latexhl.fmt.$$ "$outf"  # -i is GNU sed only
+@
+
+\lstset{language=make}
+<<makefile.rules>>=
+nw2html: cproto.h
+@
+
+Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be
+standards compliant any more, HTML
+Tidy\footnote{\url{http://tidy.sourceforge.net}} is used to clean up the
+output.
+
+\lstset{language=sed}
+<<Filter noweave output without removal>>=
+# tidy gives errors on unknown tags
+s%</*tableofcontents>%%
+@
+
+<<Filter noweave output without removal>>=
+# rather than trying to put TOC /li in right place, just remove them all
+/href="#toc/s%</li>%%
+@
+
+\lstset{language=sh}
+<<nw2html>>=
+tidy -q -wrap 0 -i -asxhtml -m "$outf" 2>tidy.log
+# report unexpected errors
+fgrep -ivf- tidy.log <<EOF >/dev/null || :
+missing <!DOCTYPE>
+unexpected </em>
+unexpected </font>
+replacing unexpected em
+missing </a> before <a>
+discarding unexpected </a>
+lacks "summary" attribute
+lacks "alt" attribute
+column 18 - Warning: <a> anchor "NW
+trimming empty
+EOF
+@
+
+Generation of the figures depends on
+ImageMagick\footnote{\url{http://www.imagemagick.org}} with GhostScript
+support to convert them to PNG format, even though using GhostScript
+directly would have worked as well.
+
+\lstset{language=make}
+<<makefile.rules>>=
+%.png: %.eps
+	convert -density 144x144 -comment '' $< -transparent white $@
+@
+
+\subsection{Method Selection}
+
+Unfortunately, neither formatter is obviously better.  TeX4ht mangles its
+output a bit (color in particular) and takes forever to run.  NoWeb's l2h
+filter is quicker, but is pretty stupid and unconfigurable for things like
+tables and footnotes.  For now, I prefer the speed and accuracy of l2h.
+
+<<makefile.config>>=
+# Program to use for generating HTML formatted source code
+# Set to tex4ht or l2h
+HTML_CONV:=l2h
+@
+
+<<makefile.rules>>=
+ifeq ($(HTML_CONV),l2h)
+<<makefile.rules l2h>>
+else
+ifeq ($(HTML_CONV),tex4ht)
+<<makefile.rules tex4ht>>
+else
+$(error Unknown HTML_CONV conversion method; use l2h or tex4ht)
+endif
+endif
+@
+
+\section{Usage}
+
+Users of this document fall into at least two categories: ones who wish to
+create documents that use this build system, and ones who wish to build
+packages which were created using this build system.  This section is for
+the former.  Instructions for the latter were included on the first page,
+but should also be included in any document using this system:
+
+\begin{quote}
+\verb!\input{build-doc.tex} %%% doc!
+\end{quote}
+
+The first few lines of a NoWeb file are \LaTeX{} code.  This must at least
+include the \verb|\documentclass| directive.  It can also include the build
+system's preamble in the place marked by \verb!%%% latex preamble!. Copying
+the beginning of this document to start with would not be a bad idea:
+
+\begin{quote}
+\verb!\documentclass[twoside,english]{article}!\\*
+\verb!\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}!\\*
+\verb!%%% latex preamble!\\*
+\verb!\RCS $!\verb!Id$!\\*
+\verb!\RCS $!\verb!Revision$!\\*
+\verb!% Build with noweb:!\\*
+\verb!%  notangle -t8 build.nw > makefile!\\*
+\verb!%  make!\\*
+\\*
+\verb!\begin{document}!\\*
+\\*
+\verb!\title{!\ldots\}\\*
+\verb!\author{!\ldots\}\\*
+\verb!\date{Revision \RCSRevision}!\\*
+\\*
+\verb!\maketitle!
+\end{quote}
+
+Dependencies on other files should be listed somewhere (usually near the
+top), as well.  They are specified by comments of the form 
+\verb!%%% requires !\textit{name} on lines by themselves.  Only direct
+dependencies need to be listed, as a full tree will be generated.  The
+\texttt{.nw} extension is optional.  For example, somewhere in your project,
+you will need to depend on this file:
+
+\begin{quote}
+\verb!%%% requires build!
+\end{quote}
+
+Chunks defined in a document extend chunks defined in documents on which it
+depends.  Chunks defined in other documents can be used, as well.  In both
+cases, they will not be weaved correctly.  Extensions will not indicate that
+they are extending anything, and external references will always be shown as
+undefined chunks.  To alleviate this, the chunk can be defined as an empty
+value, or as a comment in the source language indicating that the chunk
+comes from an external file.
+
+Within the document, several extensions can be used:
+
+\begin{itemize}
+\item Language definitions: the listing package's
+\verb!\lstset{language=!\textit{lang}\verb!}! directive is used to set the
+language for any subsequent code chunks.  The default language is C.
+
+\item Hidden sections: any figures or other files which are normally
+included in the document in a processed form can be stored in-line in the
+NoWeb document in their raw form in hidden sections.  Each hidden section is
+delimited by \verb|<!-->| on its own line at the start, and \verb!<-->! on
+its own line at the end.  This is intended to be used as follows:
+
+\begin{quote}
+\footnotesize
+\verb!% hidden section - notangle chunks that shouldn't appear in printed output!\\*
+\verb!% mainly for diagrams, which are extracted and included in visual form.!\\*
+\verb!% noweb doesn't actually strip these out - iffalse does that!\\*
+\verb!% This can't be the last part of the doc, or xrefs won't work!\\*
+\verb!\begin{rawhtml}!\\*
+\verb|<!-->|\\*
+\verb!\end{rawhtml}!\\*
+\verb!\iffalse!\\*
+
+\ldots{} hidden material \ldots{}\\
+
+\verb!\fi!\\*
+\verb!\begin{rawhtml}!\\*
+\verb!<-->!\\*
+\verb!\end{rawhtml}!\\*
+
+\end{quote}
+
+\item Syntax highlighted, fully extracted code chunks: a code chunk can be
+repeated in e.g. a users' guide appendix, fully extracted and syntax
+highlighted, by using a special [[\input]] directive:
+\verb!\input{!\emph{chunk-name}\verb!.tex} % !\emph{language}.  This
+directive will be replaced by the contents of the named chunk.  For example,
+the configurable variables are included here using
+\verb!\input{makefile.config} % make!:
+
+\input{makefile.config.tex} % make
+
+One use of this feature which should be in every document is to list the
+RCS/CVS/subversion ID tag of all source files from which the document was
+built:
+\begin{quote}
+This document was generated from the following sources, all of which are
+attached:\\
+\verb!\input{Sources.tex} % txt!
+\end{quote}
+
+\item Syntax highlighted C prototypes: the prototype of a C function can be
+repeated as a highlighted code chunk using a special comment:
+\verb!% !\emph{function-name}\verb! prototype! prints a reformatted version
+of the prototype extracted from [[cproto.h]], which is automatically
+generated for all C files.  Any prototypes which would not be placed there
+can be manually added using the [[<<C Prototypes>>]] chunk; all prototypes
+from the chunk must consist of exactly one line of text.
+
+\item Repeated documentation: a separate NoWeb-like macro facility which
+only does substitutions can be used to repeat documentation in e.g. a users'
+guide in an appendix.  Such documentation chunks are delimited by
+\verb!% Begin-doc !\emph{chunk-name} and \verb!% End-doc !\emph{chunk-name}
+at the beginning of a line.  They are inserted in place of any occurence of
+\verb!\input {!\textit{chunk-name}\verb!.tex} %%% doc! at the beginning of a
+line.
+
+\item Simple input directives: a file can be included verbatim using
+\verb!\input{!\emph{file}\verb!.nw}!.  This actually substitutes the file in
+place rather than doing an actual include so that weaving and tangling
+operate correctly.
+
+\item Documentation attachments: any files which should be attached to the
+PDF or HTML output can be attached using the [[embedfile]] package's
+[[\embedfile]] directive.
+
+\end{itemize}
+
+At the end of the document, the code chunk index and \LaTeX{} end should be
+added.  The index needs to be at the end for consistency between HTML and
+PDF output, since the HTML converter always sticks it at the end.
+
+\begin{quote}
+\footnotesize
+\begin{verbatim}
+\section{Code Index}
+% This must be last, because l2h always puts it last & ignores the directives
+\nowebchunks
+
+\end{document}
+\end{verbatim}
+\end{quote}
+
+Once the documentation has been built, the PDF output needs to be checked
+for overflows.  Horizontal overflows in code chunks are hard to detect, as
+they do not always generate [[Overfull \hbox]] messages.  They can be
+corrected by reformatting the source code.  Vertical overflows as the result
+of problems with the [[framed]] package can be detected by
+[[Overfull \vbox]] messages, and can be corrected by prefixing chunks which
+are not broken at the end of a page with a [[\break]] directive.  Naturally,
+any edits to the document will require rechecking all [[\break]] directives
+to see if they are still necessary, and possibly to add more.
+
+Finally, extensions to the build system can be made by adding code chunks;
+they will be appended to existing values in the order of the tree, from the
+most depended on file to the least depended on file (i.e., anything
+depending on \texttt{build.nw} will append values \emph{after} the values set
+in \texttt{build.nw}):
+
+\begin{itemize}
+\item [[<<makefile.config>>]]: add user-configurable variables to the
+makefile.
+\item [[<<makefile.vars>>]]: add non-configurable variables to the makefile.
+\item [[<<makefile.rules>>]]: add rules to the makefile.
+\item [[<<Install other files>>]]: add installation commands.
+\item [[<<Clean temporary files>>]]: add commands to clean temporary files.
+\item [[<<Clean built files>>]]: add commands to clean built files.
+\item [[<<Plain Files>>]]: add plain files to build; always add a backslash
+to the end of each added line.  If additional processing other than simple
+extraction is required for any file, it should instead be added to
+[[<<makefile.rules>>]] as a separate rule and a dependency for the
+\texttt{misc} target.  If any plain files are not in the NoWeb source, but
+instead are distributed separately, they should instead be added to the
+[[ATTACH_EXTRA]] variable, to be attached to the documentation.  That
+variable can also be a make function taking the name of the file being
+attached to as an argument.
+\item [[<<Script Executables>>]]: add plain text files to build as
+executables; always add a backslash to the end of each added line.  Like
+[[<<Plain Files>>]], no processing is done by the default rules.
+\item [[<<Test Scripts>>]]: add plain text files to build as executables,
+but only for the [[test]] and [[test-bin]] targets.  The [[test]] target
+will execute these scripts without anyinterpretation other than return code
+checks.
+\item [[<<C Executables>>]]: C files are either the name of an executable
+with the \texttt{.c} extension, or the name of a library member, with
+\texttt{.o} replaced by \texttt{.c}.  The executables are listed here,
+without the \texttt{.c} extension, but with a trailing backslash on every
+line.  Preprocessing for these and all other C files is done by setting
+[[C_POSTPROCESS]] in [[<<makefile.vars>>]] to a function taking the file
+name as an argument (or just a variable if no per-file differences exist),
+which returns (or whose value is) the pipe symbol, followed by the command
+to use for post-processing.  For example:
+\begin{quote}
+[[<<makefile.vars>>]]=\\
+[[C_POSTPROCESS+=|sed '1i\copyright blurb']]\\
+[[@]]
+\end{quote}
+Build flags can also be augmented using the [[EXTRA_CFLAGS]] and
+[[EXTRA_LDFLAGS]] variables, in addition to the standard [[CFLAGS]] and
+[[LDFLAGS]].
+\item [[<<C Test Executables>>]]:  names of executables to build for the
+[[test]] and [[test-bin]] targets, as explained in the above two items.
+\item [[<<Library [[name]] Members>>]]: A library named [[name]] will be
+built using objects listed in these chunks.  [[name]] can of course be
+anything appropriate.  Unlike the chunks which expand into specific [[make]]
+variables, no backslashes are required or allowed at the end of each line.
+\item [[<<Known Data Types>>]]: comma-separated list of data types to
+emphasize; end each line with a comma and a percent-sign.
+\item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
+always add a backslash to the end of each added line.  In particular, any
+specially processed plain files with their own rules should be added to this
+list.  See [[<<C Executables>>]] above for more details on C compilation.
+\item [[<<Files to Count>>]]: files to count as part of the \texttt{count}
+target; always add a backslash to the end of each added line.  Anything
+added to the [[<<Build Source>>]] should probably be added here, as well.
+\item [[<<Executables>>]]: additional specially-built execuatables, other
+than scripts and C executables.
+\item [[<<Common NoWeb Warning>>]]: a boilerplate coment for the top of
+script files; extend with [[# $]][[Id$]].
+\item [[<<Version Strings>>]]: A C string containing the version ID of all
+contributing source files; extend with [["$]][[Id$\n"]].
+\item [[<<Sources>>]]: A simple text chunk containing the version ID of all
+contributing source files; extend with just [[$]][[Id$]].
+\end{itemize}
+
+Of course building and testing the project is done using \texttt{make} as
+well.  The standard targets are \texttt{all} (the default), \texttt{bin},
+\texttt{install}, \texttt{doc}, \texttt{misc}, \texttt{clean},
+\texttt{distclean}, \texttt{count}, \texttt{check}, \texttt{test-bin}, and
+\texttt{test}.
+
+\section{Code Index}
+% This must be last, because l2h always puts it last & ignores the directives
+
+\nowebchunks
+
+% note: no identifier indexing is done right now
+
+\begin{rawhtml}
+<!-->
+%\end{rawhtml}
+%\vspace{1ex}
+%\hrule
+%\vspace{1ex}
+\begin{rawhtml}
+<-->
+\end{rawhtml}
+
+%\nowebindex
+
+\end{document}

@@ -127,7 +127,7 @@ If NoWeb is not available, but perl is, the following code can be copied and
 pasted into a text file using a reasonable document viewer and made
 executable as an imperfect, but adequate [[notangle]] replacement:
 
-\input{perl-notangle.tex} %%% doc
+\input{perl-notangle.tex} % verbatim
 % End-doc build-doc
 
 As noted below, additional makefile components are created in separate files.
@@ -739,13 +739,7 @@ rm -f $(TEST_EXEC) $(TEST_C_EXEC:%=%.c) $(TEST_EXEC_SUPPORT) \
 \subsection{Support Files}
 
 Since [[noroots]] may not be on the target system, for example when using
-the tar file, a close equivalent is provided.  In fact, when building just
-the code, it is likely that the only part of NoWeb required is [[notangle]].
-For this, an equivalent can be provided in [[perl]], which is installed on
-most modern UNIX systems by default.  It is not a perfect emulation, but
-it should be close enough.  It is presented as a pastable document, rather
-than a NoWeb source chunk, so that reasonable document viewers can extract
-it fairly easily.
+the tar file, a close equivalent is provided.
 
 <<makefile.config>>=
 # The noroots command is used to extract file names from $(NOWEB)
@@ -758,17 +752,27 @@ NOROOTS=$(shell if type -p noroots >/dev/null 2>&1; then \
                 fi)
 @
 
-% Begin-doc perl-notangle
-\begin{quote}
-\footnotesize
-\begin{verbatim}
+In fact, when building just the code, it is likely that the only part
+of NoWeb required is [[notangle]].  For this, an equivalent can be
+provided in [[perl]], which is installed on most modern UNIX systems
+by default.  It is not a perfect emulation, but it should be close
+enough.
+
+\lstset{language=perl}
+<<perl-notangle>>=
 #!/bin/sh
 #!perl
 # This code barely resembles noweb's notangle enough to work for simple builds
 eval 'exec perl -x -f "$0" "$@"'
   if 0;
+@
 
-my $chunk = '*';  my $tab = 0; my ($inchunk, %chunks);
+The only recognized command-line options are for tab size ([[-t]]) and
+chunk name ([[-R]]), which defaults to [[*]].  The remaining
+parameters are file names, and are left in [[ARGV]].
+
+<<perl-notangle>>=
+my $chunk = '*';  my $tab = 0;
 
 while($#ARGV > 0 && $ARGV[0] =~ /^-.*/) {
   if($ARGV[0] =~ /^-R/) {
@@ -777,10 +781,16 @@ while($#ARGV > 0 && $ARGV[0] =~ /^-.*/) {
   } elsif($ARGV[0] =~ /^-t(.*)/) {
     $tab = $1;
   }
-  shift ARGV;
+  shift @ARGV;
 }
+@
 
-# Extract raw chunks
+Next, the files are read ([[<>]] just uses all files from [[ARGV]])
+and raw chunks are extracted.  They are stored in a hash keyed on
+chunk name.
+
+<<perl-notangle>>=
+my ($inchunk, %chunks);
 while(<>) {
   if(/^@<<(.*)@>>=$/) {
     $inchunk = $1;
@@ -790,7 +800,14 @@ while(<>) {
     $chunks{$inchunk} .= $_;
   }
 }
-# Substitute chunks with indentation simulation
+@
+
+Then, the desired chunk is processed.  Any chunk references are
+repeatedly extracted (using a regular expression) and replaced with
+their equivalent chunk.  Multiline replacements get spaces prepended
+equivalent to the number of characters before the first line.
+
+<<perl-notangle>>=
 my $chunkout = $chunks{$chunk};
 while($chunkout =~ /(?:^|\n)(|[^\n]*[^\n@])(?:@<<((?:[^>\n]|>[^>\n])*)@>>)/) {
   my $cv = $chunks{$2};
@@ -800,12 +817,22 @@ while($chunkout =~ /(?:^|\n)(|[^\n]*[^\n@])(?:@<<((?:[^>\n]|>[^>\n])*)@>>)/) {
   $cv =~ s/\n/$&$ws/g;
   $chunkout =~ s/(^|[^@])(@<<(([^>\n]|>[^>\n])*)@>>)/$1$cv/;
 }
+@
+
+Next, any final escapes are undone.  NoWeb requires (and strips)
+escapes for [[<<]] and [[>>]].  Also, if the tab option was specified,
+initial groups of spaces equal to the tab size are replaced with tabs.
+
+<<perl-notangle>>=
 $chunkout =~ s/@(@<<|@>>)/\1/g;
 $chunkout =~ s/((^|\n)\t*) {$tab}/$1\t/g if($tab gt 0);
+@
+
+Finally, the result is printed to standard output.
+
+<<perl-notangle>>=
 print $chunkout;
-\end{verbatim}
-\end{quote}
-% End-doc perl-notangle
+@
 
 In order to avoid having to duplicate function prototypes in the main code
 and a header, the prototypes are generated automatically using
@@ -1656,6 +1683,11 @@ weave.  The sed script to generate the sed script cannot be done in a
 backtick expression, because the argument list may overflow.  Generating the
 script to a file also reduces the number of backslash escapes required.
 
+It seems pointless to highlight plain text files, but it may still be
+desirable to give it a colored background.  For cases where this is
+not so, a special language \texttt{verbatim} can be used to instead
+insert the code as verbatim quoted plain text.
+
 <<Pre-process before weave>>=
 sed '/^\\input{.*\.tex} % [^ ]*$/{s/\[\[/@\0/g;s/<</@\0/g;}' | \
 @
@@ -1670,6 +1702,17 @@ sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/;T;p' $noweb_order | sort 
 <<Compute dependency tree for [[$noweb]]>>
 trap "rm -f /tmp/latexhl.*.$$" 0
 <<For each reinserted code chunk>>
+  test verbatim = $lang || continue
+  printf %s\\n "/^\\\\input{${fesc}\\.tex} % $lang\$/{s/.*/%/;a\\%\\"
+  eval notangle '-R"$f"' $noweb_order 2>/dev/null | (
+    echo '\begin{quote}\footnotesize\begin{verbatim}'
+    sed 's/@<</@@<</g;s/@>>/@@>>/g;s/^@/@@/g'
+    echo '\end{verbatim}\end{quote}'
+    ) | sed 's/\\/\\\\/g;s/$/\\/' | sed '$s/.$//'
+  echo '}'
+done > /tmp/latexhl.verb.$$
+<<For each reinserted code chunk>>
+  test verbatim = $lang && continue
   printf %s\\n "/^\\\\input{${fesc}\\.tex} % $lang\$/{s/.*/%/;a\\%\\"
   eval notangle '-R"$f"' $noweb_order 2>/dev/null | \
     if [ -z "$uselst" ]; then
@@ -1681,6 +1724,10 @@ trap "rm -f /tmp/latexhl.*.$$" 0
     fi | sed 's/\\/\\\\/g;s/$/\\/' | sed '$s/.$//'
   echo '}'
 done > /tmp/latexhl.fmt.$$
+@
+
+<<Pre-process before weave>>=
+sed -f /tmp/latexhl.verb.$$ | \
 @
 
 <<Insert latexhl output directly>>=
@@ -2591,12 +2638,15 @@ NF <= 1 && !odd && ($0 !~ "</body>")
 @
 
 Copying in the highlighted code must be done after [[noweave]] is finished,
-or else it would need raw HTML sentinels.
+or else it would need raw HTML sentinels.  On the other hand, verbatim
+code should be copied in before weaving, and in fact it already has
+above.
 
 \lstset{language=sh}
 <<nw2html>>=
 # insert highlighted extracted chunks/files
 <<For each reinserted code chunk>>
+  test $lang = verbatim && continue
   printf '%s\\\n' '/<!-- input '"$fesc"'.tex --> <!-- '$lang'-->/{
        s/<!--.*-->//;i'
   eval notangle '-R"$f"' $noweb_order 2>/dev/null | ./htmlhl $lang | \

@@ -42,6 +42,20 @@ License.
 
 \section{Overview}
 
+Most of my old personal programming projects started out as a general
+idea, along with numerous scattered pieces of paper with notes
+detaling some particular aspects of the design.  Most of my
+professional programming projects instead started with formal design
+documents containing similar information.  Over time, the design
+documents and notes were lost and/or forgotten, and/or they diverged
+from the actual product.  In any case, the organization of any design
+documentation rarely corresponds with the actual code, as efficient
+code follows much different rules than efficient human communication.
+Literate programming provides two main features that alleviate these
+problems: the design document is kept with the source code, and the
+code can be written in the order of the design document, to be
+reordered later for more efficient compilation.
+
 Literate programming is a method of programming devised and named by
 Donald Knuth in 1983, along with the tools to help implement that
 method (Web).  It mainly emphasizes writing a human-readable document
@@ -60,7 +74,7 @@ code chunks, and multiple source files and programs in a single
 document, as well as my lack of a language-specific symbol cross
 reference and index (in addition to the chunk index).
 
-Knuth felt that programs should be pleasent to read, like documents
+Knuth felt that programs should be pleasant to read, like documents
 which happen to have executable code in them.  He believed that his
 method would allow creation of programs which are by their nature
 easier to maintain and less error-prone.  Whether or not a document is
@@ -434,6 +448,44 @@ $(MISC_FILES): $(NOWEB_ORDER)
 
 <<Clean built files>>=
 rm -f $(MISC_FILES)
+@
+
+\subsection{Preventing Rebuilds}
+
+One issue with making things purely dependent on the NoWeb source as
+above is that making e.g. a change to the text or an unrelated program
+in the same file will force everything to be rebuilt.  To prevent
+this, an attempt is made to use stamps for dependencies where
+possible.  For the makefile, this is impractical.  For the rest, a
+stamp file is built when extracting from the NoWeb source which
+contains either zero if no change was made, or non-zero otherwise.  A
+make function then inherits the stamp file, and only does a full
+rebuild if non-zero.
+
+<<makefile.vars>>=
+# x.stamp: src.nw
+#   notangle ... > x.tmp
+#   cmp x.tmp x >/dev/null; echo $? > x.stamp
+#
+# x.o: x.c
+#   $(call STAMP_CMD,$<,$*,$(CC) -o $< $*)
+#
+STAMP_CMD:= \
+  res=-1; \
+  for x in $2; do \
+    if [ -f $${x}.stamp ]; then \
+      res1=$(cat $${x}.stamp); \
+      test $res1 -gt $res && res=$$res1; \
+    fi; \
+  done; \
+  if [ $res -eq 0 ]; then \
+    echo 0 > $1.stamp; \
+  elif [ $res -eq 1 ]; then \
+    echo 1 > $1.stamp; \
+    $3; \
+  else \
+    $3; \
+  fi
 @
 
 \subsection{Additional Features}

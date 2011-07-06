@@ -1,0 +1,5894 @@
+% -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+\documentclass[twoside,english]{article}
+\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
+%%% latex preamble
+\RCS $Id$
+\RCS $Revision$
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
+
+%%% requires build
+\lstset{language=ada}
+
+\begin{document}
+
+\title{Ada Build Support for Modular Literate Build System}
+\author{Thomas J. Moore}
+\date{Version 1.0\\Revision \RCSRevision\\2011}
+\maketitle
+
+\begin{abstract}
+
+This document describes and implements some extensions to my modular
+literate programming build system which support the Ada programming
+language.  In particular, this includes yet another API documentation system
+to document Ada from comments.
+
+\vspace{0.5in}
+
+This document was generated from the following sources, all of which are
+attached:
+\input{Sources.tex} % txt
+
+\end{abstract}
+
+\tableofcontents
+
+\lstset{language=txt}
+<<Sources>>=
+$Id$
+@
+
+\lstset{language=sh}
+<<Version Strings>>=
+"$Id$\n"
+@
+
+<<Common NoWeb Warning>>=
+# $Id$
+@
+
+\section{Introduction}
+
+The first two versions of my literate build system were geared towards
+Ada coding.  One of my unfinished projects has been an Ada compiler.
+I began writing the compiler with no practical Ada experience; instead
+I simply wrote it based on careful reading of the standard. After
+accumulating a large quantity of hand-written notes and C and assembly
+code, the project was abandoned.  Later, I decided to revive the
+project using Ada as a source language (to gain experience and have a
+code base for testing), and literate programming methods (to gain the
+benefits outlined in the main build document).  The first version of
+this build system reflected this.  It was essentially a
+LyX\footnote{\url{http://www.lyx.org/}} extension which provided a
+shell script and support tools.  Just before abandoning the project
+again, I was in the process of developing a second version of the
+build system which no longer used LyX (LyX was not designed as a
+programmer's editor, and it shows) but instead used a makefile and raw
+NoWeb source files.  This system still used the same support tools.
+
+One of these support tools was a pretty-printer based on
+pretzel\footnote{\url{http://www.informatik.tu-darmstadt.de/BS/Gaertner/pretzel}}.
+That pretty printer had many of the characteristics of Knuth's pretty
+printers: it was able to make certain mathematical constructs look
+more mathematical, and used symbol substitution liberally.  It also
+formatted the code based on its idea of code formatting, ignoring the
+actual code chunk's raw formatting.  While this has some desirable
+traits, it suffered from some of the same drawbacks as Knuth's system.
+It relied on user-supplied special comments for some of the
+formatting, and it only supported one language: Ada (in particular,
+Ada 95; I never updated it to later revisions).
+
+Even with the first version of the build system I ran into problems
+due to some use of C and some use of shell code, neither of which
+could be handled by the pretty printer.  Instead, these were always
+just rendered as plain text without highlighting.  Version 3 of my
+build system was a rewrite from scratch, which lost many of the
+features of the first two and replaced the syntax highlighter with
+various generic highlighters.  This Ada extension to the build system
+will not be using the pretzel formatter any more, even though it would
+be possible to just hook into the conversion scripts and select the
+pretzel version when the language is Ada.
+
+Another facility lost from the old system was explicit code chunk
+imports and exports.  The new build system instead collects all files
+present in the same directory and merges them in a particular order,
+essentially importing/exporting/extending all chunks.  While this is
+more convenient in some ways, it presents the danger of namespace
+pollution.  This may be changed some time in the future.  One feature
+that the new sytem adds that the old one did not is chunk extension in
+reverse dependency order.  Any reimplementation of the old system's
+explicit import/export would have to support extension in this way as
+well.
+
+Finally, another tool used by the old build systems which I lost was
+an API documentation tool.  I provided several facilities for
+simplified API documentation in the new system, but nothing fully
+automated.  The Ada API documentation tool will be reintroduced.
+Eventually some of its concepts should be incorporated into the main
+build system as well.
+
+\section{Code Documentation}
+
+While the generic build system provides some tools for user-level
+documentation, more is always needed.  One common, but inadequate extension
+to the documentation is a separate API document.  This is particularly
+useful for libraries.  There are numerous tools out there for this, but I
+nonetheless have decided to make my own.  This is mainly because my
+own is more easily integrated into my documents.
+
+Parsing Ada code out of literate programs would require a combination Ada
+parser and NoWeb parser, making things much more complicated than necessary.
+Instead, the Ada code must be extracted and passed in to the parser.
+
+This is my documentation comment extractor for ADA to \LaTeX, used by my
+"literate" programs.  It parses all Ada files on the command line, and
+prints out all documented symbols for the first Ada file on the command
+line, using the others to resolve cross-references if necessary.  The
+documentation is generated as LaTeX code to standard out, with some
+warnings/errors to standard error.  The LaTeX code is intended to be
+included in a section of another document (it creates subsections).
+
+My documentation comments are:
+\begin{itemize}
+\item A comment begun with {}``-{}-|'' (a vertical bar) indicates
+documentation for the following defined symbol. The first such comment
+for a symbol completes the sentence ``\emph{Symbol} is a \emph{Type}
+which ...'', starting with a capital letter, and without a terminating
+period (e.g. ``Provides service X'').  Two special alternatives exist:
+if the first word is followed by a colon, the comment is a standalone
+description (usually of a main-line program's functionality), without
+its terminating period; if the first character after the vertical bar
+is a colon (:), ``which'' in the sentence to complete is replaced by
+``which is'' (e.g. ``The main program'').  All subsequent comments are
+plain English sentences which list further features and requirements.
+
+\item A comment begun with ``-{}-+'' (a plus sign) indicates a
+continuation of a previous ``-{}-|'' (vertical bar) comment. This is
+necessary due to a limit on the length of a line of Ada program text.
+
+\item A comment begun with ``-{}->See '' (a greater-than symbol)
+indicates a duplication of documentation; resolution depends on
+context:
+
+\begin{itemize}
+
+\item If the symbol is nested within another symbol, and contains no
+qualification, then it refers to the named symbol within the same
+nested region.
+
+\item If the symbol is nested within another symbol, and contains
+qualification, and the qualifier prefix can be resolved in the context
+of the parent symbol (i.e., refers to a symbol nested deeper within
+the same parent symbol), then it refers to that symbol.
+
+\item Otherwise, the symbol must be qualified with a prefix. The
+prefix is resolved from all known library-level objects; ignoring an
+arbitrary (but minimal) level of prefix. For example, Foo.Bar will
+match Package\_Prefix.Foo.Bar, but not
+Package\_Prefix.Zip.Foo.Bar.
+
+\item Simple overload resolution is done for subprograms; all parameter
+names and types must match exactly, or, failing that, all parameter
+names must at least match exactly (default values are ignored). Overload
+resolution is only applied when there is ambiguity. If ambiguity still
+exists after selection, the first one found will be used.
+
+\end{itemize}
+
+\item A comment begun with ``-{}-('' (an open parenthesis) is a formal
+parameter list, followed by a closing parenthesis and optional return
+type specifier (as in, ``return \emph{type}'').  This specifies the
+parameter profile for a subprogram created by generic instantiation
+from a library not documented using this method. It must always be
+followed by additional documentation. Unlike real Ada, an empty formal
+parameter list is specified by an empty pair of parentheses.
+
+\item A comment begun with ``-{}-\{'' (an open curly brace) is the
+name of a group to which the symbol belongs.  The group name may begin
+with an optional numeric prefix; this prefix is stripped off after
+sorting.  It may also be followed by a colon, followed by a
+description; if any such descriptions are found, they describe the
+entire group.  Groups are global to an Ada file, but not to all Ada
+files.
+
+\end{itemize}
+
+No \LaTeX{} or other special codes are permitted within the
+special comments.  All comments without a special starting character
+are not incorporated into the API documentation. Any symbols not
+immediately preceeded by an API documentation comment are not
+incorporated into the API documentation, either. If these symbols are
+not merely overrides of inherited symbols, then they should be
+documented, at least in that they may cause name space pollution when
+a use clause is in effect.
+
+Were this available for other languages, similar rules would apply.
+C/C++ code would use ``//'' instead of ``-\/-'' and shell code would use
+``\#'' instead of ``-\/-''.
+
+\subsection{Compiler Support Tools}
+
+Sometimes it is more convenient to use a lexical analyzer generator
+and/or a parser generator rather than coding it by hand.  For this,
+the standard Ada tools are ayacc and aflex from the
+afay\footnote{\url{http://thiberlog.free.fr/src/afay_thiberlog\_041111.tgz}}
+package.  In addition to the Ada 95 patches, a few more patches by me
+are required to work with gnat properly.
+
+First, the documentation contains invalid \LaTeX{}.  This is easily
+fixed:
+
+\lstset{language=TeX}
+<<afay-fixes.patch>>=
+diff -ru afay/aflex/doc/aflex_user_man.tex afay/aflex/doc/aflex_user_man.tex
+--- afay/aflex/doc/aflex_user_man.tex	1994-04-15 10:25:08.000000000 -0500
++++ afay/aflex/doc/aflex_user_man.tex	2005-10-24 16:32:49.000000000 -0500
+@@@ -12,6 +12,7 @@
+ 
+ \newcommand{\mysk}{\vspace{0.5cm}}
+ 
++\begin{document}
+ \title{\vspace{2cm}\goodbreak 
+ \bf {\sl Aflex} \rm -- An Ada Lexical Analyzer Generator
+ \\ \vspace{1cm} Version 1.1 \vspace{1cm}
+@@@ -33,7 +34,6 @@
+ 
+ \maketitle
+ 
+-\begin{document}
+ 
+ \begin{titlepage}
+ \tableofcontents
+@
+
+Next, we want to use the gnat [[Source_Reference]] pragma in order to
+get better feedback for errors.  The old code simply inserted
+comments, which are helpful, but not as helpful as having compiler
+just indicate the correct line to begin with.
+
+\lstset{language=ada}
+<<afay-fixes.patch>>=
+diff -ru afay/aflex/src/miscB.a afay/aflex/src/miscB.a
+--- afay/aflex/src/miscB.a	2004-10-21 15:48:23.000000000 -0500
++++ afay/aflex/src/miscB.a	2005-10-25 15:15:13.000000000 -0500
+@@@ -335,11 +335,11 @@
+   procedure LINE_DIRECTIVE_OUT(OUTPUT_FILE_NAME : in FILE_TYPE) is 
+   begin
+     if (GEN_LINE_DIRS) then 
+-      TEXT_IO.PUT(OUTPUT_FILE_NAME, "--# line "); 
++      TEXT_IO.PUT(OUTPUT_FILE_NAME, "pragma Source_Reference("); 
+       INT_IO.PUT(OUTPUT_FILE_NAME, LINENUM, 1); 
+-      TEXT_IO.PUT(OUTPUT_FILE_NAME, " """); 
++      TEXT_IO.PUT(OUTPUT_FILE_NAME, ", """); 
+       TSTRING.PUT(OUTPUT_FILE_NAME, INFILENAME); 
+-      TEXT_IO.PUT_LINE(OUTPUT_FILE_NAME, """"); 
++      TEXT_IO.PUT_LINE(OUTPUT_FILE_NAME, """);"); 
+     end if; 
+   end LINE_DIRECTIVE_OUT; 
+ 
+@@@ -347,11 +347,11 @@
+   procedure LINE_DIRECTIVE_OUT is 
+   begin
+     if (GEN_LINE_DIRS) then 
+-      TEXT_IO.PUT("--# line "); 
++      TEXT_IO.PUT("pragma Source_Reference("); 
+       INT_IO.PUT(LINENUM, 1); 
+-      TEXT_IO.PUT(" """); 
++      TEXT_IO.PUT(", """); 
+       TSTRING.PUT(INFILENAME); 
+-      TEXT_IO.PUT_LINE(""""); 
++      TEXT_IO.PUT_LINE(""");"); 
+     end if; 
+   end LINE_DIRECTIVE_OUT; 
+ 
+diff -ru afay/ayacc/src/lexical_analyzer_body.a afay/ayacc/src/lexical_analyzer_body.a
+--- afay/ayacc/src/lexical_analyzer_body.a	2004-10-22 13:31:21.000000000 -0500
++++ afay/ayacc/src/lexical_analyzer_body.a	2005-10-25 15:10:39.000000000 -0500
+@@@ -48,8 +48,8 @@
+ -- + Added support for Ada95 parent/child units
+ 
+ 
+-with Actions_File, Source_File, STR_Pack, Tokens_File, Text_IO;
+-use  Actions_File, Source_File, STR_Pack, Tokens_File, Text_IO;
++with Actions_File, Source_File, STR_Pack, Tokens_File, Text_IO, Ayacc_File_Names;
++use  Actions_File, Source_File, STR_Pack, Tokens_File, Text_IO, Ayacc_File_Names;
+ package body Lexical_Analyzer is
+ 
+   SCCS_ID : constant String := "@(#) lexical_analyzer_body.adadisk21~/rschm/hasee/sccs/ayacc, Version 1.2";
+@@@ -222,7 +222,9 @@
+ 	Actions_File.Writeln;
+         Actions_File.Write("when " & Integer'Image(Rule) & " =>");
+ 	Actions_File.Writeln;
+-	Actions_File.Write("--#line " & Integer'Image(Current_Line_Number));
++	Actions_File.Write("pragma Source_Reference(" &
++                          Integer'Image(Current_Line_Number) & ", """ &
++                          Get_Source_File_Name & """);");
+ 	Actions_File.Writeln;
+         loop
+             Get_Char(Char);
+diff -ru afay/aflex/src/mainB.a afay/aflex/src/mainB.a
+--- afay/aflex/src/mainB.a	2005-10-25 15:39:19.000000000 -0500
++++ afay/aflex/src/mainB.a	2005-10-25 15:39:41.000000000 -0500
+@@@ -463,6 +463,7 @@
+   -- readin - read in the rules section of the input file(s)
+   procedure READIN is 
+   begin
++    MISC.LINE_DIRECTIVE_OUT;  -- GNAT needs immediate satisfaction
+     SKELETON_MANAGER.SKELOUT; 
+ --  TEXT_IO.PUT("with " & TSTRING.STR(MISC.UNITNAME) & "dfa" & "; "); 
+ --  TEXT_IO.PUT_LINE("use " & TSTRING.STR(MISC.UNITNAME) & "dfa" & "; "); 
+diff -ru afay/ayacc/src/output_file_body.a afay/ayacc/src/output_file_body.a
+--- afay/ayacc/src/output_file_body.a	1994-04-15 10:22:40.000000000 -0500
++++ afay/ayacc/src/output_file_body.a	2005-10-25 15:56:53.000000000 -0500
+@@@ -99,6 +99,9 @@
+     begin 
+         Open; -- Open the output file.
+ 
++       Put_Line(Outfile, "pragma Source_Reference(" &
++                  Natural'Image(Source_Line_Number) & ", """ &
++                  Get_Source_File_Name & """);");
+         -- Read the first part of the source file up to '##'
+         -- or to end of file.
+         while not Source_File.Is_End_of_File loop  
+@@@ -378,6 +380,9 @@
+         Parse_Template_File.Close; 
+         
+         -- Copy rest of input file after ## 
++	Put_Line(Outfile, "pragma Source_Reference(" &
++                Natural'Image(Source_Line_Number) & ", """ &
++                Get_Source_File_Name & """);");
+         while not Source_File.Is_End_of_File loop  
+ 	    Source_File.Read_Line(Text, Length);
+ -- UMASS CODES :
+@
+
+The parser is tail recursive when it should just be a plain loop.  Making
+it recursive can cause stack overflow problems.
+
+<<afay-fixes.patch>>=
+diff -ru afay/ayacc/src/parser_body.a afay/ayacc/src/parser_body.a
+--- afay/ayacc/src/parser_body.a	2004-10-22 13:31:21.000000000 -0500
++++ afay/ayacc/src/parser_body.a	2005-10-24 18:47:26.000000000 -0500
+@@@ -223,6 +223,7 @@
+       -- 							--
+       procedure Rules is 
+       begin
++	 loop
+           T := Get_Token;
+           if T = Identifier then 
+               -- Make the left hand side of the rule 
+@@@ -234,10 +235,12 @@
+                  Augment_Grammar(LHS); 
+               end if;  
+               Rule;
+-              Rules;
+           elsif T /= Mark then
+               Fatal_Error("Expecting next section"); 
++	  else
++	      exit;
+           end if; 
++         end loop;
+       end Rules;
+    
+    begin -- parse_rules 
+@
+
+The command line interface attempts to retain the previous argument,
+but it fails by not making the variables stored at a higher scope.
+
+<<afay-fixes.patch>>=
+diff -ru afay/ayacc/src/command_line_interface.a afay/ayacc/src/command_line_interface.a
+--- afay/ayacc/src/command_line_interface.a	1994-04-15 10:22:38.000000000 -0500
++++ afay/ayacc/src/command_line_interface.a	2005-10-24 18:49:10.000000000 -0500
+@@@ -98,14 +98,14 @@
+   end CLI_Error;
+ 
+ 
++Last_arg: sp.String_type;
++Last_kind: Token_type;
+ procedure Get_token(
+   Scan_string : in out ss.Scanner;
+   Argument : in out sp.String_type;
+-  Kind: in out Token_type
++  Kind: out Token_type
+   ) is
+ 
+-  Last_arg: sp.String_type;
+-  Last_kind: Token_type;
+   Found: boolean;
+   Delimeter: sp.String_type;
+   Delim_string: ss.Scanner;
+@
+
+Modern machines are big enough that the maximum number of rules
+should be supported by default.
+
+<<afay-fixes.patch>>=
+diff -ru afay/ayacc/src/rule_table.a afay/ayacc/src/rule_table.a
+--- afay/ayacc/src/rule_table.a	1994-04-15 10:22:40.000000000 -0500
++++ afay/ayacc/src/rule_table.a	2005-10-24 21:26:43.000000000 -0500
+@@@ -47,7 +47,7 @@
+     -- This package is used to store and access the rules
+     -- of the input grammar.
+ 
+-    Max_Rules  : constant := 1_000;       -- An arbitrary upper bound.
++    Max_Rules  : constant := 3_000;       -- An arbitrary upper bound.
+                                           -- if you raise this above 3_000
+                                           -- you will also need to make
+                                           -- changes in parse_table_body
+@
+
+Next, we want to use modern Ada facilities rather than odd, unportable
+ones.  This means that the first thing to do is remove the custom
+string packages:
+
+\begin{quote}
+\begin{verbatim}
+cd <path_to>/afay
+rm -f ayacc/src/str_pack_*.a
+\end{verbatim}
+\end{quote}
+
+Next, the standard command-line processor should be used.  Note that
+[[example.l]] also has some issues with including the correct
+supporting packages; this is fixed in this hunk as well.
+
+<<afay-fixes.patch>>=
+diff -ru afay/aflex/doc/example.l afay/aflex/doc/example.l
+--- afay/aflex/doc/example.l	1994-04-15 10:25:08.000000000 -0500
++++ afay/aflex/doc/example.l	2005-10-24 19:25:19.000000000 -0500
+@@@ -20,7 +20,10 @@
+                  -- write anything else as is
+ 
+ %%
+-with U_Env;  -- VADS environment package for UNIX
++with Ada.Text_IO; use Ada; use Ada.Text_IO;
++with Example_IO; use Example_IO;
++with Example_DFA; use Example_DFA;
++with Ada.Command_Line;
+ procedure Example is
+ 
+   type Token is (End_of_Input, Error);
+@@@ -45,7 +49,7 @@
+ 
+ begin  -- Example
+ 
+-  Example_IO.Open_Input     (U_Env.argv(1).s);
++  Example_IO.Open_Input     (Ada.Command_Line.Argument(1));
+ 
+   Read_Input :
+   loop
+@
+
+Speaking of incorrect includes, there are some other places where this
+is true as well.
+
+<<afay-fixes.patch>>=
+diff -ru afay/ayacc/examples/calc/calc.y afay/ayacc/examples/calc/calc.y
+--- afay/ayacc/examples/calc/calc.y	1994-04-15 10:22:46.000000000 -0500
++++ afay/ayacc/examples/calc/calc.y	2005-10-24 19:37:56.000000000 -0500
+@@@ -69,12 +69,12 @@
+     procedure yyparse; 
+ end parser; 
+ 
+-with yylex, calc_lex_dfa, calc_lex_io, text_io, calc_error_report, calc_tokens, calc_goto, calc_shift_reduce; 
++with yylex, calc_lex_dfa, calc_lex_io, text_io, calc_tokens, calc_goto, calc_shift_reduce; 
+ use  text_io, calc_tokens, calc_goto, calc_lex_io, calc_shift_reduce; 
+ 
+ package body parser is 
+ 
+-    registers : array('A'..'Z') of integer; 
++    registers : array(character'('A')..'Z') of integer; 
+ 
+     function to_upper(ch : in character) return character is
+     begin
+@
+
+<<afay-fixes.patch>>=
+diff -ru afay/ayacc/examples/calc/calc_lex.l afay/ayacc/examples/calc/calc_lex.l
+--- afay/ayacc/examples/calc/calc_lex.l	1994-04-15 10:22:46.000000000 -0500
++++ afay/ayacc/examples/calc/calc_lex.l	2005-10-24 19:37:57.000000000 -0500
+@@@ -14,6 +14,9 @@
+ [\t ]+      { null;} 
+ %%
+ 
++with Ada.Text_IO; use Ada; use Ada.Text_IO;
++with Calc_Lex_IO; use Calc_Lex_IO;
++with Calc_Lex_DFA; use Calc_Lex_DFA;
+ with calc_tokens; 
+ use  calc_tokens;
+ ##
+diff -ru afay/ayacc/examples/ada_parser/ada_lex.l afay/ayacc/examples/ada_parser/ada_lex.l
+--- afay/ayacc/examples/ada_parser/ada_lex.l	1994-04-15 10:22:48.000000000 -0500
++++ afay/ayacc/examples/ada_parser/ada_lex.l	2005-10-24 19:45:49.000000000 -0500
+@@@ -244,9 +244,12 @@
+ 
+ %%
+ 
++with Ada.Text_IO; use Ada; use Ada.Text_IO;
++with Ada_Lex_DFA; use Ada_Lex_DFA;
++with Ada_Lex_IO; use Ada_Lex_IO;
++
+ with ada_tokens; 
+ use  ada_tokens;
+-use text_io;
+ 
+ package ada_lex is
+   
+diff -ru afay/ayacc/examples/ada_parser/driver.a afay/ayacc/examples/ada_parser/driver.a
+--- afay/ayacc/examples/ada_parser/driver.a	1994-04-15 10:22:48.000000000 -0500
++++ afay/ayacc/examples/ada_parser/driver.a	2005-10-24 19:45:56.000000000 -0500
+@@@ -1,5 +1,5 @@
+-with u_env, parser, ada_lex_io, ada_lex, text_io;
+-use  u_env, parser, text_io;
++with parser, ada_lex_io, ada_lex, text_io;
++use  parser, text_io;
+ 
+ procedure parse is
+   in_file_name: string(1..80);
+@
+
+Finally, in order to actually support overriding [[YY_USER_ACTION]],
+the default is placed into a package.
+
+<<afay-fixes.patch>>=
+diff -ru afay/aflex/src/skeleton_managerB.a afay/aflex/src/skeleton_managerB.a
+--- afay/aflex/src/skeleton_managerB.a	2004-11-10 16:40:46.000000000 -0500
++++ afay/aflex/src/skeleton_managerB.a	2005-10-24 18:22:09.000000000 -0500
+@@@ -84,11 +84,17 @@
+ VSTR("        YY_DO_BEFORE_ACTION; -- set up yytext again"),
+ VSTR("end yyless;"),
+ VSTR(""),
+-VSTR("-- redefine this if you have something you want each time."),
+-VSTR("procedure YY_USER_ACTION is"),
+-VSTR("begin"),
+-VSTR("        null;"),
+-VSTR("end;"),
++VSTR("-- redefine YY_USER_ACTION if you have something you want each time."),
++VSTR("package Overridable_User_Action is"),
++VSTR("        procedure YY_USER_ACTION;"),
++VSTR("end Overridable_User_Action;"),
++VSTR("use Overridable_User_Action;"),
++VSTR("package body Overridable_User_Action is"),
++VSTR("        procedure YY_USER_ACTION is"),
++VSTR("        begin"),
++VSTR("                null;"),
++VSTR("        end;"),
++VSTR("end Overridable_User_Action;"),
+ VSTR(""),
+ VSTR("-- yy_get_previous_state - get the state just before the EOB char was reached"),
+ VSTR(""),
+@
+
+To build afay (and its documentation) using gnat, just do the following:
+
+\begin{quote}
+\begin{verbatim}
+cd <path_to>/afay
+notangle -t8 -Rafay-fixes.patch <path_to>/ada-build.nw | patch -p1
+for x in aflex ayacc; do
+  cd $x/src
+  cp gnat_unix/*.a .
+  gnatchop *.a
+  gnatmake $x
+  cd ../doc
+  latex *.tex
+  bibtex *.tex
+  latex *.tex
+  cd ../..
+done
+\end{verbatim}
+\end{quote}
+
+Place ayacc and aflex in your path, and you can then use them with
+this build system.  Using variables like [[$(AFLEX)]] and [[$(AYACC)]]
+is not worth the effort.
+
+<<Makefile.rules>>=
+%.a: %.l
+	aflex $(ALFLAGS) -i $<
+	# also generates %_dfa.a and %_io.a
+	# gnatchop -w -r $*.a $*_dfa.a $*_io.a
+	# rm -f $*.s $*_dfa.s $*_io.s
+
+%.a: %.y
+	ayacc -i $< Verbose '=>' On $(AYFLAGS) # Debug '=>' On
+	# also generates %_goto.a, %_shift_reduce.a and %_tokens.a
+	# gnatchop -w -r $*.a $*_goto.a $*_shift_reduce.a $*_tokens.a
+	# rm -f $*.s $*_goto.s $*_shift_reduce.s $*_tokens.s
+@
+
+<<Makefile.rules>>=
+%.a.stamp: %.a
+	gnatchop -w -r $< | grep '.adb$' | while read x; do \
+	   gnatmake -gnatf -gnatwawFwPwl -Wuninitialized -funwind-tables -g -O3 $$x; \
+	done
+
+%.ada.stamp: %.ada
+	gnatchop -w -r $< | grep '.adb$' | while read x; do \
+	   gnatmake -gnatf -gnatwawFwPwl -Wuninitialized -funwind-tables -g -O3 $$x; \
+	done
+@
+
+\subsection{The Lexical Analyzer}
+
+The lexical analyzer is based off of the public domain one provided by
+the SCATC DSK project.  Unfortunately, all links to the originals are
+gone.  A web search may locate an old archive if you're lucky.  Since
+this invovles a modification of existing code, very little will be
+described here, unless it involves one of those modifications.
+
+\lstset{language=ada}
+<<a95.l>>=
+----------------------------------------------------------------------------
+--                  written for use with aflex
+----------------------------------------------------------------------------
+--/*------------------------------------------------------------------------*/
+--/* Lexical input for AFLEX for LALR(1) Grammar for ANSI Ada95             */
+--/*                                                                        */
+--/*               Dean R. Runzel                                           */
+--/*      Monmouth College, West Long Branch, NJ                            */
+--/*               February 16, 1995                                        */
+--/*                                                                        */
+--/* Accompanies Public Domain AYACC format Ada95 grammar                   */
+--/*                                                                        */
+--/* This work is based upon previous work performed by:                    */
+--/*                                                                        */
+--/* Herman Fischer  Litton Data Systems  1984                              */
+--/* C. Schaefer                          1991                              */
+--/* C. Howell                            1991                              */
+--/* Richard Conn    Mitre, Inc.          1993                              */
+--/*                 Intermetrics, Inc.   1994                              */
+--/*                                                                        */
+--/* This work is copyrighted by the author.                                */
+--/*                                                                        */
+--/* Please see the Parse95 reader for the complete text of all copyrights  */
+--/* and acknowledgements.                                                  */
+--/*                                                                        */
+--/*------------------------------------------------------------------------*/
+-- Modified by tjm for API doc extraction
+
+<<Ada lexical pattern macros>>
+%%
+-- Reserved Words
+<<Ada reserved word patterns>>
+
+-- Delimiters
+<<Ada delimiter patterns>>
+
+-- Literals
+<<Ada literal patterns>>
+
+-- Whitespace and Comments
+<<Ada ignore patterns>>
+
+-- Errors
+<<Ada error patterns>>
+
+%%
+
+<<Ada lexer dependencies>>
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer                                  * SPEC
+-- *                                                         *
+-- ***********************************************************
+package A95 is
+--| PURPOSE
+--| Analyze a stream of characters for tokens, producing a stream of
+--| tokens as a result.  The input stream is obtained through Text_IO.
+--| The output stream is obtained by the user of this package through
+--| successive calls to Get_Token.
+--|
+--| AUTHOR AND REVISION HISTORY:
+--| Version  Date        Author             Notes
+--|   1.0    12 Nov 93   Richard Conn       Initial release
+--|   1.1     6 Mar 95   Dean Runzel        Change package name and correct
+--|                                         identifier errors
+--|   1.2     3 Apr 97   Richard Conn       Modify for SCATC Kit
+--| NOTES:
+--| The sequence of invocation of the methods in this package is:
+--|     Reset - initialize analyzer and open input file
+--|     Get_Token -- as desired until END_OF_INPUT is returned
+--|     Get_Token_Value -- as desired (returns string of token)
+  <<Ada lexer function definitions>>
+end A95;
+
+<<Ada lexer private dependencies>>
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer                                  * BODY
+-- *                                                         *
+-- ***********************************************************
+package body A95 is
+
+------------------------------------------------------------------
+-- Local types and objects
+------------------------------------------------------------------
+  <<Ada lexer private definitions>>
+------------------------------------------------------------------
+-- Local routines
+------------------------------------------------------------------
+  <<Ada lexer private functions>>
+------------------------------------------------------------------
+-- Routines exported by the specification
+------------------------------------------------------------------
+  <<Ada lexer function bodies>>
+end A95;
+@
+
+If newer versions of Ada are to be supported, the first thing to do is
+add keywords here.  Adding them to the grammar is necessary as well,
+in order to define the required token (and to add the rules which use
+those tokens, of course).
+
+The first change I made to the original was to force the use of the
+[[-i]] (case-insenstive) option rather than requiring that each
+reserved word be sepcified as a sequence of upper-lower-case character
+groups.  Also, the old code set [[was_id]] in every single pattern
+action; instead, I use [[YY_USER_ACTION]] for that.
+
+<<Ada reserved word patterns>>=
+abort      { return(ABORT_TOKEN); }
+abs        { return(ABS_TOKEN); }
+abstract   { return(ABSTRACT_TOKEN); }
+accept     { return(ACCEPT_TOKEN); }
+access     { return(ACCESS_TOKEN); }
+aliased    { return(ALIASED_TOKEN); } 
+all        { return(ALL_TOKEN); } 
+and        { return(AND_TOKEN); } 
+array      { return(ARRAY_TOKEN); }
+at         { return(AT_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+begin      { return(BEGIN_TOKEN); }
+body       { return(BODY_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+case       { return(CASE_TOKEN); }
+constant   { return(CONSTANT_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+declare    { return(DECLARE_TOKEN); }
+delay      { return(DELAY_TOKEN); }
+delta      { return(DELTA_TOKEN); }
+digits     { return(DIGITS_TOKEN); }
+do         { return(DO_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+else       { return(ELSE_TOKEN); }
+elsif      { return(ELSIF_TOKEN); }
+end        { return(END_TOKEN); }
+entry      { return(ENTRY_TOKEN); }
+exception  { return(EXCEPTION_TOKEN); }
+exit       { return(EXIT_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+for        { return(FOR_TOKEN); }
+function   { return(FUNCTION_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+generic    { return(GENERIC_TOKEN); }
+goto       { return(GOTO_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+if         { return(IF_TOKEN); }
+in         { return(IN_TOKEN); }
+is         { return(IS_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+limited    { return(LIMITED_TOKEN); }
+loop       { return(LOOP_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+mod        { return(MOD_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+new        { return(NEW_TOKEN); }
+not        { return(NOT_TOKEN); }
+null       { return(NULL_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+of         { return(OF_TOKEN); }
+or         { return(OR_TOKEN); }
+others     { return(OTHERS_TOKEN); }
+out        { return(OUT_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+package    { return(PACKAGE_TOKEN); }
+pragma     { return(PRAGMA_TOKEN); }
+private    { return(PRIVATE_TOKEN); }
+procedure  { return(PROCEDURE_TOKEN); }
+protected  { return(PROTECTED_TOKEN); }
+@
+
+Note that the orignal incorrectly returned [[RENAMES_TOKEN]] for [[requeue]].
+
+<<Ada reserved word patterns>>=
+raise      { return(RAISE_TOKEN); }
+range      { return(RANGE_TOKEN); }
+record     { return(RECORD_TOKEN); }
+rem        { return(REM_TOKEN); }
+renames    { return(RENAMES_TOKEN); }
+requeue    { return(REQUEUE_TOKEN); }
+return     { return(RETURN_TOKEN); }
+reverse    { return(REVERSE_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+select     { return(SELECT_TOKEN); }
+separate   { return(SEPARATE_TOKEN); }
+subtype    { return(SUBTYPE_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+tagged     { return(TAGGED_TOKEN); }
+task       { return(TASK_TOKEN); }
+terminate  { return(TERMINATE_TOKEN); }
+then       { return(THEN_TOKEN); }
+type       { return(TYPE_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+until      { return(UNTIL_TOKEN); }
+use        { return(USE_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+when       { return(WHEN_TOKEN); }
+while      { return(WHILE_TOKEN); }
+with       { return(WITH_TOKEN); }
+@
+
+<<Ada reserved word patterns>>=
+xor        { return(XOR_TOKEN); }
+@
+
+<<Ada delimiter patterns>>=
+"=>"    { return(ARROW); }
+".."    { return(DOUBLE_DOT); }
+"**"    { return(DOUBLE_STAR); }
+":="    { return(ASSIGNMENT); }
+"/="    { return(INEQUALITY); }
+">="    { return(GREATER_THAN_OR_EQUAL); }
+"<="    { return(LESS_THAN_OR_EQUAL); }
+"@<<"    { return(LEFT_LABEL_BRACKET); }
+"@>>"    { return(RIGHT_LABEL_BRACKET); }
+"<>"    { return(BOX); }
+"&"     { return('&'); }
+"("     { return('('); }
+")"     { return(')'); }
+"*"     { return('*'); }
+"+"     { return('+'); }
+","     { return(','); }
+"-"     { return('-'); }
+"."     { return('.'); }
+"/"     { return('/'); }
+":"     { return(':'); }
+";"     { return(';'); }
+"<"     { return('<'); }
+"="     { return('='); }
+">"     { return('>'); }
+"|"     { return('|'); }
+"!"     { return('|'); } -- Ada Reference Manual 2.10(1)
+"'"     { return('''); }
+@
+
+Again the patterns here are simplified by the use of [[-i]] rather
+than using upper-lower-case groups.  The only case where [[was_id]]
+was being set to [[true]] was for indentifiers, so that is done
+explicitly here. Another change I made was to support obsolete
+([[%]]-delimited) strings.  I could probably support obsolete
+([[:]]-delimited) based literals as well, but neither should really be
+necessary.
+
+<<Ada lexical pattern macros>>=
+DIGIT            [0-9]
+EXTENDED_DIGIT   [0-9a-f]
+INTEGER          ({DIGIT}(_?{DIGIT})*)
+EXPONENT         (e(\+?|-){INTEGER})
+DECIMAL_LITERAL  {INTEGER}(\.?{INTEGER})?{EXPONENT}?
+BASE             {INTEGER}
+BASED_INTEGER    {EXTENDED_DIGIT}(_?{EXTENDED_DIGIT})*
+BASED_LITERAL    {BASE}#{BASED_INTEGER}(\.{BASED_INTEGER})?#{EXPONENT}?
+IDENTIFIER       [a-z]("_"?[a-z0-9])*
+OBSOLETE_STRING  %([^"%]|(%%))*%
+STRING_LITERAL   \"([^"]*(\"\")*)*\" 
+CHAR_LITERAL     \'[^\n]\'          
+@
+
+<<Ada literal patterns>>=
+{IDENTIFIER}          { was_id := true; return(IDENTIFIER); }
+{DECIMAL_LITERAL}     { return(DECIMAL_LITERAL); }
+{BASED_LITERAL}       { return(BASED_LITERAL); }
+{STRING_LITERAL}      { return(STRING_LITERAL); }
+{OBSOLETE_STRING}     { return(STRING_LITERAL); }
+@
+
+The old kludge used [[was_id]] to determine if an attribute may
+follow.  Instead, I use the grammar to indicate the possibility.
+
+<<Ada literal patterns>>=
+{CHAR_LITERAL}        {
+                        --| kludge for character literal / attribute problem
+                        if Maybe_Attr then
+                          yyless(1);
+
+                          return (''');
+		        else
+                          return(CHAR_LITERAL);
+                        end if;
+                      }
+@
+
+Patterns are processed in the order presented.  This means that API
+documentation comments must be processed before regular comments.
+
+<<Ada ignore patterns>>=
+[ \f\t\r]*    { Bogus; }          --/* ignore spaces, tabs, carriage returns */
+<<Ada API documentation patterns>>
+"--".*        { Bogus; }          --/* ignore comments */
+[\n]          { <<Ada lexer: end of line>> }
+@
+
+<<Ada lexer: end of line>>=
+Lines := Lines + 1;
+@
+
+<<Ada error patterns>>=
+.                           { return (ERROR); }
+-- _{IDENTIFIER}               {Handle_Errors; 
+--                              Put_Line("Leading underscore in identifier.")
+--                              ;
+--                             }
+-- {IDENTIFIER}__{IDENTIFIER}  {Handle_Errors; 
+--                              Put_Line("Consecutive underscores in identifier.")
+--                              ;
+--                             }
+@
+
+The original code basically redefined the tokens in the package
+inline.  Instead, I used the ones automatically generated by the parser.
+
+<<Ada lexer dependencies>>=
+with A95p_Tokens; use A95p_Tokens;
+@
+
+<<Ada lexer function definitions>>=
+procedure Reset (File_Name : in STRING);
+--| PURPOSE
+--| Zero line number count for current file and update total line
+--| count for all files.  Reset key variables for current file.
+--| Open input and output files.
+@
+
+<<Ada lexer function bodies>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Reset                            *
+-- *                                                         *
+-- ***********************************************************
+procedure Reset (File_Name : in STRING) is
+--| PURPOSE
+--| Zero line number count and reset key variables for current
+--| file.  Open input and output files.
+begin -- Reset
+  Lines           := 1;
+  Was_ID          := FALSE;
+    Was_Comment := False;
+   Maybe_Attr := False;
+   Save_Was_ID := False;
+ A95_IO.Open_Input (File_Name);
+  A95_IO.Create_Output;
+end Reset;
+@
+
+<<Ada lexer: end of line>>=
+Was_Comment := True;
+@
+
+<<Ada lexer function definitions>>=
+procedure Close_Files;
+--| PURPOSE
+--| Close the input and output files.
+@
+
+<<Ada lexer function bodies>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Close_Files                      *
+-- *                                                         *
+-- ***********************************************************
+procedure Close_Files is
+--| PURPOSE
+--| Close the input and output files.
+begin -- Close_Files
+  A95_IO.Close_Input;
+  A95_IO.Close_Output;
+end Close_Files;
+@
+
+The orignal code used the name [[Get_Token]], but [[YYLex]] is the
+default function used by ayacc.
+
+<<Ada lexer function definitions>>=
+function YYLex return TOKEN;
+--| PURPOSE		     
+--| Return current token
+@
+
+<<Ada lexer function bodies>>=
+--| NOTE:
+--| This function is acronymic and does not reflect a good design
+--| choice, but it is retained for compatibility with the YYParse
+--| function generated by AYACC, where YYParse calls YYLex.
+--|
+--| Function YYLex is inserted here by AFLEX.
+--| Return current token (inserted below).
+##
+@
+
+<<Ada lexer function definitions>>=
+function Get_Token_Value return STRING;
+--| PURPOSE
+--| Return value associated with current token (e.g., if current
+--| token is an identifier, this is the name of the identifier);
+--| "Current token" is the last token returned by a call to
+--| YYLex
+@
+
+<<Ada lexer function bodies>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Get_Token_Value                  *
+-- *                                                         *
+-- ***********************************************************
+function Get_Token_Value return STRING is
+--| PURPOSE
+--| Return value associated with current token (e.g., if current
+--| token is an identifier, this is the name of the identifier);
+--| "Current token" is the last token returned by a call to
+--| Get_Token
+begin -- Get_Token_Value
+  return A95_DFA.YYText;
+end Get_Token_Value;
+@
+
+<<Ada lexer function definitions>>=
+function Get_Current_Line return NATURAL;
+--| PURPOSE
+--| Return line on which current token is located
+@
+
+<<Ada lexer function bodies>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Get_Current_Line                 *
+-- *                                                         *
+-- ***********************************************************
+function Get_Current_Line return NATURAL is
+--| PURPOSE
+--| Return line on which current token is located
+begin -- Get_Current_Line
+  return Lines;
+end Get_Current_Line;
+@
+
+<<Ada lexer function definitions>>=
+procedure Get_Statistics (Number_of_Lines : out NATURAL);
+--| PURPOSE
+--| Return statistics on the last file processed.  These
+--| counters are reset by a call to Reset.  This
+--| routine should be called after the parse is complete.
+@
+
+<<Ada lexer function bodies>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Get_Statistics                   *
+-- *                                                         *
+-- ***********************************************************
+procedure Get_Statistics (Number_of_Lines : out NATURAL) is
+--| PURPOSE
+--| Return statistics on the last file processed.  These
+--| counters are reset by a call to Reset.  This
+--| routine should be called after the parse is complete.
+begin -- Get_Statistics
+  Number_of_Lines := Lines - 1;
+end Get_Statistics;
+@
+
+<<Ada lexer dependencies>>=
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+@
+
+<<Ada lexer function definitions>>=
+function Get_API_Doc return Unbounded_String;
+--| PURPOSE
+--| Return & clear API documentation accumulated so far
+@
+
+<<Ada lexer function bodies>>=
+function Get_API_Doc return Unbounded_String is
+  Comment : Unbounded_String := Current_API_Doc;
+begin
+  Current_API_Doc := Null_Unbounded_String;
+  return Comment;
+end Get_API_Doc;
+@
+
+<<Ada lexer function definitions>>=
+function Get_API_Group return Unbounded_String;
+--| PURPOSE
+--| Return current API documentation group name
+@
+
+<<Ada lexer function bodies>>=
+function Get_API_Group return Unbounded_String is
+begin
+  if Current_Group = No_Element then
+    return Null_Unbounded_String;
+  else
+    return Key(Current_Group);
+  end if;
+end Get_API_Group;
+@
+
+<<Ada lexer function definitions>>=
+function API_Group_Doc(Name : Unbounded_String) return Unbounded_String;
+--| PURPOSE
+--| Return documentation string associated with group
+@
+
+<<Ada lexer function bodies>>=
+function API_Group_Doc(Name : Unbounded_String) return Unbounded_String is
+   C : constant Cursor := Find(API_Groups, Name);
+begin
+  if C = No_Element then
+    return Null_Unbounded_String;
+  else
+    return Element(C);
+  end if;
+end API_Group_Doc;
+@
+
+The only dependency other than afay is the Ada0Y container package sample
+implementation for Ada 95, also from powerada.com.  Once my own containers
+work well enough, that dependency will probably go away.
+
+<<Ada lexer private dependencies>>=
+with A95_IO; use A95_IO;
+with A95_DFA; use A95_DFA;
+with Ada.Text_IO; use Ada; use Ada.Text_IO;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
+with Ada.Containers.Hashed_Maps;  use Ada.Containers;
+with Ada.Strings.Hash; use Ada.Strings;
+@
+
+<<Ada lexer private definitions>>=
+Lines            : NATURAL := 1;
+Was_ID           : BOOLEAN := FALSE;
+@
+
+<<Ada lexer private definitions>>=
+Maybe_Attr       : Boolean := False;
+Was_Comment      : Boolean := False;
+Save_Was_ID : Boolean := False;
+@
+
+<<Ada lexer private functions>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Lexical_Analyzer.Bogus                            *
+-- *                                                         *
+-- ***********************************************************
+procedure Bogus is
+  -- dummy routine
+begin
+   Was_Comment := True;
+end Bogus;
+@
+
+<<Ada API documentation patterns>>=
+"--"[|+>(].*$      { Add_API_Doc; }
+"--{".*\}$	   { Add_API_Group; }
+@
+
+<<Ada lexer private definitions>>=
+Current_API_Doc : Unbounded_String := Null_Unbounded_String;
+@
+
+<<Ada lexer private functions>>=
+procedure Add_API_Doc is
+begin
+  if Length(Current_API_Doc) > 0 then
+    if YYText(3) = '+' then
+      Append(Current_API_Doc, ' ' & YYText(4 .. YYText'Length));
+    else
+      Append(Current_API_Doc, ASCII.LF & YYText(3 .. YYText'Length));
+    end if;
+  else
+    Append(Current_API_Doc, YYText(3 .. YYText'Length));
+  end if;
+  Was_Comment := True;
+end Add_API_Doc;
+@
+
+<<Ada lexer private definitions>>=
+function Hash(Key : Unbounded_String) return Hash_Type is
+begin
+  return Hash(To_String(Key));
+end Hash;
+package API_Group_Hash is new Hashed_Maps(Unbounded_String, Unbounded_String, Hash, "=");
+use API_Group_Hash;
+API_Groups : Map;
+Current_Group : Cursor;
+@
+
+<<Ada lexer private functions>>=
+procedure Add_API_Group is
+  S : constant String := YYText;
+  G : Unbounded_String := To_Unbounded_String(S(S'First + 3 .. S'Last - 1));
+  D : Unbounded_String;
+  L : Natural;
+  Inserted : Boolean;
+begin
+  L := Index(G, ":");
+  if L = 0 then
+    D := Null_Unbounded_String;
+  else
+    D := To_Unbounded_String(Slice(G, L + 2, Length(G)));
+    Delete(G, L, Length(G));
+  end if;
+  Insert(API_Groups, G, D, Current_Group, Inserted);
+  if not Inserted and then Length(D) > 0 and then
+    Length(Element(Current_Group)) = 0 then
+    Replace_Element(API_Groups, Current_Group, D);
+  end if;
+  Was_Comment := True;
+end Add_API_Group;
+@
+
+<<Ada lexer private definitions>>=
+Last_Token : Node_Access;
+@
+
+This routine incorporates the old [[was_id]] setting which used to be
+in every single pattern action.
+
+<<Ada lexer private functions>>=
+procedure YY_USER_ACTION is
+begin
+  -- Maintain YYLval without having to modify rules above
+  if not Was_Comment then
+    Last_Token := new Node;
+  end if;
+  Last_Token.Name := To_Unbounded_String(YYText);
+  YYLVal := Last_Token;
+  -- Put_Line("Read token " & Natural'Image(Last_Token.ID) & " - """ & YYText & '"');
+  -- Maintain current Maybe_Attr flag without having to manually set
+  -- it in every rule above
+  if not Was_Comment then
+    Maybe_Attr := Save_Was_ID;
+    Save_Was_ID := Was_ID;
+    Was_ID := False;
+  else
+    Was_Comment := False;
+  end if;
+end YY_USER_ACTION;
+@
+
+\subsection{The Parser}
+
+The parser is also based off of the public domain one provided by the
+SCATC DSK project.  As above, very little will be described here,
+unless it involves a modification.
+
+--  Adjusted to work w/ "standard" ayacc
+--  Fixed ** rule
+
+<<a95p.y>>=
+-- package Ada95_Parser for SCATC DSK
+--   Modified from the original by Richard Conn
+-- Modified again by tjm for API doc extraction
+
+------------------------------------------------------------------------------
+
+<<Ada parser tokens>>
+
+<<Ada grammar start token>>
+
+<<Ada grammar support definitions>>
+
+%%
+
+<<Ada grammar rules>>
+
+%%
+
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Parser                                            * SPEC
+-- *                                                         *
+-- ***********************************************************
+package A95P is
+  <<Ada parser function definitions>>
+end A95P;
+
+<<Ada parser token private dependencies>>
+package body A95P_Tokens is
+  <<Ada parser token private definitions>>
+  <<Ada parser token private functions>>
+end A95P_Tokens;
+
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Parser                                            * BODY
+-- *                                                         *
+-- ***********************************************************
+<<Ada parser private dependencies>>
+package body A95P is
+------------------------------------------------------------------
+-- Local routines
+------------------------------------------------------------------
+  <<Ada parser private functions>>
+------------------------------------------------------------------
+-- Routines exported by the specification
+------------------------------------------------------------------
+  <<Ada parser functions>>
+end A95P;
+@
+
+<<Ada parser tokens>>=
+-- Single Character Tokens
+
+%token '&' ''' '(' ')' '*' '+' ',' '-' '.' '/' ':' ';'
+%token '<' '=' '>' '|'
+@
+
+<<Ada parser tokens>>=
+-- Special Character or Two Character Tokens
+
+%token ARROW DOUBLE_DOT DOUBLE_STAR ASSIGNMENT INEQUALITY 
+%token GREATER_THAN_OR_EQUAL LESS_THAN_OR_EQUAL
+%token LEFT_LABEL_BRACKET RIGHT_LABEL_BRACKET
+%token BOX
+@
+
+<<Ada parser tokens>>=
+-- Reserved Words
+
+%token ABORT_TOKEN ABS_TOKEN ABSTRACT_TOKEN ACCEPT_TOKEN  ACCESS_TOKEN
+%token ALIASED_TOKEN ALL_TOKEN  AND_TOKEN ARRAY_TOKEN AT_TOKEN
+
+%token BEGIN_TOKEN  BODY_TOKEN BOGUS_TOKEN
+
+%token CASE_TOKEN  CONSTANT_TOKEN
+
+%token DECLARE_TOKEN DELAY_TOKEN DELTA_TOKEN DIGITS_TOKEN DO_TOKEN 
+
+%token ELSE_TOKEN ELSIF_TOKEN END_TOKEN  ENTRY_TOKEN EXCEPTION_TOKEN 
+%token EXIT_TOKEN 
+
+%token FOR_TOKEN FUNCTION_TOKEN 
+
+%token GENERIC_TOKEN  GOTO_TOKEN
+
+%token IF_TOKEN IN_TOKEN  IS_TOKEN
+
+%token LIMITED_TOKEN LOOP_TOKEN 
+
+%token MOD_TOKEN
+
+%token NEW_TOKEN NOT_TOKEN  NULL_TOKEN
+
+%token OF_TOKEN OR_TOKEN OTHERS_TOKEN OUT_TOKEN  
+
+%token PACKAGE_TOKEN PRAGMA_TOKEN  PRIVATE_TOKEN PROCEDURE_TOKEN  
+%token PROTECTED_TOKEN
+
+%token RAISE_TOKEN  RANGE_TOKEN RECORD_TOKEN REM_TOKEN RENAMES_TOKEN 
+%token REQUEUE_TOKEN RETURN_TOKEN REVERSE_TOKEN
+
+%token SELECT_TOKEN  SEPARATE_TOKEN SUBTYPE_TOKEN
+
+%token TAGGED_TOKEN TASK_TOKEN TERMINATE_TOKEN THEN_TOKEN TYPE_TOKEN 
+
+%token UNTIL_TOKEN USE_TOKEN
+
+%token WHEN_TOKEN WHILE_TOKEN WITH_TOKEN
+
+%token XOR_TOKEN
+@
+
+<<Ada parser tokens>>=
+-- Additional Tokens
+
+%token BASE
+%token BASED_LITERAL
+
+%token DECIMAL_LITERAL
+%token DIGIT
+
+%token EXTENDED_DIGIT
+%token EXPONENT
+
+%token IDENTIFIER 
+-- %token INTEGER 
+
+%token CHAR_LITERAL STRING_LITERAL 
+
+-- %token ERROR1 ERROR2  ERROR3  ERROR4  ERROR5  ERROR6  ERROR7  ERROR8
+-- %token ERROR9 ERROR10 ERROR11 ERROR12 ERROR13 ERROR14 ERROR15
+@
+
+The [[YYSTYPE]] definition is completely different, since it has a
+different purpose.
+
+<<Ada grammar support definitions>>=
+%with Ada.Strings.Unbounded
+%use Ada.Strings.Unbounded
+{ 
+  type Decl_Class is
+     (Object, Number, Enum_Type, Record_Type, Variant_Part, Other_Type,
+      Sub_Type, Proc, Fun, Pack, Task_Type, Task_Obj, Generic_Item,
+      Excp);
+  type Decl_Flag is
+     (Is_Constant, Is_Aliased, Is_In, Is_Out, Is_New, Is_Private, Is_Inst,
+      Is_Limited, Is_Extension, Is_Abstract, Is_Tagged, Is_Access, Is_All,
+      Is_Protected, Is_Body, Is_Rename, Is_Generic, Is_Discrim, Is_Comp,
+      Is_Library);
+  type Decl_Flags is array(Decl_Flag) of Boolean;
+
+  function New_Node_Number return Natural;
+
+  type Node;
+  type Node_Access is access all Node;
+  type Node is
+     record
+        ID      : Natural := New_Node_Number;
+	Name    : Unbounded_String;
+	Prefix  : Unbounded_String; -- expanded name
+	API     : Unbounded_String;
+	Group   : Unbounded_String;
+	Class   : Decl_Class := Object;
+	Flags   : Decl_Flags := (others => False);
+	-- Could add tail pointers for fast append, but not worth it
+	Child   : Node_Access;
+	Sibling : Node_Access;
+	List    : Node_Access;
+     end record;
+  subtype YYSTYPE is Node_Access;
+  procedure Free(What : in out Node_Access);
+
+  Null_S : YYSTYPE; -- initialized to defaults
+}
+@
+ 
+<<Ada grammar start token>>=
+%start compilation
+@
+
+Most of the following rule have been modified to actually return
+something useful.  In addtion, some rules were split in order to allow
+actions without shift/reduce conflicts.
+
+% note: lstlistings has no "yacc" or "bison" language
+<<Ada grammar rules>>=
+goal_symbol : compilation { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+NUMERIC_LIT : DECIMAL_LITERAL { $$ := $1; }
+	    | BASED_LITERAL { $$ := $1; }
+            ;
+@
+
+<<Ada grammar rules>>=
+CHAR_LIT : CHAR_LITERAL { $$ := $1; }
+         ;
+@
+
+<<Ada grammar rules>>=
+GT_GT : RIGHT_LABEL_BRACKET { $$ := $1; }
+      ;
+@
+
+<<Ada grammar rules>>=
+LT_LT : LEFT_LABEL_BRACKET { $$ := $1; }
+      ;
+@
+
+<<Ada grammar rules>>=
+GE : GREATER_THAN_OR_EQUAL { $$ := $1; }
+   ;
+@
+
+<<Ada grammar rules>>=
+LT_EQ : LESS_THAN_OR_EQUAL { $$ := $1; }
+      ;
+@
+
+<<Ada grammar rules>>=
+NE : INEQUALITY { $$ := $1; }
+   ;
+@
+
+<<Ada grammar rules>>=
+CHAR_STRING : STRING_LITERAL { $$ := $1; }
+            ;
+@
+
+<<Ada grammar rules>>=
+TIC : ''' { $$ := $1; }
+    ;
+@
+
+<<Ada grammar rules>>=
+pragma  : PRAGMA_TOKEN identifier ';' { Free($1); Free($2); Free($3); }
+	| PRAGMA_TOKEN simple_name '(' pragma_arg_s ')' ';'
+	    { Free($1); Free($2); Free($3); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+pragma_arg_s : pragma_arg
+	| pragma_arg_s ',' pragma_arg  { Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+pragma_arg : expression  { Free($1); }
+	| simple_name ARROW expression { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+pragma_s :
+	| pragma_s pragma { Free($2); }
+	;
+@
+
+Note that this rule used to have an error rule at the end ([[error ';']]).
+This is unnecessary for the API documenter.
+
+<<Ada grammar rules>>=
+decl    : object_decl { $$ := $1; }
+	| number_decl { $$ := $1; }
+	| type_decl { $$ := $1; }
+	| subtype_decl { $$ := $1; }
+	| subprog_decl { $$ := $1; }
+	| pkg_decl { $$ := $1; }
+	| task_decl { $$ := $1; }
+	| prot_decl { $$ := $1; }
+	| exception_decl { $$ := $1; }
+	| rename_decl { $$ := $1; }
+	| generic_decl { $$ := $1; }
+	| body_stub { $$ := null; } -- always completions; no need to document
+	;
+@
+
+<<Ada grammar rules>>=
+object_decl : def_id_s ':' object_qualifier_opt object_subtype_def init_opt
+	 {
+	     $$ := $1;
+	     Free($2);
+             $$.Class := Object;
+             $$.Flags := $3.Flags;
+	     Free($3);
+             Child($$, $4);
+	     Child($$, $5);
+             Set_Doc($$);
+	 } ';' { $$ := $6; Free($7); }
+	;
+@
+
+<<Ada grammar rules>>=
+def_id_s : def_id { $$ := $1; }
+         | def_id_s ',' def_id { $$ := $1; List($$, $3); Free($2); }
+	 ;
+@
+
+<<Ada grammar rules>>=
+def_id  : identifier { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+object_qualifier_opt : { $$ := new Node; }
+	| ALIASED_TOKEN { $$ := $1; Set($$, Is_Aliased); }
+	| CONSTANT_TOKEN { $$ := $1; Set($$, Is_Constant); }
+	| ALIASED_TOKEN CONSTANT_TOKEN
+             {
+                 $$ := $1;
+                 Set($$, Is_Constant);
+                 Set($$, Is_Aliased);
+                 Free($2);
+             }
+	;
+@
+
+<<Ada grammar rules>>=
+object_subtype_def : subtype_ind { $$ := $1; }
+	| array_type { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+init_opt : { $$ := null; }
+	| ASSIGNMENT expression { Free($1); $$ := $2; }
+	;
+@
+
+<<Ada grammar rules>>=
+number_decl : def_id_s ':' CONSTANT_TOKEN ASSIGNMENT expression
+	 {
+	     $$ := $1;
+             $$.Class := Number;
+	     Free($2);
+             Free($3);
+	     Free($4);
+             Child($$, $5);
+             Set_Doc($$);
+	 } ';' { $$ := $6; Free($7); }
+	;
+@
+
+Here is the first split of a rule in order to remove a shift/reduce
+conflict.  The old rules did not use [[type_prefix]].  The old rules
+also used [[identifier]] rather than [[simple_name]].  If this lets in
+invalid code, it is irrelevant, as the API documenter is not a code
+validator.
+
+<<Ada grammar rules>>=
+type_prefix : TYPE_TOKEN simple_name { Free($1); $$ := $2; Set_Doc($$); }
+            ;
+@
+
+<<Ada grammar rules>>=
+type_decl : type_prefix discrim_part_opt type_completion ';'
+          { $$ := $3; Copy_Def($$, $1); List($$, $2); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+discrim_part_opt : { $$ := null; }
+	| discrim_part { $$ := $1; }
+	| '(' BOX ')' { $$ := $2; Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+type_completion : { $$ := new Node; $$.Class := Other_Type; }
+	| IS_TOKEN type_def { $$ := $2; Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+type_def : enumeration_type { $$ := $1; }
+	| integer_type { $$ := new Node; Child($$, $1); $$.Class := Other_Type; }
+	| real_type { $$ := new Node; Child($$, $1); $$.Class := Other_Type; }
+	| array_type { $$ := $1; }
+	| record_type { $$ := $1; }
+	| access_type { $$ := $1; }
+	| derived_type { $$ := $1; $$.Class := Sub_Type; Set($$, Is_New); }
+	| private_type { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+subtype_decl : SUBTYPE_TOKEN identifier IS_TOKEN subtype_ind
+        {
+	   Free($1);
+	   $$ := $2;
+	   $$.Class := Sub_Type;
+	   Free($3);
+	   Child($$, $4);
+           Set_Doc($$);
+        } ';' { $$ := $5; Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+subtype_ind : name constraint { $$ := $1 & ' ' & $2; Free($2); }
+	| name { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+constraint : range_constraint { $$ := $1; }
+	| decimal_digits_constraint { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+decimal_digits_constraint : DIGITS_TOKEN expression range_constr_opt
+            { $$ := $1 & ' ' & $2; Free($2);
+	      if $3 /= null then
+	         $$ := $$ & ' ' & $3;
+		 Free($3);
+	      end if; }
+	;
+@
+
+<<Ada grammar rules>>=
+derived_type : NEW_TOKEN subtype_ind { $$ := $1; Child($$, $2); }
+	| NEW_TOKEN subtype_ind WITH_TOKEN PRIVATE_TOKEN
+	    { $$ := $1; Child($$, $2); Set($$, Is_Extension); Free($3);
+	      Free($4); }
+	| NEW_TOKEN subtype_ind WITH_TOKEN record_def
+	    { $$ := $1; Child($$, $2); Set($$, Is_Extension); Free($3);
+	      Child($$, $4); }
+	| ABSTRACT_TOKEN NEW_TOKEN subtype_ind WITH_TOKEN PRIVATE_TOKEN
+	    { Free($1); $$ := $2; Child($$, $3); Set($$, Is_Extension);
+	      Free($4); Free($5); }
+	| ABSTRACT_TOKEN NEW_TOKEN subtype_ind WITH_TOKEN record_def
+	    { Free($1); $$ := $2; Child($$, $3); Set($$, Is_Extension);
+	      Free($4); Child($$, $5); }
+	;
+@
+
+<<Ada grammar rules>>=
+range_constraint : RANGE_TOKEN range { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+range : simple_expression DOUBLE_DOT simple_expression
+            { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| name TIC RANGE_TOKEN
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| name TIC RANGE_TOKEN '(' expression ')'
+	    { $$ := $1 & ' ' & $2 & ' ' & $3 & $4 & $5 & $6; Free($2);
+	      Free($3); Free($4); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+enumeration_type : '(' enum_id_s ')'
+            { $$ := $1; $$.Class := Enum_Type; Child($$, $2); Free($3); }
+        ;
+@
+
+<<Ada grammar rules>>=
+enum_id_s : enum_id { $$ := $1; }
+	| enum_id_s ',' enum_id { $$ := $1; Sibling($$, $3); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+enum_id : identifier { $$ := $1; Set_Doc($$); }
+	| char_lit { $$ := $1; Set_Doc($$); }
+	;
+@
+
+<<Ada grammar rules>>=
+integer_type : range_spec { $$ := $1; }
+	| MOD_TOKEN expression  { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+range_spec : range_constraint { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+range_spec_opt : { $$ := null; }
+	| range_spec { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+real_type : float_type { $$ := $1; }
+	| fixed_type { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+float_type : DIGITS_TOKEN expression range_spec_opt
+           { $$ := $1 & ' ' & $2; Free($2);
+	     if $3 /= null then
+	         $$ := $$ & ' ' & $3;
+		 Free($3);
+             end if; }
+	;
+@
+
+<<Ada grammar rules>>=
+fixed_type : DELTA_TOKEN expression range_spec
+            { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| DELTA_TOKEN expression DIGITS_TOKEN expression range_spec_opt
+	   { $$ := $1 & ' ' & $2 & ' ' & $3 & ' ' & $4;
+	     Free($2); Free($3); Free($4);
+	     if $5 /= null then
+	        $$ := $$ & ' ' & $5;
+		Free($5);
+	     end if; }
+	;
+@
+
+<<Ada grammar rules>>=
+array_type : unconstr_array_type
+            { $$ := new Node; Child($$, $1); $$.Class := Other_Type; }
+	| constr_array_type
+	    { $$ := new Node; Child($$, $1); $$.Class := Other_Type; }
+	;
+@
+
+<<Ada grammar rules>>=
+unconstr_array_type : ARRAY_TOKEN '(' index_s ')' OF_TOKEN component_subtype_def
+           { $$ := $1 & $2 & $3 & $4 & ' ' & $5 & ' ' & $6;
+	     $$.Flags(Is_Aliased) := $6.Flags(Is_Aliased);
+	     Free($2); Free($3); Free($4); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+constr_array_type : ARRAY_TOKEN iter_index_constraint OF_TOKEN component_subtype_def
+           { $$ := $1 & $2 & ' ' & $3 & ' ' & $4;
+	     $$.Flags(Is_Aliased) := $4.Flags(Is_Aliased);
+	     Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+component_subtype_def : aliased_opt subtype_ind
+           { $$ := $2; $2.Flags(Is_Aliased) := $1 /= null; Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+aliased_opt : { $$ := null; }
+	| ALIASED_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+index_s : index { $$ := $1; }
+	| index_s ',' index { $$ := $1 & $2 & ' ' &  $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+index : name RANGE_TOKEN BOX { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+iter_index_constraint : '(' iter_discrete_range_s ')'
+            { $$ := $1 & $2 & ')'; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+iter_discrete_range_s : discrete_range  { $$ := $1; }
+	| iter_discrete_range_s ',' discrete_range
+	     { $$ := $1 & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+discrete_range : name range_constr_opt
+            { $$ := $1; if $2 /= null then $$ := $$ & ' ' & $2; Free($2); end if; }
+	| range { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+range_constr_opt : { $$ := null; }
+	| range_constraint { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+record_type : tagged_opt limited_opt record_def
+           { $$ := $3; $$.Flags(Is_Limited) := $2 /= null;
+	     if $1 /= null then
+	        Set($$, Is_Tagged);
+		$$.Flags(Is_Abstract) := $1.Flags(Is_Abstract);
+             end if; Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+record_def : RECORD_TOKEN pragma_s comp_list END_TOKEN RECORD_TOKEN
+             { $$ := $1; Child($$, $3); $$.Class := Record_Type;
+	       Free($4); Free($5); }
+	| NULL_TOKEN RECORD_TOKEN { $$ := $2; Free($1); $$.Class := Record_Type; }
+	;
+@
+
+<<Ada grammar rules>>=
+tagged_opt : { $$ := null; }
+	| TAGGED_TOKEN { $$ := $1; }
+	| ABSTRACT_TOKEN TAGGED_TOKEN { $$ := $2; Set($$, Is_Abstract); Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+comp_list : comp_decl_s variant_part_opt { $$ := $1; Sibling($$, $2); }
+	| variant_part pragma_s { $$ := $1; }
+	| NULL_TOKEN ';' pragma_s { $$ := null; Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+comp_decl_s : comp_decl { $$ := $1; }
+	| comp_decl_s pragma_s comp_decl { $$ := $1; Sibling($$, $3); }
+	;
+@
+
+<<Ada grammar rules>>=
+variant_part_opt : pragma_s { $$ := null; }
+	| pragma_s variant_part pragma_s { $$ := $2; }
+	;
+@
+
+The next rule used to have an error rule as well ([[error ';']]).
+
+<<Ada grammar rules>>=
+comp_decl : def_id_s ':' component_subtype_def init_opt
+            { $$ := $1; Set_Doc($$); $$.Class := Object; Set($$, Is_Comp);
+	      Free($2); Child($$, $3); Child($$, $4); } ';'
+	    { $$ := $5; Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+discrim_part : '(' discrim_spec_s ')' { $$ := $2; Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+discrim_spec_s : discrim_spec { $$ := $1; }
+	| discrim_spec_s ';' discrim_spec { $$ := $1; Sibling($$, $3); Free($2); }
+	;
+@
+
+And here is another rule that used to have an error rule (just
+[[error]]).
+
+<<Ada grammar rules>>=
+discrim_spec : def_id_s ':' access_opt mark init_opt
+	  { $$ := $1; Set_Doc($$);
+	    $$.Flags(Is_Access) := $3 /= null;
+	    Child($$, $4);
+	    Set($4, Is_Discrim);
+	    Child($$, $5);
+	    Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+access_opt : { $$ := null; }
+	| ACCESS_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+variant_part : CASE_TOKEN simple_name IS_TOKEN pragma_s variant_s END_TOKEN
+                                                                CASE_TOKEN ';'
+               { $$ := $2; $$.Class := Variant_Part; Child($$, $5);
+	         Free($1); Free($3); Free($6); Free($7); Free($8); }
+	;
+@
+
+<<Ada grammar rules>>=
+variant_s : variant { $$ := $1; }
+	| variant_s variant { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+variant : WHEN_TOKEN choice_s ARROW pragma_s comp_list
+            { $$ := $2; Child($$, $5); Free($1); Free($3); }
+	;		  
+@
+
+<<Ada grammar rules>>=
+choice_s : choice { $$ := $1; }
+	| choice_s '|' choice { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+choice : expression { $$ := $1; }
+	| discrete_with_range { $$ := $1; }
+	| OTHERS_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+discrete_with_range : name range_constraint  { $$ := $1 & ' ' & $2; Free($2); }
+	| range {$$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+access_type : ACCESS_TOKEN subtype_ind
+            { $$ := $1; Child($$, $2); $$.Class := Sub_Type; Set($$, Is_Access); }
+	| ACCESS_TOKEN CONSTANT_TOKEN subtype_ind
+	    { $$ := $1; Child($$, $3); $$.Class := Sub_Type; Set($$, Is_Access);
+	      Set($$, Is_Constant); Free($2); }
+	| ACCESS_TOKEN ALL_TOKEN subtype_ind
+	    { $$ := $1; Child($$, $3); $$.Class := Sub_Type; Set($$, Is_Access);
+	      Set($$, Is_All); Free($2); }
+	| ACCESS_TOKEN prot_opt PROCEDURE_TOKEN formal_part_opt
+	    { $$ := $1; $$.Class := Proc; Child($$, $4);
+	      $$.Flags(Is_Protected) := $2 /= null; Set($$, Is_Access);
+	      Free($2); Free($3); }
+	| ACCESS_TOKEN prot_opt FUNCTION_TOKEN formal_part_opt RETURN_TOKEN mark
+	    { $$ := $1; $$.Class := Fun; Child($$, $6); Child($$, $4);
+	      $$.Flags(Is_Protected) := $2 /= null; Set($$, Is_Access); Free($2);
+	      Free($3); Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_opt : { $$ := null; }
+	| PROTECTED_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+decl_part : { $$ := null; }
+	| decl_item_or_body_s1 { $$ := $1; }
+	;		
+@
+
+<<Ada grammar rules>>=
+decl_item_s :  { $$ := null; }
+	| decl_item_s1 { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+decl_item_s1 : decl_item { $$ := $1; }
+	| decl_item_s1 decl_item { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+decl_item : decl { $$ := $1; }
+	| use_clause { $$ := null; }
+	| rep_spec { $$ := null; }
+	| pragma { $$ := null; }
+	;
+@
+
+<<Ada grammar rules>>=
+decl_item_or_body_s1 : decl_item_or_body { $$ := $1; }
+	| decl_item_or_body_s1 decl_item_or_body { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+decl_item_or_body : body { $$ := $1; }
+	| decl_item { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+body : subprog_body { $$ := $1; Set($$, Is_Body); }
+	| pkg_body { $$ := $1; Set($$, Is_Body); }
+	| task_body { $$ := $1; Set($$, Is_Body); }
+	| prot_body { $$ := $1; Set($$, Is_Body); }
+	;
+@
+
+<<Ada grammar rules>>=
+name : simple_name { $$ := $1; }
+	| indexed_comp { $$ := $1; }
+	| selected_comp { $$ := $1; }
+	| attribute { $$ := $1; }
+	| operator_symbol { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+mark : simple_name { $$ := $1; }
+	| mark TIC attribute_id { $$ := $1 & ''' & $3; Free($2); Free($3); }
+	| mark '.' simple_name { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+simple_name : identifier { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+compound_name : simple_name { $$ := $1; }
+	| compound_name '.' simple_name { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+c_name_list : compound_name { $$ := $1; }
+	 | c_name_list ',' compound_name {$$ := $1; Sibling($$, $3); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+used_char : char_lit { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+operator_symbol : char_string { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+indexed_comp : name '(' value_s ')'
+            { $$ := $1 & '(' & $3 & ')'; Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+value_s : value { $$ := $1; }
+	| value_s ',' value { $$ := $1 & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+The following rule also had a plain error alternative.
+
+<<Ada grammar rules>>=
+value : expression { $$ := $1; }
+	| comp_assoc { $$ := $1; }
+	| discrete_with_range { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+selected_comp : name '.' simple_name { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	| name '.' used_char { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	| name '.' operator_symbol { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	| name '.' ALL_TOKEN { $$ := $1 & '.' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+attribute : name TIC attribute_id { $$ := $1 & ''' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+attribute_id : identifier { $$ := $1; }
+	| DIGITS_TOKEN { $$ := $1; }
+	| DELTA_TOKEN { $$ := $1; }
+	| ACCESS_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+literal : numeric_lit { $$ := $1; }
+	| used_char { $$ := $1; }
+	| NULL_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+aggregate : '(' comp_assoc ')' { $$ := $1 & $2 & ')'; Free($2); Free($3); }
+	| '(' value_s_2 ')' { $$ := $1 & $2 & ')'; Free($2); Free($3); }
+	| '(' expression WITH_TOKEN value_s ')'
+	    { $$ := $1 & ' ' & $2 & ' ' & $3 & ')'; Free($2); Free($3); Free($4); }
+	| '(' expression WITH_TOKEN NULL_TOKEN RECORD_TOKEN ')'
+	    { $$ := $1 & ' ' & $2 & ' ' & $3 & ' ' & $4 & ')'; Free($2); Free($3);
+	      Free($4); Free($5); }
+	| '(' NULL_TOKEN RECORD_TOKEN ')'
+	    { $$ := $1 & $2 & ' ' & $3 &  ')'; Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+value_s_2 : value ',' value { $$ := $1 & ',' & ' ' & $3; Free($2); Free($3); }
+	| value_s_2 ',' value { $$ := $1 & ',' & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+comp_assoc : choice_s ARROW expression 
+            { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+expression : relation { $$ := $1; }
+	| expression logical relation
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| expression short_circuit relation
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+logical : AND_TOKEN { $$ := $1; }
+	| OR_TOKEN { $$ := $1; }
+	| XOR_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+short_circuit : AND_TOKEN THEN_TOKEN { $$ := $1 & ' ' & $2; Free($2); }
+	| OR_TOKEN ELSE_TOKEN { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+relation : simple_expression { $$ := $1; }
+	| simple_expression relational simple_expression
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| simple_expression membership range
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	| simple_expression membership name
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+relational : '=' { $$ := $1; }
+	| NE { $$ := $1; }
+	| '<' { $$ := $1; }
+	| LT_EQ { $$ := $1; }
+	| '>' { $$ := $1; }
+	| GE { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+membership : IN_TOKEN { $$ := $1; }
+	| NOT_TOKEN IN_TOKEN { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+simple_expression : unary term { $$ := $1 & $2; Free($2); }
+	| term { $$ := $1; }
+	| simple_expression adding term
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+unary   : '+' { $$ := $1; }
+	| '-' { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+adding  : '+' { $$ := $1; }
+	| '-' { $$ := $1; }
+	| '&' { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+term    : factor { $$ := $1; }
+	| term multiplying factor 
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+multiplying : '*' { $$ := $1; }
+	| '/' { $$ := $1; }
+	| MOD_TOKEN { $$ := $1; }
+	| REM_TOKEN { $$ := $1; }
+	;
+@
+
+The following rule used to use a token named [[EXPONENT]] instead of
+[[DOUBLE_STAR]].  [[EXPONENT]] is an invalid token.
+
+<<Ada grammar rules>>=
+factor : primary { $$ := $1; }
+	| NOT_TOKEN primary { $$ := $1 & ' ' & $2; Free($2); }
+	| ABS_TOKEN primary { $$ := $1 & ' ' & $2; Free($2); }
+	| primary DOUBLE_STAR primary
+	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+primary : literal { $$ := $1; }
+	| name { $$ := $1; }
+	| allocator { $$ := $1; }
+	| qualified { $$ := $1; }
+	| parenthesized_primary { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+parenthesized_primary : aggregate { $$ := $1; }
+	| '(' expression ')' { $$ := $1 & $2 & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+qualified : name TIC parenthesized_primary
+            { $$ := $1 & $2 & $3; Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+allocator : NEW_TOKEN name { $$ := $1 & ' ' & $2; Free($2); }
+	| NEW_TOKEN qualified { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+statement_s : statement
+	| statement_s statement
+	;
+@
+
+<<Ada grammar rules>>=
+statement : unlabeled
+	| label statement
+	;
+@
+
+<<Ada grammar rules>>=
+unlabeled : simple_stmt
+	| compound_stmt
+	| pragma
+	;
+@
+
+The following used to have an error alternative ([[error ';']]).
+
+<<Ada grammar rules>>=
+simple_stmt : null_stmt
+	| assign_stmt
+	| exit_stmt
+	| return_stmt
+	| goto_stmt
+	| procedure_call
+	| delay_stmt
+	| abort_stmt
+	| raise_stmt
+	| code_stmt
+	| requeue_stmt
+	;
+@
+
+<<Ada grammar rules>>=
+compound_stmt : if_stmt
+	| case_stmt
+	| loop_stmt
+	| block
+	| accept_stmt
+	| select_stmt
+	;
+@
+
+<<Ada grammar rules>>=
+label : LT_LT identifier GT_GT { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+null_stmt : NULL_TOKEN ';' { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+assign_stmt : name ASSIGNMENT expression ';'
+            { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+if_stmt : IF_TOKEN cond_clause_s else_opt END_TOKEN IF_TOKEN ';'
+            { Free($1); Free($4); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+cond_clause_s : cond_clause
+	| cond_clause_s ELSIF_TOKEN cond_clause  { Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+cond_clause : cond_part statement_s
+	;
+@
+
+<<Ada grammar rules>>=
+cond_part : condition THEN_TOKEN { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+condition : expression { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+else_opt :
+	| ELSE_TOKEN statement_s { Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+case_stmt : case_hdr pragma_s alternative_s END_TOKEN CASE_TOKEN ';'
+            { Free($4); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+case_hdr : CASE_TOKEN expression IS_TOKEN { Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+alternative_s :
+	| alternative_s alternative
+	;
+@
+
+<<Ada grammar rules>>=
+alternative : WHEN_TOKEN choice_s ARROW statement_s
+            { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+loop_stmt : label_opt iteration basic_loop id_opt ';' { Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+label_opt :
+	| identifier ':' { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+iteration :
+	| WHILE_TOKEN condition { Free($2); }
+	| iter_part reverse_opt discrete_range { Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+iter_part : FOR_TOKEN identifier IN_TOKEN { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+reverse_opt :
+	| REVERSE_TOKEN { Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+basic_loop : LOOP_TOKEN statement_s END_TOKEN LOOP_TOKEN
+            { Free($1); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+id_opt : 
+	| designator  { Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+block : label_opt block_decl block_body END_TOKEN id_opt ';'  { Free($4); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+block_decl : 
+	| DECLARE_TOKEN decl_part  { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+block_body : BEGIN_TOKEN handled_stmt_s  { Free($1); }
+	;
+
+@
+
+<<Ada grammar rules>>=
+handled_stmt_s : statement_s except_handler_part_opt 
+	; 
+@
+
+<<Ada grammar rules>>=
+except_handler_part_opt : 
+	| except_handler_part 
+	;
+@
+
+<<Ada grammar rules>>=
+exit_stmt : EXIT_TOKEN name_opt when_opt ';'  { Free($1); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+name_opt :
+	| name  { Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+when_opt : 
+	| WHEN_TOKEN condition  { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+return_stmt : RETURN_TOKEN ';'  { Free($1); Free($2); }
+	| RETURN_TOKEN expression ';'  { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+goto_stmt : GOTO_TOKEN name ';'  { Free($1); Free($2); Free($3); }
+	;
+@
+
+Here, I simply removed the [[_push]] part of [[subprog_spec_is_push]].
+I'm not sure any more why.  I made the same change everywhere this
+identifier was used.
+
+<<Ada grammar rules>>=
+subprog_decl : subprog_spec ';' { $$ := $1; Free($2); }
+	| generic_subp_inst ';' { $$ := $1; Free($2); }
+	| subprog_spec_is ABSTRACT_TOKEN ';'
+        { $$ := $1; Set($$, Is_Abstract); $$.Flags(Is_Body) := False;
+           Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+subprog_spec : PROCEDURE_TOKEN compound_name
+              { Free($1); $$ := $2; $$.Class := Proc; Set_Doc($$); }
+                formal_part_opt { $$ := $2; Child($$, $4); }
+	| FUNCTION_TOKEN designator
+	      { Free($1); $$ := $2; $$.Class := Fun; Set_Doc($$); }
+                 formal_part_opt RETURN_TOKEN name
+              { $$ := $3; Child($$, $6); Child($$, $4); Free($5); }
+	| FUNCTION_TOKEN designator --  for generic inst and generic rename
+              { Free($1); $$ := $2; $$.Class := Fun; Set_Doc($$); }
+	;
+@
+
+<<Ada grammar rules>>=
+designator : compound_name { $$ := $1; }
+	| char_string { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+formal_part_opt : { $$ := null; }
+	| formal_part { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+formal_part : '(' param_s ')' { $$ := $2; Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+param_s : param { $$ := $1; }
+	| param_s ';' param { $$ := $1; Sibling($$, $3); Free($2); }
+	;
+@
+
+The following rule used to have a plain error alternative.
+
+<<Ada grammar rules>>=
+param : def_id_s ':' mode mark init_opt
+            { $$ := $1; $$.Class := Object; $$.Flags := $3.Flags; Child($$, $4);
+	      Child($$, $5);  Set_Doc($$); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+mode : { $$ := new Node; Set($$, Is_In); }
+	| IN_TOKEN { Set($$, Is_In); }
+	| OUT_TOKEN {Set($$, Is_Out); }
+	| IN_TOKEN OUT_TOKEN {Set($$, Is_In); Set($$, Is_Out); }
+	| ACCESS_TOKEN { Set($$, Is_Access); }
+	;
+@
+
+<<Ada grammar rules>>=
+subprog_spec_is : subprog_spec IS_TOKEN  { $$ := $1; Set($$, Is_Body); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+subprog_body : subprog_spec_is
+	       decl_part block_body END_TOKEN id_opt ';'
+	    { $$ := $1; Free($2); Free($4); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+procedure_call : name ';' { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+pkg_decl : pkg_spec ';' { $$ := $1; Free($2); }
+	| generic_pkg_inst ';' { $$ := $1; Free($2); }
+	;
+@
+
+The following rule was split out to remove shift/reduce conflicts.
+
+<<Ada grammar rules>>=
+pkg_prefix : PACKAGE_TOKEN compound_name
+            { Free($1); $$ := $2; $$.Class := Pack; Set_Doc($$); }
+           ;
+@
+
+<<Ada grammar rules>>=
+pkg_spec : pkg_prefix IS_TOKEN
+	     decl_item_s private_part END_TOKEN c_id_opt
+	     { $$ := $1; Free($2); Child($$, $3); Free($5); }
+       ;
+@
+
+<<Ada grammar rules>>=
+private_part :
+          -- even though private children could have need of an API
+	  -- private parts are not documented
+	| PRIVATE_TOKEN decl_item_s { Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+c_id_opt : 
+	| compound_name { Free($1); }
+	;
+@
+
+Again, [[pkg_body_prefix]] was split out due to shift/reduce conflicts.
+
+<<Ada grammar rules>>=
+pkg_body_prefix : PACKAGE_TOKEN BODY_TOKEN compound_name
+           { Free($1); Free($2); $$ := $3; $$.Class := Pack; Set_Doc($$); }
+	        ;
+@
+
+<<Ada grammar rules>>=
+pkg_body : pkg_body_prefix IS_TOKEN
+	       decl_part body_opt END_TOKEN c_id_opt ';'
+	       { $$ := $1; Free($2); Free($3); Free($5); Free($7); }
+	;
+@
+
+<<Ada grammar rules>>=
+body_opt :
+	| block_body
+	;
+@
+
+<<Ada grammar rules>>=
+private_type : tagged_opt limited_opt PRIVATE_TOKEN
+            { $$ := $3; if $1 /= null then $$.Flags := $1.Flags; end if;
+	      $$.Flags(Is_Limited) := $2 /= null; Set($$, Is_Private);
+	      $$.Class := Other_Type; Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+limited_opt : { $$ := null; }
+	| LIMITED_TOKEN { $$ := $1; }
+     	;
+@
+
+<<Ada grammar rules>>=
+use_clause : USE_TOKEN name_s ';' { Free($1); Free($2); Free($3); }
+	| USE_TOKEN TYPE_TOKEN name_s ';' { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+name_s : name { $$ := $1; }
+	| name_s ',' name { $$ := $1; List($$, $3); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+-- Normally, we don't care if it's a real decl or a renaming
+-- However, object renamings inherit their characteristics
+-- from their parents.  If we can find the immediate parent, OK; otherwise,
+-- forget it.
+rename_decl : def_id_s ':' object_qualifier_opt subtype_ind renames {
+            $$ := $1; Set_Doc($$); $$.Class := Object;
+	    $$.Flags := $3.Flags;
+	    Set($$, Is_Rename);
+	    Free($2); Free($3);
+	    Child($$, $4);  Child($$, $5); } ';' { $$ := $6; Free($7); }
+	| def_id_s ':' EXCEPTION_TOKEN renames {
+            $$ := $1; Set_Doc($$); $$.Class := Excp;
+	    Free($2); Free($3); Free($4); } ';' { $$ := $5; Free($6); }
+	| rename_unit { $$ := $1; }
+	;
+@
+
+Here is wher the [[pkg_prefix]] split above is needed as well.
+
+<<Ada grammar rules>>=
+rename_unit : pkg_prefix renames ';'
+            { $$ := $1; List($$, $2); Set($$, Is_Rename); Free($3); }
+	| subprog_spec renames ';'
+	    { $$ := $1; List($$, $2); Set($$, Is_Rename); Free($3); }
+	| generic_formal_part pkg_prefix renames ';'
+	    { $$ := $1; List($$, $2); List($$, $3);  Set($$, Is_Rename); Free($4); }
+	| generic_formal_part subprog_spec renames ';'
+            { $$ := $1; List($$, $2); List($$, $3); Set($$, Is_Rename); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+renames : RENAMES_TOKEN name { $$ := $2; Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+task_decl : task_spec ';' { $$ := $1; Free($2); }
+	;
+@
+
+Here, [[task_prefix]] was split out to remove a shift/reduce conflict.
+
+<<Ada grammar rules>>=
+task_prefix : TASK_TOKEN simple_name
+          { Free($1); $$ := $2; $$.Class := Task_Obj; Set_Doc($$); }
+            | TASK_TOKEN type_prefix discrim_part_opt
+	  { Free($1); $$ := $2; $$.Class := Task_Type; List($$, $3); }
+	    ;
+@
+
+<<Ada grammar rules>>=
+task_spec : task_prefix task_def { $$ := $1; Child($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+task_def : { $$ := null; }
+	| IS_TOKEN entry_decl_s rep_spec_s task_private_opt END_TOKEN id_opt
+	    { $$ := $2; Free($1); Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+task_private_opt :
+	| PRIVATE_TOKEN entry_decl_s rep_spec_s { Free($1); Free($2); }
+	;
+@
+
+And the [[task_body_prefix]] is split out as well.
+
+<<Ada grammar rules>>=
+task_body_prefix : TASK_TOKEN BODY_TOKEN simple_name
+             { $$ := $3; Set($$, Is_Body); Set_Doc($$);
+	       Free($1); Free($2); }
+                 ;
+@
+
+<<Ada grammar rules>>=
+task_body : task_body_prefix IS_TOKEN decl_part block_body END_TOKEN id_opt ';'
+	       { $$ := $1; Free($2); Free($3); Free($5); Free($7); } 
+	;
+@
+
+<<Ada grammar rules>>=
+prot_decl : prot_spec ';' { $$ := $1; Free($2); }
+	;
+@
+
+And the [[prot_prefix]].  This is also where [[type_prefix]] is used.
+
+<<Ada grammar rules>>=
+prot_prefix : PROTECTED_TOKEN identifier
+            { $$ := $2; Free($1); Set_Doc($$);
+	      $$.Class := Task_Obj; Set($$, Is_Protected); }
+            | PROTECTED_TOKEN type_prefix discrim_part_opt
+            { $$ := $2; Free($1); $$.Class := Task_Type;
+	      Set($$, Is_Protected); List($$, $3); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_spec : prot_prefix prot_def { $$ := $1; Child($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_def : IS_TOKEN prot_op_decl_s prot_private_opt END_TOKEN id_opt
+            { $$ := $2; Free($1); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_private_opt :
+	| PRIVATE_TOKEN prot_elem_decl_s { Free($2); }
+        ;
+@
+
+<<Ada grammar rules>>=
+prot_op_decl_s : { $$ := null; }
+	| prot_op_decl_s prot_op_decl { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_op_decl : entry_decl { $$ := $1; }
+	| subprog_spec ';' { $$ := $1; Free($2); }
+	| rep_spec { $$ := null; }
+	| pragma { $$ := null; }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_elem_decl_s : { $$ := null; }
+	| prot_elem_decl_s prot_elem_decl { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_elem_decl : prot_op_decl { $$ := $1; } | comp_decl { $$ := $1; } ;
+@
+
+Here's another split to avoid shift/reduce conflicts.
+
+<<Ada grammar rules>>=
+prot_body_prefix : PROTECTED_TOKEN BODY_TOKEN simple_name {
+              $$ := $3; Free($1); Free($2); Set_Doc($$);
+	      $$.Class := Task_Obj; Set($$, Is_Body);
+	      Set($$, Is_Protected); }
+	         ;
+@
+
+<<Ada grammar rules>>=
+prot_body : prot_body_prefix IS_TOKEN
+	       prot_op_body_s END_TOKEN id_opt ';'
+	    { $$ := $1; Free($2); Free($4); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+prot_op_body_s : pragma_s
+	| prot_op_body_s prot_op_body pragma_s
+	;
+@
+
+<<Ada grammar rules>>=
+prot_op_body : entry_body { Free($1); }
+	| subprog_body { Free($1); }
+	| subprog_spec ';' { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+entry_decl_s : pragma_s { $$ := null; }
+	| entry_decl_s entry_decl pragma_s { $$ := $1; Sibling($$, $2); }
+	;
+@
+
+And another rule split.
+
+<<Ada grammar rules>>=
+entry_pre_prefix : ENTRY_TOKEN identifier {
+             $$ := $2; $$.Class := Proc; Set($$, Is_Protected);
+	     Free($1); Set_Doc($$); }
+	         ;
+@
+
+This one actually required two splits.
+
+<<Ada grammar rules>>=
+entry_prefix : entry_pre_prefix formal_part_opt { $$ := $1; Child($$, $2); }
+	| entry_pre_prefix '(' discrete_range ')' formal_part_opt
+	   { $$ := $1; List($$, $3); Free($2); Free($4); Child($$, $5); }
+	;
+@
+
+<<Ada grammar rules>>=
+entry_decl : entry_prefix ';' { $$ := $1; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+entry_body : entry_pre_prefix formal_part_opt WHEN_TOKEN 
+                condition entry_body_part
+	    { Free($1); Free($2); Free($3); Free($4); }
+	| entry_pre_prefix '(' iter_part discrete_range ')'
+		formal_part_opt WHEN_TOKEN condition entry_body_part
+	    { Free($1); Free($2); Free($4); Free($5); Free($6); Free($7); Free($8); }
+	;
+@
+
+<<Ada grammar rules>>=
+entry_body_part : ';' { Free($1); }
+	| IS_TOKEN decl_part block_body END_TOKEN id_opt ';'
+	    { Free($1); Free($2); Free($4); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+rep_spec_s :
+	| rep_spec_s rep_spec pragma_s
+	;
+@
+
+<<Ada grammar rules>>=
+entry_call : procedure_call
+	;
+@
+
+<<Ada grammar rules>>=
+accept_stmt : accept_hdr ';' { Free($2); }
+	| accept_hdr DO_TOKEN handled_stmt_s END_TOKEN id_opt ';'
+	    { Free($2); Free($4); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+accept_hdr : ACCEPT_TOKEN entry_name formal_part_opt { Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+entry_name : simple_name { Free($1); }
+	| entry_name '(' expression ')' { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+delay_stmt : DELAY_TOKEN expression ';' { Free($1); Free($2); }
+	| DELAY_TOKEN UNTIL_TOKEN expression ';'
+	    { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+select_stmt : select_wait
+	| async_select
+	| timed_entry_call
+	| cond_entry_call
+	;
+@
+
+<<Ada grammar rules>>=
+select_wait : SELECT_TOKEN guarded_select_alt or_select else_opt
+	      END_TOKEN SELECT_TOKEN ';' { Free($1); Free($5); Free($6); Free($7); }
+	;
+@
+
+<<Ada grammar rules>>=
+guarded_select_alt : select_alt
+	| WHEN_TOKEN condition ARROW select_alt { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+or_select :
+	| or_select OR_TOKEN guarded_select_alt { Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+select_alt : accept_stmt stmts_opt
+	| delay_stmt stmts_opt
+	| TERMINATE_TOKEN ';' { Free($1); Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+delay_or_entry_alt : delay_stmt stmts_opt
+	| entry_call stmts_opt
+        ;
+@
+
+<<Ada grammar rules>>=
+async_select : SELECT_TOKEN delay_or_entry_alt
+	       THEN_TOKEN ABORT_TOKEN statement_s
+	       END_TOKEN SELECT_TOKEN ';'
+	       { Free($1); Free($3); Free($4); Free($6); Free($7); Free($8); }
+	;
+@
+
+<<Ada grammar rules>>=
+timed_entry_call : SELECT_TOKEN entry_call stmts_opt 
+		   OR_TOKEN delay_stmt stmts_opt
+	           END_TOKEN SELECT_TOKEN ';'
+		   { Free($1); Free($4); Free($7); Free($8); Free($9); }
+	;
+@
+
+<<Ada grammar rules>>=
+cond_entry_call : SELECT_TOKEN entry_call stmts_opt 
+		  ELSE_TOKEN statement_s
+	          END_TOKEN SELECT_TOKEN ';'
+		  { Free($1); Free($4); Free($6); Free($7); Free($8); }
+	;
+@
+
+<<Ada grammar rules>>=
+stmts_opt :
+	| statement_s
+	;
+@
+
+<<Ada grammar rules>>=
+abort_stmt : ABORT_TOKEN name_s ';' { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+compilation : { $$ := null; }
+	| compilation comp_unit { $$ := $1; Sibling($$, $2); }
+	| pragma pragma_s { $$ := null; }
+	;
+@
+
+<<Ada grammar rules>>=
+comp_unit : context_spec private_opt unit pragma_s
+            { $$ := $3; $$.Flags(Is_Private) := $2 /= null; Free($2); }
+	| private_opt unit pragma_s 
+	    { $$ := $2; $$.Flags(Is_Private) := $1 /= null; Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+private_opt : { $$ := null; }
+	| PRIVATE_TOKEN { $$ := $1; }
+	;
+@
+
+<<Ada grammar rules>>=
+context_spec : with_clause use_clause_opt
+	| context_spec with_clause use_clause_opt
+	| context_spec pragma
+	;
+@
+
+<<Ada grammar rules>>=
+with_clause : WITH_TOKEN c_name_list ';' { Free($1); Free($2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+use_clause_opt :
+	| use_clause_opt use_clause
+	;
+@
+
+<<Ada grammar rules>>=
+unit : pkg_decl { $$ := $1; Set($$, Is_Library); }
+	| pkg_body { $$ := $1; Set($$, Is_Library); }
+	| subprog_decl { $$ := $1; Set($$, Is_Library); }
+	| subprog_body { $$ := $1; Set($$, Is_Library); }
+	| subunit { $$ := null; }
+	| generic_decl { $$ := $1; Set($$, Is_Library); }
+	| rename_unit { $$ := $1; Set($$, Is_Library); }
+	;
+@
+
+<<Ada grammar rules>>=
+-- subunits are always completions; no need to document
+subunit : SEPARATE_TOKEN '(' compound_name ')'
+	      subunit_body { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+subunit_body : subprog_body { Free($1); }
+	| pkg_body { Free($1); }
+	| task_body { Free($1); }
+	| prot_body { Free($1); }
+	;
+@
+
+Body stubs are why most of the splits were needed above.
+
+<<Ada grammar rules>>=
+body_stub : task_body_prefix IS_TOKEN SEPARATE_TOKEN ';'
+            { Free($1); Free($2); Free($3); Free($4); }
+	| pkg_body_prefix IS_TOKEN SEPARATE_TOKEN ';'
+	    { Free($1); Free($2); Free($3); Free($4); }
+	| subprog_spec_is SEPARATE_TOKEN ';'
+	    { Free($1); Free($2); Free($3); }
+	| prot_body_prefix IS_TOKEN SEPARATE_TOKEN ';'
+	    { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+exception_decl : def_id_s ':' EXCEPTION_TOKEN ';'
+            { $$ := $1; $$.Class := Excp; Set_Doc($$); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+except_handler_part : EXCEPTION_TOKEN exception_handler { Free($1); }
+	| except_handler_part exception_handler
+	;
+@
+
+<<Ada grammar rules>>=
+exception_handler : WHEN_TOKEN except_choice_s ARROW statement_s
+             { Free($1); Free($3); }
+	| WHEN_TOKEN identifier ':' except_choice_s ARROW statement_s
+	     { Free($1); Free($2); Free($3); Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+except_choice_s : except_choice
+	| except_choice_s '|' except_choice { Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+except_choice : name { Free($1); }
+	| OTHERS_TOKEN { Free($1); }
+	;
+@
+
+<<Ada grammar rules>>=
+raise_stmt : RAISE_TOKEN name_opt ';' { Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+requeue_stmt : REQUEUE_TOKEN name ';' { Free($1); Free($2); Free($3); }
+	| REQUEUE_TOKEN name WITH_TOKEN ABORT_TOKEN ';'
+	    { Free($1); Free($2); Free($3); Free($4); Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_decl : generic_formal_part subprog_spec ';'
+            { $$ := $1; List($$, $2); Free($3); }
+	| generic_formal_part pkg_spec ';' { $$ := $1; List($$, $2); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_formal_part : { $$ := new Node; Set_Doc($$); $$.Class := Generic_Item; }
+                      GENERIC_TOKEN { $$ := $1; Free($2); }
+	| generic_formal_part generic_formal
+	    { $$ := $1; Child($$, $2); if $2 /= null then Set($2, Is_Generic); end if; }
+	;
+@
+
+And here is where the type split was needed.
+
+<<Ada grammar rules>>=
+generic_formal : param ';' { $$ := $1; Free($2); }
+	| type_prefix generic_discrim_part_opt IS_TOKEN generic_type_def ';'
+     	     { $$ := $4; List($$, $2); Copy_Def($$, $1); Free($3); Free($5); }
+	| WITH_TOKEN PROCEDURE_TOKEN simple_name
+	     { $$ := $3; $$.Class := Proc; Set_Doc($$); Free($1); Free($2); }
+	     formal_part_opt subp_default ';'
+	       { $$ := $4; Child($$, $5); List($$, $6); Free($7); }
+	| WITH_TOKEN FUNCTION_TOKEN designator {
+	    $$ := $3; $$.Class := Fun; Set_Doc($$); Free($1); Free($2); }
+	    formal_part_opt RETURN_TOKEN name subp_default ';' {
+	    $$ := $4; Child($$, $7); Child($$, $5); List($$, $8);
+	    Free($6); Free($9); }
+	| WITH_TOKEN PACKAGE_TOKEN simple_name IS_TOKEN NEW_TOKEN
+            name '(' BOX ')' {
+	    $$ := $3; $$.Class := Pack; List($$, $6); Set($$, Is_Inst);
+	    Child($$, $8); Set_Doc($$); Free($1); Free($2);
+	    Free($4); Free($5); Free($7); Free($9); }
+	      ';' { $$ := $10; Free($11); }
+	| WITH_TOKEN PACKAGE_TOKEN simple_name IS_TOKEN NEW_TOKEN name {
+	    $$ := $3; $$.Class := Pack; List($$, $6); Set($$, Is_Inst);
+	      declare
+	        I : constant Natural := Index($6.Name, "(");
+	      begin
+	        if I > 0 then
+		   Child($$, new Node);
+	           $$.Child.Name := To_Unbounded_String(Slice($6.Name, I,
+		                                              Length($6.Name)));
+		   Delete($6.Name, I, Length($6.Name));
+	        end if;
+	     end;
+	    Set_Doc($$); Free($1); Free($2); Free($4); Free($5); }
+	    ';' { $$ := $7; Free($8); }
+	| use_clause { $$ := null; }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_discrim_part_opt : { $$ := null; }
+	| discrim_part { $$ := $1; }
+	| '(' BOX ')' { $$ := $2; Free($1); Free($3); }
+	;
+@
+
+<<Ada grammar rules>>=
+subp_default : { $$ := null; }
+	| IS_TOKEN name { $$ := $2; Free($1); }
+	| IS_TOKEN BOX  { $$ := $2; Free($1); }
+	;
+@
+
+This [[basic_generic_type]] had to be split off from
+[[generic_type_def]] for the usual reason.
+
+<<Ada grammar rules>>=
+basic_generic_type : '(' BOX ')' { $$ := $1 & $2 & $3; Free($2); Free($3); }
+	| RANGE_TOKEN BOX { $$ := $1 & ' ' & $2; Free($2); }
+	| MOD_TOKEN BOX { $$ := $1 & ' ' & $2; Free($2); }
+	| DELTA_TOKEN BOX { $$ := $1 & ' ' & $2; Free($2); }
+	| DELTA_TOKEN BOX DIGITS_TOKEN BOX
+	    { $$ := $1 & ' ' & $2 & ' ' & $3 & ' ' & $4; Free($2); Free($3);
+	      Free($4); }
+	| DIGITS_TOKEN BOX { $$ := $1 & ' ' & $2; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_type_def : basic_generic_type
+            { $$ := new Node; $$.Class := Other_Type; Child($$, $1); }
+	| array_type { $$ := $1; }
+	| access_type { $$ := $1; }
+	| private_type { $$ := $1; }
+	| generic_derived_type  { $$ := $1; $$.Class := Sub_Type; Set($$, Is_New); }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_derived_type : NEW_TOKEN subtype_ind { $$ := $1; Child($$, $2); }
+	| NEW_TOKEN subtype_ind WITH_TOKEN PRIVATE_TOKEN
+	   { $$ := $1; Child($$, $2); Set($$, Is_Extension);
+	     Set($$, Is_Private); Free($3); Free($4); }
+	| ABSTRACT_TOKEN NEW_TOKEN subtype_ind WITH_TOKEN PRIVATE_TOKEN
+	   { $$ := $2; Child($$, $3); Set($$, Is_Extension);
+	     Set($$, Is_Private); Set($$, Is_Abstract);
+	     Free($1); Free($4); Free($5); }
+	;
+@
+
+The generic instantiations are the reason for a lot of prefixes as well.
+
+<<Ada grammar rules>>=
+generic_subp_inst : subprog_spec_is generic_inst
+                   { $$ := $1; List($$, $2); Set($$, Is_Inst);
+		     declare
+		        I : constant Natural := Index($2.Name, "(");
+		     begin
+		        if I > 0 then
+			   Delete($2.Name, I, Length($2.Name));
+			end if;
+	             end; }			
+	;
+@
+
+<<Ada grammar rules>>=
+generic_pkg_inst : pkg_prefix IS_TOKEN generic_inst
+                   { $$ := $1; List($$, $3); Set($$, Is_Inst);
+		     declare
+		        I : constant Natural := Index($3.Name, "(");
+		     begin
+		        if I > 0 then
+			   Delete($3.Name, I, Length($3.Name));
+			end if;
+	             end; Free($2); }
+	;
+@
+
+<<Ada grammar rules>>=
+generic_inst : NEW_TOKEN name { Free($1); $$ := $2; }
+	;
+@
+
+<<Ada grammar rules>>=
+rep_spec : attrib_def
+	| record_type_spec
+	| address_spec
+	;
+@
+
+<<Ada grammar rules>>=
+attrib_def : FOR_TOKEN mark USE_TOKEN expression ';'
+            { Free($1); Free($2); Free($3); Free($4); Free($5); }
+	;
+@
+
+<<Ada grammar rules>>=
+record_type_spec : FOR_TOKEN mark USE_TOKEN RECORD_TOKEN
+                     align_opt comp_loc_s END_TOKEN RECORD_TOKEN ';'
+            { Free($1); Free($2); Free($3); Free($4); Free($7); Free($8); Free($9); }
+	;
+@
+
+<<Ada grammar rules>>=
+align_opt :
+	| AT_TOKEN MOD_TOKEN expression ';' { Free($1); Free($2); Free($3); Free($4); }
+	;
+@
+
+<<Ada grammar rules>>=
+comp_loc_s :
+	| comp_loc_s mark AT_TOKEN expression RANGE_TOKEN range ';'
+	    { Free($2); Free($3); Free($4); Free($5); Free($6); Free($7); }
+	;
+@
+
+<<Ada grammar rules>>=
+address_spec : FOR_TOKEN mark USE_TOKEN AT_TOKEN expression ';'
+            { Free($1); Free($2); Free($3); Free($4); Free($5); Free($6); }
+	;
+@
+
+<<Ada grammar rules>>=
+code_stmt : qualified ';' { Free($1); Free($2); }
+	;
+@
+
+<<Ada parser function definitions>>=
+procedure Run (File_Name : in STRING);
+--| PURPOSE:
+--| Cause the Parser to execute.  This is simply a call to YYParse.
+@
+
+This routine now catches exceptions and prints errors.
+
+<<Ada parser functions>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Parser.Run                                        *
+-- *                                                         *
+-- ***********************************************************
+procedure Run (File_Name : in STRING) is
+begin	     
+  A95.Reset (File_Name);
+  begin
+    YYParse;
+    Set_Expanded_Names(yyval);
+  exception
+    when others =>
+      Put_Line(Standard_Error, "Line: " & Integer'Image(Get_Current_Line));
+      A95.Close_Files;
+      raise;
+  end;
+  A95.Close_Files;
+end Run;
+@
+
+<<Ada parser token private dependencies>>=
+with Ada.Unchecked_Deallocation;
+-- with Ada.Text_IO; use Ada.Text_IO;
+@
+
+The [[YYSTYPE]] manipulation routines are replaced by the API
+documenter's node manipulators.
+
+<<Ada parser token private definitions>>=
+Node_Number : Natural := Natural'First;
+@
+
+<<Ada parser token private functions>>=
+function New_Node_Number return Natural is
+begin
+   Node_Number := Node_Number + 1;
+   return Node_Number;
+end New_Node_Number;
+@
+
+<<Ada parser token private functions>>=
+procedure Real_Free is new Ada.Unchecked_Deallocation(Node, Node_Access);
+procedure Free(What : in out Node_Access) is
+begin
+  -- Put_Line("Attemping Free");
+  if What = null then
+    return;
+  end if;
+  -- Put_Line("Freeing " & Natural'Image(What.ID) & " - " & To_String(What.Name));
+  if What.Child /= null then
+    Free(What.Child);
+  end if;
+  if What.Sibling /= null then
+    Free(What.Sibling);
+  end if;
+  if What.List /= null then
+    Free(What.List);
+  end if;
+  Real_Free(What);
+end Free;
+@
+
+<<Ada parser private dependencies>>=
+with A95;               use A95;
+with A95P_Goto;         use A95P_Goto;
+with A95P_Shift_Reduce; use A95P_Shift_Reduce;
+with A95P_Tokens;       use A95P_Tokens;
+with Text_IO;           use Text_IO;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded;
+@
+
+<<Ada parser private functions>>=
+function "&"(Left, Right : Node_Access) return Node_Access is
+begin
+  if Left = null then
+    return Right;
+  else
+    if Right /= null then
+      Append(Left.Name, Right.Name);
+    end if; 
+    return Left;
+  end if;
+end "&";
+@
+
+<<Ada parser private functions>>=
+function "&"(Left : Node_Access; Right : Character) return Node_Access is
+begin
+  Append(Left.Name, Right);
+  return Left;
+end "&";
+@
+
+<<Ada parser private functions>>=
+procedure Sibling(Left : in out Node_Access; Right : Node_Access) is
+  T : Node_Access := Left;
+begin
+  if Right = null then
+    return;
+  end if;
+  if T = null then
+    Left := Right;
+  else
+    while T.Sibling /= null loop
+      T := T.Sibling;
+    end loop;
+    T.Sibling := Right;
+  end if;
+end Sibling;
+@
+
+<<Ada parser private functions>>=
+procedure Child(Left, Right : Node_Access) is
+begin
+  if Left.Child = null then
+    Left.Child := Right;
+  else
+    Sibling(Left.Child, Right);
+  end if;
+end Child;
+@
+
+<<Ada parser private functions>>=
+procedure List(Left, Right : Node_Access) is
+  T : Node_Access := Left;
+begin
+  while T.List /= null loop
+    T := T.List;
+  end loop;
+  T.List := Right;
+end List;
+@
+
+<<Ada parser private functions>>=
+procedure Set(Node : Node_Access; Flag : Decl_Flag) is
+begin
+  Node.Flags(Flag) := True;
+end Set;
+@
+
+<<Ada parser private functions>>=
+procedure Set_Doc(Node : Node_Access) is
+begin
+  Node.API := Get_API_Doc;
+  Node.Group := Get_API_Group;
+end Set_Doc;
+@
+
+<<Ada parser private functions>>=
+procedure Copy_Def(Dest, Source : Node_Access) is
+begin
+  Dest.Name := Source.Name;
+  Dest.API := Source.API;
+  Dest.Group := Source.Group;
+end Copy_Def;
+@
+
+<<Ada parser private functions>>=
+procedure Set_Expanded_Names(Start : Node_Access;
+                             Parent : Unbounded_String := Null_Unbounded_String) is
+  N : Node_Access := Start;
+  NP : Unbounded_String;
+begin
+  while N /= null loop
+    if N.Class /= Generic_Item then
+      N.Prefix := Parent;
+    end if;
+    if N.Class = Pack or N.Class = Fun or N.Class = Proc or 
+      N.Class = Enum_Type or N.Class = Generic_Item then
+      if N.Class = Generic_Item then
+        NP := N.List.Name;
+      else
+        NP := N.Name;
+      end if;
+      if Length(Parent) > 0 then
+        NP := Parent & '.' & NP;
+      end if;
+      if N.Child /= null then
+        if N.Class = Fun then
+	  Set_Expanded_Names(N.Child.Sibling, NP);
+        else
+	  Set_Expanded_Names(N.Child, NP);
+	end if;
+      end if;
+      if N.Class = Generic_Item then
+        Set_Expanded_Names(N.List, Parent);
+      end if;
+    end if;
+    N := N.Sibling;
+  end loop;
+end Set_Expanded_Names;
+@
+
+Note that the old code required a SCATC-customized ayacc, which
+required a renaming of the lexer.  This is not required here.
+
+<<Ada parser private functions>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Parser.YYError                                    *
+-- *                                                         *
+-- ***********************************************************
+procedure YYError(S: in STRING := "Syntax Error") is
+begin
+  Put(Standard_Error, S);
+end YYError;
+@
+
+<<Ada parser private functions>>=
+-- ***********************************************************
+-- *                                                         *
+-- * Ada95_Parser.YYParse                                    *
+-- *                                                         *
+-- ***********************************************************
+--| PURPOSE:
+--| Perform the parse of a file.
+--| YYParse is inserted below
+
+##%procedure_parse
+@
+
+\subsection{The API documentation generator}
+Next we have the general wrapper code.
+
+<<ada_extractdoc.ada>>=
+-- TODO:
+--   take multiple documents to process (not just multiple xrefs)
+--   sort compilation units & package contents by name
+--     provide user-deifned partial sort order (i.e., categories)
+--       e.g. --{Category} comment applies to current & all following symbols
+--       also need cat. doc; e.g. --{Category: Description}
+--   test tasks
+--   find return type & formal parameters for generic subprogram instantiations
+--     in particular, implement --() comment
+--   test doc extraction for subprogram formal parameters
+--   some sort of method to say "true type is private" (currently: all subtypes
+--   of undocumented types or with restrictions are listed as if private, but
+--   other types are listed as if public)
+
+package Extract_Doc is
+   procedure Main;
+end Extract_Doc;
+with A95P;
+pragma Elaborate_All(A95P);
+with A95P_Tokens;  use A95P_Tokens;
+pragma Elaborate_All(A95P_Tokens);
+with Ada.Command_Line; use Ada.Command_Line;
+with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Strings.Unbounded; use Ada.Strings.Unbounded; use Ada.Strings;
+with Ada.Characters.Handling; use Ada.Characters.Handling;
+with Ada.Containers.Hashed_Maps; use Ada.Containers;
+with Ada.Containers.Vectors;
+with Ada.Strings.Hash;
+package body Extract_Doc is
+   -- Linked list (.Sibling) of file names & parse trees (.Child)
+   Documents : Node_Access;
+   -- Master hash table
+   function Hash(Key : Unbounded_String) return Hash_Type is
+   begin
+      return Hash(To_String(Key));
+   end Hash;
+   type Overload_Entry;
+   type Table_Entry is access Overload_Entry;
+   type Overload_Entry is
+      record
+	 P : Node_Access;
+	 Next : Table_Entry;
+      end record;
+   package Node_Hash is new Ada.Containers.Hashed_Maps(Unbounded_String,
+                                                       Table_Entry, Hash, "=");
+   Names : Node_Hash.Map;
+   -- following aliases are because "use Names" causes undesirable conflicts
+   subtype Cursor is Node_Hash.Cursor;
+   procedure Insert(Container : in out Node_Hash.Map;
+		    Key : in Unbounded_String;
+		    New_Item : in Table_Entry;
+		    Position : out Cursor;
+		    Success : out Boolean) renames Node_Hash.Insert;
+   function Find(Container : Node_Hash.Map;
+		 Key : Unbounded_String) return Cursor renames Node_Hash.Find;
+   No_Element : Cursor renames Node_Hash.No_Element;
+   function "="(Left, Right : Cursor) return Boolean renames Node_Hash."=";
+   function Element(C : Cursor) return Table_Entry renames Node_Hash.Element;
+
+   function Get_Name(N : Node_Access) return Unbounded_String is
+   begin
+      if N.Class = Generic_Item then
+	 return N.List.Name;
+      else
+	 return N.Name;
+      end if;
+   end Get_Name;
+
+   function Get_Prefix(N : Node_Access) return Unbounded_String is
+   begin
+      if N.Class = Generic_Item then
+	 return N.List.Prefix;
+      else
+	 return N.Prefix;
+      end if;
+   end Get_Prefix;
+
+   function Expanded_Name(N : Node_Access) return Unbounded_String is
+      P : Unbounded_String := Get_Prefix(N);
+   begin
+      if Length(P) > 0 then
+	 return P & '.' & Get_Name(N);
+      else
+	 return Get_Name(N);
+      end if;
+   end Expanded_Name;
+
+   function Class_Order(N : Node_Access) return Integer is
+      C : Node_Access := N;
+   begin
+      if C.Class = Generic_Item then
+	 C := C.List;
+      end if;
+      case C.Class is
+	 when Pack =>
+	    return 0;
+	 when Enum_Type | Record_Type | Other_Type | Sub_Type | Task_Type =>
+	    return 1;
+	 when Object | Number | Task_Obj | Excp =>
+	    return 2;
+	 when Proc | Fun | Generic_Item | Variant_Part =>
+	    if C.Flags(Is_Access) then
+	       return 1;
+	    else
+	       return 3;
+	    end if;
+      end case;
+   end Class_Order;
+
+   type Sort_Entry is
+      record
+	 N : Node_Access;
+	 Original_Order : Positive;
+      end record;
+   package Sort_Vector is new Vectors(Positive, Sort_Entry);
+   function "<"(Left, Right : Sort_Entry) return Boolean is
+      Left_N, Right_N : Unbounded_String;
+      Left_C, Right_C : Integer;
+   begin
+      if Left.N.Group /= Right.N.Group then
+	 return Left.N.Group < Right.N.Group;
+      end if;
+      Left_C := Class_Order(Left.N);
+      Right_C := Class_Order(Right.N);
+      if Left_C /= Right_C then
+	 return Left_C < Right_C;
+      end if;
+      Left_N := Get_Name(Left.N);
+      Right_N := Get_Name(Right.N);
+      if Left_N /= Right_N then
+	 return Left_N < Right_N;
+      end if;
+      return Left.Original_Order < Right.Original_Order;
+   end "<";
+   package Sort_Vector_Sorter is new Sort_Vector.Generic_Sorting;
+   procedure Sort(Container: in out Sort_Vector.Vector) renames Sort_Vector_Sorter.Sort;
+
+   procedure Esc_Put(X : Character) is
+   begin
+      case X is
+	 when '%' | '_' | '&' | '#' | '{' | '}' | '$' =>
+	    Put('\');
+	    Put(X);
+	 when '\' =>
+	    Put("\textbackslash{}");
+	 when '~' =>
+	    Put("\textasciitilde{}");
+	 when '^' =>
+	    Put("\^{}");
+	 when others =>
+	    Put(X);
+      end case;
+   end Esc_Put;
+
+   procedure Esc_Put(X : Unbounded_String;
+		     First : Natural := 1;
+		     Last : Natural := Natural'Last) is
+      C : Character;
+      M : constant Natural := Natural'Min(Length(X), Last);
+   begin
+      for I in First .. M loop
+	 C := Element(X, I);
+	 -- Hack: suppress template parameter types' leading G
+	 if C /= 'G' or else I = M or else Element(X, I + 1) not in 'A' .. 'Z' then
+	    Esc_Put(Element(X, I));
+	 end if;
+      end loop;
+   end Esc_Put;
+
+   procedure Esc_Put_Line(X : Unbounded_String;
+			  First : Natural := 1;
+			  Last : Natural := Natural'Last) is
+   begin
+      Esc_Put(X, First, Last);
+      New_Line;
+   end Esc_Put_Line;
+
+   procedure Esc_Put(X : String) is
+   begin
+      for I in X'Range loop
+	 Esc_Put(X(I));
+      end loop;
+   end Esc_Put;
+
+   procedure Dup(From, To : Node_Access; Full : Boolean := False) is
+   begin
+      To.Flags := From.Flags;
+      To.Class := From.Class;
+      if Full then
+	 To.Name := From.Name;
+	 To.API := From.API;
+      end if;
+      Free(To.Child);
+      if From.Child /= null then
+	 To.Child := new Node;
+	 Dup(From.Child, To.Child, True);
+      end if;
+      Free(To.List);
+      if From.List /= null then
+	 To.List := new Node;
+	 Dup(From.List, To.List, True);
+      end if;
+      if Full then
+	 if From.Sibling /= null then
+	    To.Sibling := new Node;
+	    Dup(From.Sibling, To.Sibling, True);
+	 end if;
+      end if;
+   end Dup;
+
+   function Has_Children(X : Node_Access) return Boolean is
+   begin
+      return X.Class = Pack or X.Class = Fun or X.Class = Proc or 
+             X.Class = Enum_Type or X.Class = Generic_Item;
+   end Has_Children;
+   pragma Inline(Has_Children);
+
+   procedure Hash_All(Start : Node_Access) is
+      P : Node_Access := Start;
+      N : Unbounded_String;
+      C : Cursor;
+      Inserted : Boolean;
+      T : Table_Entry;
+   begin
+      while P /= null loop
+	 if Length(P.API) /= 0 then
+	    N := Expanded_Name(P);
+	    T := new Overload_Entry;
+	    T.P := P;
+	    Insert(Names, N, T, C, Inserted);
+	    if not Inserted then
+	       if P.Class = Fun or P.Class = Proc then
+		  declare
+		     O : Table_Entry := Element(C);
+		  begin
+		     while O.Next /= null loop
+			O := O.Next;
+		     end loop;
+		     O.Next := T;
+		  end;
+	       -- else
+		  -- Free(T);
+	       end if;
+	    end if;
+	    if Has_Children(P) then
+	       if P.Class = Fun then
+		  Hash_All(P.Child.Sibling);
+	       else
+		  Hash_All(P.Child);
+	       end if;
+	       if P.Class = Generic_Item then
+		  if P.List.Class = Fun then
+		     Hash_All(P.List.Child.Sibling);
+		  else
+		     Hash_All(P.List.Child);
+		  end if;
+	       end if;
+	    end if;
+	 end if;
+	 P := P.Sibling;
+      end loop;
+   end Hash_All;
+
+   procedure Maybe_Hash_All(Start : Node_Access) is
+      P : Node_Access := Start;
+   begin
+      while P /= null loop
+	 if Find(Names, Expanded_Name(P)) = No_Element then
+	    Hash_All(Start);
+	 end if;
+	 P := P.Sibling;
+      end loop;
+   end Maybe_Hash_All;
+
+   -- Print API docs for tree rooted at Which & all its siblings
+   procedure Print_Node(Which : Node_Access;
+			-- All of following are for recursive call:
+			-- parent node
+			Parent : Node_Access := null;
+			-- compilation parent node
+			Compilation : Node_Access := null;
+			-- force printing even if undocumented
+			Force : Boolean := False;
+			No_Sort : Boolean := False) is
+      Cur : Node_Access := Which;
+
+      -- Look up Ref in known universe
+      -- If Resolve_Doc is True, continue following See links
+      -- Source is node referencing Ref (for overload resolution)
+      -- If Matching is non-null, lookup class must match Matching's class
+      function Lookup_Ref(Ref : String;
+			  Resolve_Doc : Boolean := False;
+			  Source : Node_Access := Cur;
+			  Matching : Node_Access := null) return Node_Access;
+
+      -- The overload resolution for See lookup:
+      -- Symbol table contains overload buckets
+      -- If more than one match occurs, choose one with the same class
+      -- and same parameter profile (if it's a function or proc)
+      function Resolve(Found : Node_Access;
+		       Source : Node_Access) return Node_Access is
+	 C, CP, SP, CPL, SPL : Node_Access;
+	 FC, FN : Node_Access;
+	 Type_Match : Boolean;
+	 T : Table_Entry;
+      begin
+	 -- Find first occurence
+	 T := Element(Find(Names, Expanded_Name(Found)));
+	 -- If only one, then done
+	 if T.Next = null then
+	    return Found;
+	 end if;
+	 -- Find full match, name-only match (FN), or class-only match (FC)
+	 while T /= null loop
+	    C := T.P;
+	    if C /= Source and C.Class = Source.Class then
+	       if FC = null then
+		  FC := C;
+	       end if;
+	       CP := Source.Child;
+	       SP := C.Child;
+	       if C.Class = Fun then
+		  Type_Match := CP.Name = SP.Name;
+		  CP := CP.Sibling;
+		  SP := SP.Sibling;
+	       else
+		  Type_Match := True;
+	       end if;
+	       if Type_Match then
+		  Type_Match := (CP = null) = (SP = null);
+	       end if;
+	       if Type_Match and CP /= null then
+		  Type_Match := CP.Child.Name = SP.Child.Name;
+	       end if;
+	       -- CP and SP are actual declarations
+	       -- CPL and SPL are identifier list pointers
+	       CPL := CP;
+	       SPL := SP;
+	       while CPL /= null loop
+		  exit when SPL = null;
+		  exit when CPL.Name /= SPL.Name;
+		  SPL := SPL.List;
+		  CPL := CPL.List;
+		  if SPL = null then
+		     if CPL = null then
+			CP := CP.Sibling;
+			CPL := CP;
+		     end if;
+		     SP := SP.Sibling;
+		     SPL := SP;
+		     if Type_Match and SP /= null then
+			Type_Match := CP /= null and then CP.Child.Name = SP.Child.Name;
+		     end if;
+		  elsif CPL = null then
+		     CP := CP.Sibling;
+		     CPL := CP;
+		     if Type_Match then
+			Type_Match := CP /= null and then CP.Child.Name = SP.Child.Name;
+		     end if;
+		  end if;
+	       end loop;
+	       if CPL = null and SPL = null then
+		  if Type_Match then
+		     return C;
+		  elsif FN = null then
+		     FN := C;
+		  end if;
+	       end if;
+	    end if;
+	    T := T.Next;
+	 end loop;
+	 -- not found: return something close enough
+	 if FN /= null then
+	    return FN;
+	 elsif FC /= null then
+	    return FC;
+	 else
+	    Put_Line(Standard_Error, "Warning: can't resolve overloaded " & 
+	                             To_String(Expanded_Name(Found)));
+	    return Found;						    
+	 end if;
+      end Resolve;
+
+      Lookup_Depth : Integer := 0;
+      Max_Lookup_Depth : constant := 20;
+
+      Debug : constant Boolean := False;
+      procedure Tab is
+      begin
+	 for I in 1 .. Lookup_Depth loop
+	    Put(Standard_Error, "..");
+	 end loop;
+      end Tab;
+      pragma Inline(Tab);
+
+      -- Lookup expanded name, resolving renames/generic instantiations in path
+      -- If Matching is non-null, lookup class must match Matching's class
+      function Find_Over_Renames(Target : Unbounded_String;
+				 Matching : Node_Access := null) return Node_Access is
+	 C : Cursor;
+	 L, P : Node_Access;
+	 Prefix, Suffix : Unbounded_String;
+	 I : Integer;
+      begin
+	 if Debug then
+	    Tab;
+	    Put(Standard_Error, "  Finding " & To_String(Target));
+	    if Matching /= null then
+	       Put(Standard_Error, " matching " & Decl_Class'Image(Matching.Class));
+	    end if;
+	    New_Line(Standard_Error);
+	 end if;
+	 C := Find(Names, Target);
+	 if C /= No_Element then
+	    L := Element(C).P;
+	    if Matching = null or else Matching.Class = L.Class then
+	       if Debug then
+		  Tab;
+		  Put_Line(Standard_Error, "  +Found " &
+		                           To_String(Expanded_Name(Element(C).P)));
+	       end if;
+	       return L;
+	    end if;
+	 end if;
+	 Prefix := Target;
+	 Suffix := Null_Unbounded_String;
+	 loop
+	    I := Index(Prefix, ".", Going => Backward);
+	    if I = 0 then
+	       if Debug then
+		  Tab;
+		  Put_Line(Standard_Error, "  +*Not Found");
+	       end if;
+	       return null;
+	    end if;
+	    Suffix := Delete(Prefix, 1, I - 1) & Suffix;
+	    Prefix := Delete(Prefix, I, Length(Prefix));
+	    if Debug then
+	       Tab;
+	       Put_Line(Standard_Error, "  " & To_String(Prefix) & "*" & 
+	                                To_String(Suffix));
+	    end if;
+	    C := Find(Names, Prefix);
+	    if C /= No_Element then
+	       L := Element(C).P;
+	       if L.Flags(Is_Rename) or L.Flags(Is_Inst) then
+		  if Lookup_Depth > Max_Lookup_Depth then
+		     Put(Standard_Error,
+		         "Error: Renaming/instantiation loop detected on " &
+			 To_String(Expanded_Name(L)));
+		     Put_Line("%Loop detected");
+		     return null;
+		  end if;
+		  P := new Node;
+		  if L.Flags(Is_Inst) then
+		     P.Class := Generic_Item;
+		  else
+		     P.Class := L.Class;
+		  end if;
+		  if L.Class = Generic_Item then
+		     L := L.List;
+		  end if;
+		  if Debug then
+		     Tab;
+		     Put_Line(Standard_Error, "   Geninst/Rename of " &
+		                              To_String(L.List.Name));
+		  end if;
+		  Lookup_Depth := Lookup_Depth + 1;
+		  L := Lookup_Ref(To_String(L.List.Name), Source => L,
+		                  Matching => P);
+		  if L = null and P.Class /= Generic_Item then
+		     -- try one more time: generics can rename generics
+		     -- as if they were normals
+		     P.Class := Generic_Item;
+		     L := Element(C).P;
+		     L := Lookup_Ref(To_String(L.List.Name), Source => L,
+		                     Matching => P);
+		  end if;
+		  Free(P);
+		  if L /= null then
+		     L := Find_Over_Renames(Expanded_Name(L) & Suffix, Matching);
+		     Lookup_Depth := Lookup_Depth - 1;
+		     if L /= null then
+			if Debug then
+			   Tab;
+			   Put_Line(Standard_Error, "  +Found " &
+			                            To_String(Expanded_Name(L)));
+			end if;
+			return L;
+		     end if;
+		  else
+		     Lookup_Depth := Lookup_Depth - 1;
+		  end if;
+	       end if;
+	    end if;
+	 end loop;
+      end Find_Over_Renames;
+
+      -- Look up Ref in known universe
+      -- If Resolve_Doc is True, continue following See links
+      -- Source is node referencing Ref (for overload resolution)
+      -- If Matching is non-null, lookup class must match Matching's class
+      function Lookup_Ref(Ref : String;
+			  Resolve_Doc : Boolean := False;
+			  Source : Node_Access := Cur;
+			  Matching : Node_Access := null) return Node_Access is
+         EN : Unbounded_String;
+	 Prefix : Unbounded_String := Get_Prefix(Source);
+	 L : Node_Access;
+	 I : Natural;
+      begin
+	 if Debug then
+	    Tab;
+	    Put_Line(Standard_Error, "Finding " &
+	                             To_String(Get_Prefix(Source)) & "/" & Ref);
+	 end if;
+	 loop
+	    if Length(Prefix) = 0 then
+	       EN := To_Unbounded_String(Ref);
+	    else
+	       EN := Prefix & '.' & Ref;
+	    end if;
+	    L := Find_Over_Renames(EN, Matching);
+	    exit when L /= null or Length(Prefix) = 0;
+	    I := Index(Prefix, ".", Going => Backward);
+	    if I = 0 then
+	       Prefix := Null_Unbounded_String;
+	    else
+	       Prefix := Delete(Prefix, I, Length(Prefix));
+	    end if;
+	 end loop;
+	 if L = null then
+	    if Debug then
+	       Tab;
+	       Put_Line(Standard_Error, " *Not Found");
+	    end if;
+	    return null;
+	 end if;
+	 if Debug then
+	    Tab;
+	    Put_Line(Standard_Error, " Found " & To_String(Expanded_Name(L)));
+	 end if;
+	 if L.Class /= Generic_Item then
+	    L := Resolve(L, Source);
+	 end if;
+	 if Resolve_Doc then
+	    I := 1;
+	    if Element(L.API, 1) = '(' then
+	       I := Index(L.API, (1 => ASCII.LF));
+	       if I > 0 then
+		  I := I + 1;
+	       end if;
+	    end if;
+	    if I > 0 and then Element(L.API, I) = '>' then
+	       if L = Source or Lookup_Depth > Max_Lookup_Depth then
+		  Put_Line(Standard_Error, "Error: See loop detected on " &
+		                           To_String(Expanded_Name(L)));
+		  Put_Line("%Loop detected");
+		  L := null;
+	       else
+		  if Debug then
+		     Tab;
+		     Put_Line(Standard_Error, To_String(L.API));
+		  end if;
+		  Lookup_Depth := Lookup_Depth + 1;
+		  L := Lookup_Ref(Slice(L.API, I + 5, Length(L.API)), True, L);
+		  Lookup_Depth := Lookup_Depth - 1;
+	       end if;
+	    end if;
+	 end if;
+	 return L;
+      end Lookup_Ref;
+
+      -- Print API doc, resolving >See if needed
+      procedure Put_API(X : Node_Access := Cur) is
+	 S : Unbounded_String := To_Unbounded_String(To_String(X.API));
+	 I : Natural := Index(S, (1 => ASCII.LF));
+	 First_Line : Boolean := True;
+	 See : Node_Access;
+      begin
+	 loop
+	    if I = 0 then
+	       I := Length(S);
+	    else
+	       I := I - 1;
+	    end if;
+	    if First_Line then
+	       if Element(S, 1) = '>' then -- ">See "
+		  See := Lookup_Ref(Slice(S, 6, I), Resolve_Doc => True);
+		  if See /= null and then Length(See.API) > 0 then
+		     S := To_Unbounded_String(To_String(See.API));
+		     I := Index(S, (1 => ASCII.LF));
+		     if I = 0 then
+			I := Length(S);
+		     else
+			I := I - 1;
+		     end if;
+		     if Element(S, 1) = '(' then
+			Delete(S, 1, I);
+			I := Index(S, (1 => ASCII.LF));
+			if I = 0 then
+			   I := Length(S);
+			end if;
+		     end if;
+		  end if;
+	       end if;
+	       if Element(S, 1) = '|' then
+		  if Element(S, 2) = ':' then
+		     Esc_Put("is " & To_Lower(Element(S, 3)));
+		     Esc_Put(S, 4, I);
+		  else
+		     Esc_Put(To_Lower(Element(S, 2)));
+		     Esc_Put(S, 3, I);
+		  end if;
+		  Put_Line(".");
+	       end if;
+	       First_Line := False;
+	    else
+	       Esc_Put_Line(S, 2, I);
+	    end if;
+	    exit when I = Length(S);
+	    Delete(S, 1, I + 1);
+	    I := Index(S, (1 => ASCII.LF));
+	 end loop;
+      end Put_API;
+
+      -- Print name + profile for function or proc
+      procedure Put_Profile(X : Node_Access;
+			    What : String;
+			    Is_Fun : Boolean) is
+	 P : Node_Access := X.Child;
+	 L : Node_Access;
+	 One_Line : Boolean := True;
+      begin
+	 if Is_Fun then
+	    P := P.Sibling;
+	 end if;
+	 if P /= null then
+	    -- Put_Line("\setlongtables");
+	    -- columns: [X(] [name] [: in] [out] [type] [:= value]
+	    -- Put_Line("\begin{longtable}{l@{}l@{}l@{~}l@{}l@{}l@{}}");
+	    Put_Line("\begin{tabular}{@{}l@{}l@{~}l@{}l@{~}l@{}l}");
+	 end if;
+	 Put("{\bf " & What & "}~");
+	 Esc_Put(X.Name);
+	 if X.Flags(Is_Protected) and X.List /= null then
+	    Put("(");
+	    Esc_Put(X.List.Name);
+	    Put(")");
+	 end if;
+	 if P /= null then
+	    Put("~(");
+	    loop
+	       L := P;
+	       while L /= null loop
+		  Put("&");
+		  Esc_Put(L.Name);
+		  Put("&");
+		  if P.Flags(Is_Access) then
+		     Put("\multicolumn{2}{@{}l}{:~{\bf access}}");
+		  elsif P.Flags(Is_In) then
+		     Put(":~{\bf in}&");
+		  else
+		     Put(":&");
+		  end if;
+		  if P.Flags(Is_Out) and not P.Flags(Is_Access) then
+		     Put("~{\bf out}");
+		  end if;
+		  if P.Child.Sibling = null then
+		     Put("&\multicolumn{2}{@{}l}{");
+		  else
+		     Put("&");
+		  end if;
+		  Esc_Put(P.Child.Name);
+		  if P.Child.Sibling /= null then
+		     Put("&~:=~");
+		     Esc_Put(P.Child.Sibling.Name);
+		  end if;
+		  exit when L.List = null and P.Sibling = null;
+		  Put(';');
+		  if P.Child.Sibling = null then
+		     Put("}");
+		  end if;
+		  Put_Line("\\");
+		  One_Line := False;
+		  L := L.List;
+	       end loop;
+	       exit when P.Sibling = null;
+	       P := P.Sibling;
+	    end loop;
+	    Put(")");
+	 end if;
+	 if Is_Fun then
+	    if One_Line then
+	       Put(" {\bf return}~");
+	    else
+	       if P.Child.Sibling = null then
+		  Put("}");
+	       end if;
+	       Put_Line("\\");
+	       Put("&\multicolumn{3}{@{}r}{\makebox[0pt][r]{\bf return}}" &
+                   "&\multicolumn{2}{@{}l}{");
+	    end if;
+	    Esc_Put(X.Child.Name);
+	 end if;
+	 Put(";");
+	 if P /= null then
+	    if P.Child.Sibling = null or (Is_Fun and not One_Line) then
+	       Put("}");
+	    end if;
+	    Put_Line("\\");
+	    -- Put_Line("\end{longtable}");
+	    Put_Line("\end{tabular}");
+	 end if;
+	 Put_Line("\\");
+      end Put_Profile;
+
+      procedure Put_Params(R : Node_Access) is
+	 P, T : Node_Access;
+      begin
+	 P := R;
+	 while P /= null loop
+	    if Length(P.API) > 0 then
+	       T := P;
+	       while T /= null loop
+		  New_Line;
+		  New_Line;
+		  Esc_Put(T.Name);
+		  Put(" ");
+		  Put_API(P);
+		  T := T.List;
+	       end loop;
+	    end if;
+	    P := P.Sibling;
+	 end loop;
+      end Put_Params;
+
+      -- Cur is above
+      T : Node_Access;
+      Real_Compilation : Node_Access := Compilation;
+      Sorted : Sort_Vector.Vector;
+      Sorted_Length : Integer := 0;
+   begin
+      if Cur = null then
+	 return;
+      end if;
+      while Cur /= null loop
+	 Sorted_Length := Sorted_Length + 1;
+	 Sort_Vector.Append(Sorted, (Cur, Sorted_Length));
+	 Cur := Cur.Sibling;
+      end loop;
+      if not No_Sort then
+	 Sort(Sorted);
+	 Put_Line(Standard_Error, "Sort output:");
+	 for I in 1 .. Sorted_Length loop
+	    Cur := Sort_Vector.Element(Sorted, I).N;
+	    Put_Line(Standard_Error, "{" & To_String(Cur.Group) & "}" &
+	                             To_String(Get_Name(Cur)));
+	 end loop;
+      end if;
+      for I in 1 .. Sorted_Length loop
+	 Cur := Sort_Vector.Element(Sorted, I).N;
+	 Put_Line("% Group " & To_String(Cur.Group));
+	 if Compilation = null then
+	    Real_Compilation := Cur;
+	 end if;
+	 if not Force and then Length(Cur.API) = 0 then
+	    Put_Line(Standard_Error, "Warning: skipping " &
+	                             To_String(Expanded_Name(Cur)));
+	    Put_Line("% skipping " & To_String(Expanded_Name(Cur)));
+	 else
+	    while Cur.Class = Sub_Type and not Cur.Flags(Is_Access) loop
+	       T := Lookup_Ref(To_String(Cur.Child.Name));
+	       exit when T = null;
+	       Dup(T, Cur);
+	    end loop;
+	    if Cur = Real_Compilation then
+	       Put("\subsection{");
+	       declare
+		  N : Unbounded_String := Get_Name(Cur);
+		  I : constant Natural := Index(N, ".", Going => Backward);
+	       begin
+		  if I = 0 then
+		     Esc_Put(N);
+		  else
+		     Esc_Put(N, I + 1);
+		  end if;
+	       end;
+	       Put_Line("}");
+	    elsif Cur.Flags(Is_Generic) or Parent.Class /= Generic_Item then
+	       Put("\item[");
+	       if Cur.Class /= Variant_Part then
+		  Esc_Put(Get_Name(Cur));
+	       end if;
+	       Put("]{");
+	    end if;
+	    case Cur.Class is
+	       when Generic_Item =>
+		  declare
+		     Is_Service : Boolean;
+		     S_Start, S_End : Natural;
+		  begin
+		     if Cur = Real_Compilation then
+			Esc_Put(Cur.List.Name);
+			Put(" is a generic ");
+		     else
+			Put("Generic ");
+		     end if;
+		     Is_Service := Cur.List.Class = Pack and then
+				   Length(Cur.List.Name) > 11 and then
+				   Tail(Cur.List.Name, 11) = "_Conformant";
+		     if not Is_Service then
+			case Cur.List.Class is
+			   when Pack =>
+			      Put("package");
+			   when Proc =>
+			      Put("procedure");
+			   when Fun =>
+			      Put("function");
+			   when others =>
+			      null;
+			end case;
+			Put(" which ");
+			Put_API;
+			New_Line;
+			Put_Line("\subsubsection{Parameters}");
+			T := Cur.Child;
+			while T /= null and then Length(T.API) = 0 loop
+			   T := T.Sibling;
+			end loop;
+			if T = null then
+			   Put_Line("There are no generic parameters.");
+			else
+			   Put_Line("\begin{description}");
+			   Print_Node(Cur.Child, Cur, Real_Compilation,
+			              No_Sort => True);
+			   Put_Line("\end{description}");
+			end if;
+		     else
+			S_Start := Index(Cur.List.Name, ".", Going => Backward) + 1;
+			S_End := Length(Cur.List.Name) - 11;
+			Put("service template.  It is to be instantiated " &
+			    "using the appropriate code chunk in a package " &
+			    "providing the functionality described within, " &
+			    "using the name ");
+			Esc_Put(Cur.List.Name, S_Start, S_End);
+			Put_Line(".");
+			Put("A dependent (user) of the service must be a " &
+			    "generic unit taking an instance of ");
+			Esc_Put(Cur.List.Name);
+			Put_Line(" as a parameter.");
+			Put_Line("An application may pass the instantiation " &
+				 "from any provider into the dependent.");
+			Put("An application or dependent may also " &
+			    "use the service directly from the " &
+			    "provider by issuing a ""use <Provider>.");
+			Esc_Put(Cur.List.Name, S_Start, S_End);
+			Put_Line(""" directive.");
+		     end if;
+		     Put_Line("\subsubsection{Instantiation}");
+		     Cur.List.API := Cur.API;
+		     Print_Node(Cur.List, Cur, Real_Compilation);
+		     Cur.List.API := Null_Unbounded_String;
+		  end;
+	       when Pack =>
+		  if Cur = Real_Compilation then
+		     Esc_Put(Cur.Name);
+		     if Cur.Flags(Is_Generic) then
+			Put("is an i");
+		     else
+			Put("is a package");
+		     end if;
+		  elsif Cur.Flags(Is_Generic) or Parent.Class /= Generic_Item then
+		     if Cur.Flags(Is_Generic) then
+			Put("I");
+		     end if;
+		  end if;
+		  if Cur.Flags(Is_Generic) then
+		     Put("nstantiation of generic package ");
+		     Esc_Put(Cur.List.Name);
+		     if Cur.List = null then
+			Put(", using no instantiation parameters,");
+		     elsif Cur.Child.Name /= "<>" then
+			Put(", using (");
+			Esc_Put(Cur.List.Name);
+			Put(") to instantiate,");
+		     end if;
+		  elsif Cur /= Real_Compilation then
+		     Put("Package");
+		  end if;
+		  Put(" which ");
+		  Put_API;
+		  if not Cur.Flags(Is_Generic) then
+		     T := Cur.Child;
+		     while T /= null and then Length(T.API) = 0 loop
+			T := T.Sibling;
+		     end loop;
+		     if T /= null then
+			Put_Line("\subsubsection{Contents}");
+			Put_Line("\begin{description}");
+			Print_Node(Cur.Child, Cur, Real_Compilation);
+			Put_Line("\end{description}");
+		     end if;
+		  end if;
+	       when Task_Type | Task_Obj =>
+		  if Cur.Class = Task_Type then
+		     Put("Task type");
+		  else
+		     Put("Standalone task");
+		  end if;
+		  Put(", with ");
+		  if Cur.Child = null then
+		     Put("no entries");
+		  else
+		     Put("the entries specified below");
+		  end if;
+		  Put(", which ");
+		  Put_API;
+		  T := Cur.Child;
+		  while T /= null and then Length(T.API) = 0 loop
+		     T := T.Sibling;
+		  end loop;
+		  if T /= null then
+		     Put_Line("\subsubsection{Entries}");
+		     Put_Line("\begin{description}");
+		     Print_Node(Cur.Child, Cur, Real_Compilation);
+		     Put_Line("\end{description}");
+		  end if;
+	       when Proc =>
+		  if Cur /= Real_Compilation and then
+		     (Cur.Flags(Is_Generic) or Parent.Class /= Generic_Item) then
+		     Put_Line("~\\");
+		  end if;
+		  if Cur.Flags(Is_Protected) then
+		     Put_Profile(Cur, "entry", Is_Fun => False);
+		  else
+		     Put_Profile(Cur, "procedure", Is_Fun => False);
+		  end if;
+		  Esc_Put(Cur.Name);
+		  Put(" is ");
+		  if Cur.Flags(Is_Access) then
+		     Put("an access-to-procedure type");
+		  elsif Cur.Flags(Is_Protected) then
+		     Put("an entry");
+		  else
+		     Put("a procedure");
+		  end if;
+		  Put(" which ");
+		  Put_API;
+		  Put_Params(Cur.Child);
+	       when Fun =>
+		  if Cur /= Real_Compilation and then
+		     (Cur.Flags(Is_Generic) or Parent.Class /= Generic_Item) then
+		     Put_Line("~\\");
+		  end if;
+		  Put_Profile(Cur, "function", Is_Fun => True);
+		  Esc_Put(Cur.Name);
+		  Put(" is ");
+		  if Cur.Flags(Is_Access) then
+		     Put("an access-to-function type");
+		  else
+		     Put("a function");
+		  end if;
+		  Put(" which ");
+		  Put_API;
+		  Put_Params(Cur.Child.Sibling);
+	       when Object =>
+		  while Cur.Flags(Is_Rename) loop
+		     T := Lookup_Ref(To_String(Cur.Child.Sibling.Name));
+		     exit when T = null;
+		     Cur.Flags := T.Flags;
+		     Free(Cur.Child.Sibling);
+		     if T.Child.Sibling /= null then
+			Cur.Child.Sibling := new Node;
+			Cur.Child.Sibling.Name := T.Child.Sibling.Name;
+		     end if;
+		  end loop;
+		  T := Cur;
+		  while T /= null loop
+		     if Cur.Flags(Is_In) or Cur.Flags(Is_Out) then
+			if not Cur.Flags(Is_Generic) then
+			   Put("Parameter of mode """);
+			   if Cur.Flags(Is_Access) then
+			      Put("access");
+			   elsif Cur.Flags(Is_In) and Cur.FLags(Is_Out) then
+			      Put("in out");
+			   elsif Cur.Flags(Is_In) then
+			      Put("in");
+			   else
+			      Put("out");
+			   end if;
+			   Put(""" and");
+			elsif Cur.FLags(Is_Out) then
+			   Put("Variable of");
+			else
+			   Put("Constant of");
+			end if;
+		     elsif Parent.Class = Record_Type then
+			if Cur.Flags(Is_Constant) then
+			   if Cur.Flags(Is_Aliased) then
+			      Put("Aliased constant of");
+			   else
+			      Put("Constant of");
+			   end if;
+			elsif Cur.Flags(Is_Aliased) then
+			   Put("Aliased component of");
+			elsif Cur.Flags(Is_Rename) then
+			   -- should obtain flags from rename source
+			   Put("Alias (of ");
+			   Esc_Put(Cur.Child.Sibling.Name);
+			   Put("; characteristics unknown) of");
+			else
+			   Put("Component of");
+			end if;
+		     else
+			if Cur.Flags(Is_Constant) then
+			   if Cur.Flags(Is_Aliased) then
+			      Put("Aliased constant of");
+			   else
+			      Put("Constant of");
+			   end if;
+			elsif Cur.Flags(Is_Aliased) then
+			   Put("Aliased object of");
+			elsif Cur.Flags(Is_Rename) then
+			   -- should obtain flags from rename source
+			   Put("Alias (of ");
+			   Esc_Put(Cur.Child.Sibling.Name);
+			   Put("; characteristics unknown) of");
+			else
+			   Put("Object of");
+			end if;
+		     end if;
+		     Put(" type ");
+		     Esc_Put(Cur.Child.Name);
+		     if Cur.Child.Sibling /= null and not Cur.Flags(Is_Rename) then
+			if Cur.Flags(Is_Constant) then
+			   Put(", with a value of ");
+			else
+			   Put(", with a default value of ");
+			end if;
+			Esc_Put(Cur.Child.Sibling.Name);
+		     end if;
+		     if Length(Cur.API) > 0 then
+			Put(", which ");
+			Put_API;
+		     else
+			Put_Line(".");
+		     end if;
+		     T := T.List;
+		     if T /= null then
+			Put_Line("}");
+			Put("\item[");
+			Esc_Put(T.Name);
+			Put("]{");
+		     end if;
+		  end loop;
+	       when Number =>
+		  T := Cur;
+		  while T /= null loop
+		     Put("Named number, with value ");
+		     Esc_Put(Cur.Child.Name);
+		     Put(", which ");
+		     Put_API;
+		     T := T.List;
+		     if T /= null then
+			Put_Line("}");
+			Put("\item[");
+			Esc_Put(T.Name);
+			Put("]{");
+		     end if;
+		  end loop;
+	       when Enum_Type =>
+		  Put("Enumeration type, with values listed below, which ");
+		  Put_API;
+		  Put_Line("\begin{description}");
+		  T := Cur.Child;
+		  while T /= null loop
+		     Put("\item[");
+		     Esc_Put(T.Name);
+		     Put("]{Enumeration literal of the type ");
+		     Esc_Put(Cur.Name);
+		     if Length(T.API) /= 0 then
+			Put(", which ");
+			Put_API(T);
+		     end if;
+		     Put_Line("}");
+		     T := T.Sibling;
+		  end loop;
+		  Put_Line("\end{description}");
+	       when Record_Type =>
+		  if Cur.Flags(Is_Abstract) then
+		     Put("Abstract tagged ");
+		  elsif Cur.Flags(Is_Tagged) then
+		     Put("Tagged ");
+		  end if;
+		  if Cur.Child = null then
+		     if Cur.Flags(Is_Tagged) then
+			Put("null ");
+		     else
+			Put("Null ");
+		     end if;
+		  end if;
+		  if Cur.Flags(Is_Tagged) or Cur.Child = null then
+		     Put("record ");
+		  else
+		     Put("Record ");
+		  end if;
+		  Put("type which ");
+		  Put_API;
+		  if Cur.List /= null then
+		     Put_Line("The following discriminants apply:");
+		     Put_Line("\begin{description}");
+		     Print_Node(Cur.List, Cur, Real_Compilation, Force => True,
+		                No_Sort => True);
+		     Put_Line("\end{description}");
+		  end if;
+		  if Cur.Child /= null then
+		     Put_Line("The following components are available:");
+		     Put_Line("\begin{description}");
+		     Print_Node(Cur.Child, Cur, Real_Compilation, Force => True,
+		                No_Sort => True);
+		     Put_Line("\end{description}");
+		  end if;
+	       when Variant_Part =>
+		  T := Cur.Child;
+		  while T /= null loop
+		     if T.Child /= null then
+			Put("The following are only available when the discriminant ");
+			Esc_Put(Cur.Name);
+			Put(" is ");
+			Esc_Put(T.Name);
+			Put_Line(":");
+			Put_Line("\begin{description}");
+			Print_Node(T.Child, Parent, Real_Compilation, Force => True,
+			           No_Sort => True);
+			Put_Line("\end{description}");
+		     end if;
+		     T := T.Sibling;
+		  end loop;
+	       when Other_Type =>
+		  if Cur.Flags(Is_Limited) then
+		     Put("Limited ");
+		     if Cur.Flags(Is_Private) then
+			Put("private ");
+		     end if;
+		     if Cur.Flags(Is_Tagged) then
+			if Cur.Flags(Is_Abstract) then
+			   Put("abstract ");
+			end if;
+			Put("tagged ");
+		     end if;
+		     Put("type");
+		  elsif Cur.Flags(Is_Private) then
+		     Put("Private ");
+		     if Cur.Flags(Is_Tagged) then
+			if Cur.Flags(Is_Abstract) then
+			   Put("abstract ");
+			end if;
+			Put("tagged ");
+		     end if;
+		     Put("type");
+		  elsif Cur.Flags(Is_Abstract) then
+		     Put("Abstract tagged type");
+		  elsif Cur.Flags(Is_Tagged) then
+		     Put("Tagged type");
+		  else
+		     Put("Type");
+		  end if;
+		  Put(" which ");
+		  Put_API;
+		  if Cur.Child /= null then
+		     Put("Its basic type is """);
+		     Esc_Put(Cur.Child.Name);
+		     Put_Line(""".");
+		  end if;
+	       when Sub_Type =>
+		  if Cur.Flags(Is_Access) then
+		     Put("Access type pointing to ");
+		     if Cur.Flags(Is_All) then
+			Put("any ");
+		     else
+			Put("a ");
+		     end if;
+		     if Cur.Flags(Is_Constant) then
+			Put("contant ");
+		     end if;
+		     Put("value");
+		  elsif Cur.Flags(Is_Extension) then
+		     if Cur.Flags(Is_Limited) then
+			Put("Limited ");
+			if Cur.Flags(Is_Abstract) then
+			   Put("abstract record");
+			else
+			   Put("record");
+			end if;
+		     elsif Cur.Flags(Is_Abstract) then
+			Put("Abstract record");
+		     else
+			Put("Record");
+		     end if;
+		     Put(" extension");
+		  elsif Cur.Flags(Is_New) then
+		     Put("Descendant");
+		  else
+		     Put("Type");
+		  end if;
+		  if Cur.Flags(Is_Access) or Cur.Flags(Is_Extension) or
+		     Cur.Flags(Is_New) then
+		     Put(" of type ");
+		     Esc_Put(Cur.Child.Name);
+		  end if;
+		  Put(" which ");
+		  Put_API;
+		  if Cur.Flags(Is_Extension) then
+		     if Cur.Child.Sibling /= null and then Cur.Child.Sibling.Child /= null then
+			Put_Line("The following additional components are provided:");
+			Put_Line("\begin{description}");
+			Print_Node(Cur.Child.Sibling.Child, Cur, Real_Compilation,
+			           Force => True, No_Sort => True);
+			Put_Line("\end{description}");
+		     elsif Cur.Flags(Is_Private) then
+			Put_Line("Additional components may be provided.");
+		     else
+			Put_Line("No additional components are provided.");
+		     end if;
+		  end if;
+	       when Excp =>
+		  T := Cur;
+		  while T /= null loop
+		     Put("Exception which ");
+		     Put_API;
+		     T := T.List;
+		     if T /= null then
+			Put_Line("}");
+			Put("\item[");
+			Esc_Put(T.Name);
+			Put("]{");
+		     end if;
+		  end loop;
+	    end case;
+	    if Cur /= Real_Compilation and then
+	       (Cur.Flags(Is_Generic) or Parent.Class /= Generic_Item) then
+	       Put_Line("}");
+	    end if;
+	    if I /= Sorted_Length then
+	       New_Line;
+	    end if;
+	 end if;
+      end loop;
+   exception
+      when others =>
+	 Put_Line(Standard_Error, "Error printing API for " &
+	                          To_String(Expanded_Name(Cur)));
+	 raise;
+   end Print_Node;
+
+   procedure Main is
+   begin
+      if Argument_Count < 1 then
+	 Put_Line(Standard_Error, "Usage: " & Command_Name &
+	                          " file [crossref_source ...]");
+	 Set_Exit_Status(Failure);
+	 return;
+      end if;
+      Documents := new Node;
+      Documents.Name := To_Unbounded_String(Argument(1));
+      begin
+	 A95P.Run(Argument(1));
+	 Documents.Child := yyval;
+	 Hash_All(Documents.Child);
+      exception
+	 when Name_Error =>
+	    Put_Line(Standard_Error, "Error opening " & Argument(1) & "; aborting");
+	    Set_Exit_Status(Failure);
+	    return;
+	 when Syntax_Error =>
+	    Put_Line(Standard_Error, "Syntax errors encountered in " & Argument(1) &
+	                             "; aborting");
+	    Set_Exit_Status(Failure);
+	    return;
+	 when others =>
+	    Put_Line(Standard_Error, "Error in " & Argument(1) & "; aborting");
+	    raise;
+      end;
+      declare
+	 Last : Node_Access := Documents;
+	 Cur : Node_Access;
+      begin
+	 for I in 2 .. Argument_Count loop
+	    Cur := new Node;
+	    Cur.Name := To_Unbounded_String(Argument(I));
+	    begin
+	       A95P.Run(Argument(I));
+	       Cur.Child := yyval;
+	       Last.Sibling := Cur;
+	       Last := Cur;
+	       Maybe_Hash_All(Cur.Child);
+	    exception
+	       when Syntax_Error | Name_Error =>
+		  Free(Cur);
+		  Put_Line(Standard_Error, "Warning: " & Argument(I) &
+		                           " could not be processed");
+	       when others =>
+		  Put_Line(Standard_Error, "Error in " & Argument(1) & "; aborting");
+	    raise;
+	    end;
+	 end loop;
+      end;
+      Print_Node(Documents.Child);
+   end Main;
+end Extract_Doc;
+
+with Extract_Doc;
+procedure Ada_ExtractDoc is
+begin
+   Extract_Doc.Main;
+end Ada_ExtractDoc;
+@
+
+The "mkapi" script works just like the ada\_extractdoc program, except that
+it works with .nw files instead of .ada files, and generates the combined
+documentation on a file with the same name as the first file, but with
+".api" instead of ".nw".  As described in my compilation document, the
+simpinput program is needed to convert external file references to the
+files' contents to correct issues with noweb.
+
+\lstset{language=sh}
+<<mkapi>>=
+#!/bin/sh
+# usage: mkapi <noweb file> <xref noweb files>
+# TODO: test resolution of external chunk references
+fn="$1"
+shift
+
+# following was copied from build-script:
+pid=$$
+trap "rm -rf .*.$pid" 0
+
+function extract_chunk()
+{
+  test -f ".imports.$1.$pid" || expand_references "$1"
+  echo "@<<$2@>>="
+  simpinput "$1" | notangle -R"$2" - ".imports.$1.$pid" | \
+      sed 's/@<</@@<</g;s/@>>/@@>>/g;s/^@/@@/'
+  echo @
+}
+
+function extract_references()
+{
+   simpinput "$1" | sed -n -e '
+        # at the start of a chunk:
+        /^@<<.*@>>=/{
+         # save the name (unless it is a repeat)
+         /@<<@>>=/!h
+         # clear the pattern space & get the next line
+         s/.*//;n
+         # if it is an external reference, print the saved chunk name
+         /^@<<External Reference@>>$/{g;s/@<<\(.*\)@>>=/\1/;p}
+       }' | sort -u
+}
+
+function expand_references()
+{
+  local ref f
+  touch ".imports.${1##*/}.$pid"  # prevent infinite recursion
+  extract_references "$1" | sort -u | while read -r ref; do
+    f=$(fgrep "@<<${ref}@>>=" *.nw | grep '\.nw:@<<.*@>>=$' | cut -d: -f1 | uniq | \
+        while read x; do
+          if [ "x$x" != "x$1" ]; then
+             if [ -z $(has_ref "$x" "$ref") ]; then
+                echo "$x"
+                break
+             fi
+          fi
+        done 2>/dev/null)
+    if [ -z "$f" ]; then
+      echo "Error: External Reference @<<$ref@>> not found!" >&2
+    else
+      extract_chunk "$f" "$ref"
+    fi
+  done >".imports.${1##*/}.$pid"
+}
+function has_ref()
+{
+   local x
+   extract_references "$1" | while read x; do
+      if [ "x$x" = "x$2" ]; then
+         echo "$1"
+         break
+      fi
+   done
+}
+
+mkdir .tmp.$pid
+i=1
+an=`<<Extract Ada nodes for API docs>>`
+PATH=.:$PATH  # get ada_extractdoc from cur dir if available
+for x in $an; do
+   echo "Extracting docs for $x." >&2
+   ada_extractdoc .tmp.$pid/$x .tmp.$pid/*
+done  > ${fn%.nw}.api
+@
+
+<<Extract Ada nodes for API docs>>=
+for x in "$@" "$fn"; do
+  expand_references "$x"
+  test "${x##*/}" = "${fn##*/}" -a "$x" != "$fn" && continue
+  echo "Extracting Ada from $x." >&2
+  simpinput "$x" | noroots | sed -n -e '/.ada@>>$/{s/@<<//;s/@>>//;p}' | while read r; do
+     echo "$r" >&2
+     simpinput "$x" | notangle -R"$r" - .imports."${x##*/}".$pid > .tmp.$pid/"$r".tmp
+     if [ "$x" = "$fn" ]; then
+        echo "$r"
+	mv -f .tmp.$pid/"$r".tmp .tmp.$pid/"$r"
+     else
+        cat .tmp.$pid/"$r".tmp @>>.tmp.$pid/"$r"
+	rm -f .tmp.$pid/"$r".tmp
+     fi
+  done
+done | sort -u
+@
+
+\section{Compilation}
+
+Any Ada compiler installation has different methods of converting the
+source code to compiled units. At the moment, the only Ada compiler
+available to the author is gcc/gnat. The makefile prepares and compiles Ada
+code named in [[<<Ada Packages>>]] and [[<<Ada Programs>>]], and links any code listed in [[<<Ada Programs>>]] into
+executable binaries using gcc/gnat. It then deals with any generated
+error messages (either printing them or displaying them in
+[[$EDITOR]]).  The [[<<Ada Packages>>]] and [[<<Ada Programs>>]]
+chunks are a list of base names; the actual top-level chunk names are
+generated by appending [[.ada]] and [[-body.ada]], and ignoring
+non-existence of either.  Chunks can be imported from external sources
+by making them dependent on [[<<External Reference>>]]; they are
+extracted manually, so care must be taken that the chunks contain
+nothing but that reference.\footnote{TODO: Add chunk to list provided
+external references.}
+
+\lstset{language=[gnu]make}
+
+<<Makefile.inc>>=
+build-script : compile.nw
+	notangle -R$@ $< > $@
+	chmod +x $@
+
+# build a .nw by making <basename>.built
+%.built: %.nw
+	$(MAKE) -$(MAKEFLAGS) simpinput
+	PATH=.:$$PATH USING_MAKE=y \
+	   simpinput $< | notangle -Rbuild-script | env NOWEB_SOURCE=$< sh
+	touch $@
+@
+
+<<Remove all intermediate files>>=
+rm -f *.{ali,[os]} gcc_errs
+@
+
+<<Remove all generated files>>=
+rm -f build-script *.{ad[abs]}
+@
+
+<<build-script>>=
+#!/bin/sh
+#|build-script: Build Ada programs from literate sources
+#|Extract "Ada Packages" and "Ada Programs" from literate file, compile, and link "Ada Programs".
+#|"Ada Packages" and "Ada Programs" chunks should contain file base names; actual file
+#+names are generated by appending ".ada" and "-body.ada"; both need not exist.
+#|Also, attempts to resolve @<<External References@>> to parent's symbol name from .nw
+#+files in same directory.
+<<build-script documentation>>
+
+<<build: functions>>
+
+<<build: initialize>>
+
+echo "Extracting..."
+<<build: extract/prepare Ada files>>
+
+echo "Building..."
+<<build: compile Ada files>>
+
+<<build: finish up>>
+@
+
+On additional feature of this script is to allow any compiled packages
+to be placed under a single, global container package. This allows any
+extracted code to coexist with other packages with the same
+name.\footnote{The AARM describes another method, libraries and
+library import, in 10.1.4-9b, but that's purely
+implementation-defined, so I'll stick with this method.} The name of
+the top-level package is specified by the [[PACKAGE_LOCATION]]
+environment variable, and is referred to in source using the pacakge
+prefix [[Package_Prefix]]. For simplicity, \emph{any} occurence of
+[[Package_Prefix]] within the source, including inside strings,
+comments, etc. will be converted. This should rarely cause problems,
+and if noticed during unit testing, it can usually be easily worked
+around.  Since trailing dots are not eliminated if
+[[PACKAGE_LOCATION]] is empty, a default will have to be provided.
+
+<<build-script documentation>>=
+#|The environment variable PACKAGE_LOCATION may be set to a package hierarchy in which
+#+to place the resulting code; the default is "TJM".
+@
+
+<<build: apply package prefix>>=
+sed "s/Package_Prefix/${PACKAGE_LOCATION}/g"
+@
+
+<<build: initialize>>=
+test -z "$PACKAGE_LOCATION" && PACKAGE_LOCATION=TJM # my initials are default
+@
+
+The parent packages must exist; dummy packages are created and
+compiled for each element in the dot-separated hierarchy.
+
+<<build-script documentation>>=
+#|The entire hierarchy of packages named by PACKAGE_PREFIX will be created as empty,
+#+pure packages in the current directory.  These means that placement in a non-empty
+#+package requires compiling in a separate directory.
+@
+
+<<build: initialize>>=
+# .<whatever>.$$ is used for temp files in general
+pid=$$
+trap "rm -rf .*.$pid" 0
+@
+
+<<build: extract/prepare Ada files>>=
+x="$PACKAGE_LOCATION"
+while [ -n "$x" ]; do
+   echo "package $x is pragma Pure; end $x;" >.tmp.$pid
+   <<build: compile [[.tmp.$pid]]>>
+   rm -f .tmp.$pid
+   x=".$x"
+   x="${x%.*}"
+   x="${x#.}"
+done
+@
+
+Before compilation, the Ada code must be extracted from the document
+using [[notangle]].  Since [[notangle]] must be run multiple times on
+the same document, the name of the document file must be passed in to
+the script.  While passing in the file name as an argument to the
+script would have been nice, it would have precluded the ability to
+pass the script as standard input to the shell rather than generating
+an actual script file before running it. Thus, the name of the
+document source is passed in using the [[NOWEB_SOURCE]] environment
+variable.
+
+<<build-script documentation>>=
+#|The noweb file being processed must be placed in the NOWEB_SOURCE
+#+environment variable.  This is due to legacy restrictions on
+#+command-line parameters
+@
+
+<<build: initialize>>=
+if [ ! -f "$NOWEB_SOURCE" ]; then
+   echo "NOWEB_SOURCE must be set to the noweb document name"
+   exit 1
+fi
+@
+
+Before extracting the source, any external references must be
+resolved.  It'd be nice to use a noweb filter to accomplish this, but
+instead, this parses chunks out of the source manually. The extraction
+happens recursively, so that references within referenced chunks are
+resolved correctly. Self-references will cause unresolved chunks, but
+not an infinite loop.
+
+<<External Reference>>=
+@
+
+<<build: extract/prepare Ada files>>=
+expand_references "$NOWEB_SOURCE"
+@
+
+<<build: functions>>=
+function extract_chunk()
+{
+  test -f ".imports.$1.$pid" || expand_references "$1"
+  echo "@<<$2@>>="
+  simpinput "$1" | notangle -R"$2" - ".imports.$1.$pid" | \
+      sed 's/@<</@@<</g;s/@>>/@@>>/g;s/^@/@@/'
+  echo @
+}
+
+function extract_references()
+{
+   <<build: extract external references of [[$1]]>>
+}
+
+function expand_references()
+{
+  local ref f
+  touch ".imports.${1##*/}.$pid"  # prevent infinite recursion
+  extract_references "$1" | sort -u | while read -r ref; do
+    f=$(fgrep "@<<${ref}@>>=" *.nw | grep '\.nw:@<<.*@>>=$' | cut -d: -f1 | uniq | \
+        <<build: return name of first file not importing [[$ref]]>>)
+    if [ -z "$f" ]; then
+      echo "Error: External Reference @<<$ref@>> not found!" >&2
+    else
+      extract_chunk "$f" "$ref"
+    fi
+  done >".imports.${1##*/}.$pid"
+}
+@
+
+Extracting all external references to find out if [[$ref]] is one of
+them is kind of expensive, but since the entire file needs to be
+parsed to extract any external references, the only way to improve
+performance would be to stop once [[$ref]] is found. Unless this
+becomes a serious performance problem, this code will remain as is.
+
+<<build: functions>>=
+function has_ref()
+{
+   local x
+   extract_references "$1" | while read x; do
+      if [ "x$x" = "x$2" ]; then
+         echo "$1"
+         break
+      fi
+   done
+}
+@
+
+<<build: return name of first file not importing [[$ref]]>>=
+while read x; do
+  if [ "x$x" != "x$1" ]; then
+     if [ -z $(has_ref "$x" "$ref") ]; then
+        echo "$x"
+        break
+     fi
+  fi
+done 2>/dev/null
+@
+
+While better methods exist to parse code out of the source, using sed
+like this is good enough. The code just looks for chunk starts, and
+prints the name of the chunk started (assuming a blank name means
+{}``repeat the last name'') whenever the first line of the chunk is a
+line matching the external reference chunk name exactly. This means,
+among other things, that no spaces are allowed around the external
+referece.
+
+<<build: extract external references of [[$1]]>>=
+simpinput "$1" | sed -n -e '
+     # at the start of a chunk:
+     /^@<<.*@>>=/{
+      # save the name (unless it is a repeat)
+      /@<<@>>=/!h
+      # clear the pattern space & get the next line
+      s/.*//;n
+      # if it is an external reference, print the saved chunk name
+      /^@<<External Reference@>>$/{g;s/@<<\(.*\)@>>=/\1/;p}
+    }' | sort -u
+@
+
+The [[notangle]] command can improve error location by inserting
+references to lines in the original document via the [[-L]] option.
+The compiler itself supports such indirect referencing using
+[[pragma Source_Reference(line, file);]], but this would require that
+all chunks end at a boundary where [[pragma]]s are legal. Instead, we
+use a comment. Since Ada does not support in-line comments, this means
+that all new chunks begin on a new line. The [[%F]], [[%L]], and
+[[%N]] directives specify replacement with the file name, line number,
+and a newline, respectively.
+
+<<build: extract Ada from document>>=
+# Can't use -L'pragma Source_Reference(%L,"%F");%N due to Ada restrictions
+# -L'-- %f:%L%N' works, but screws up indentation
+simpinput "$NOWEB_SOURCE" | notangle -R<<build: file to extract>> - \
+   ".imports.${NOWEB_SOURCE##*/}.$pid"
+@
+
+This script enforces no naming convention, other than the [[.ada]] and
+[[-body.ada]] extensions. The compiler, however, requires a specific
+file naming convention, and uses [[.ads]] and [[.adb]] as extensions.
+The [[gnatchop]] command takes any arbitrary file as input, and splits
+it into the file(s) required by the compiler. It prints the names of
+the generated files on its standard output, so the names can be
+collected for feeding into the compiler. Note that using [[-r]] on
+[[gnatchop]] here would partially compensate for the lack of -L
+useability above by pointing errors to the unsplit form of the source
+code, but it would also eliminate the benefit of cpif by changing
+files just because code preceeding them caused line number
+changes. The [[-r]] option also causes problems when the source file
+changes all the time, like for [[.tmp.$pid]].
+
+<<build: functions>>=
+function gnatchop_cpif()
+{
+   mkdir .chop.$pid
+   cp "$1" .chop.$pid
+   (
+      cd .chop.$pid
+      gnatchop "$1"
+   ) | grep '\.ad[sb]$' | while read f; do
+      echo "$f"
+      cpif "$f" < .chop.$pid/"$f"
+   done
+   rm -rf .chop.$pid
+}
+@
+
+<<build: compile [[.tmp.$pid]]>>=
+y="`gnatchop_cpif .tmp.$pid`"
+echo "$y" | while read y; do
+  gnatgcc -gnatc -c $y
+done
+@
+
+While not strictly necessary, the extraction process for Ada code
+chunks only extracts chunks if they are different from previous
+extractions, and deletes them if they are empty. Files are extracted
+by passing chunk base names into the standard input of
+[[generate_files()]], and the resulting compilable file names are
+printed on standard output.  Since the script is editing the output
+anyway, it also removes pretzel-specific special control comments.
+
+<<build: functions>>=
+function extract_ada()
+{
+  echo "$1:" >&2
+  <<build: extract Ada from document>> | \
+    <<build: apply package prefix>> | \
+    sed 's/[[:space:]]*--@.$//g' | \
+    cpif $1
+  if [ `du -s $1 | cut -f1` -eq 0 ]; then
+     rm -f $1
+  else
+     echo -n "Lines of code: " >&2
+     egrep -v '^[[:space:]]*($|--)' $1 | wc -l >&2
+     gnatchop_cpif $1
+  fi
+}
+
+function generate_files()
+{
+  while read x; do
+    test -z "$x" && continue
+    extract_ada $x.ada
+    extract_ada $x-body.ada
+  done | grep '\.ad[sb]$'
+}
+@
+
+<<build: file to extract>>=
+$1
+@
+
+Chunk names are extracted from the document, and passed into the
+[[generate_files]] function. The generated files are kept in temporary
+files so that they can be passed to the compiler later. The
+[[.progf.$pid]] list contains compilable files generated for programs,
+the [[.genf.$pid]] list contains all generated compilable files, and
+the [[.adaf.$pid]] list contains the base names of all Ada files. They
+will be deleted by the [[trap]] above on script exit. Note that the
+extra the [[notangle]] commands to extract the file names could have
+been avoided by using an in-line reference to the chunks, but then the
+script could not be stand-alone, and the indentation of the code might
+cause problems.\footnote{In fact, it used to be done in-line all the
+time using a here-doc ([[cat]]<\/<[[EOF]]), but the EOF token was
+being indented after a (since removed) change to allow both. It's
+safer, and definitely easier to test, if the script is standalone.}
+
+<<build: extract/prepare Ada files>>=
+simpinput "$NOWEB_SOURCE" | notangle -R"Ada Packages" | \
+    tee .adaf.$pid | generate_files >.genf.$pid
+simpinput "$NOWEB_SOURCE" | notangle -R"Ada Programs" | \
+    tee -a .adaf.$pid | generate_files >.progf.$pid
+cat .progf.$pid >>.genf.$pid
+@
+
+In order to prevent old source files from interfering with the build
+process, they are removed before starting. This is a bit dangerous, as
+any test files that were created in the same directory will be deleted
+as well. This also assumes that the master source is in its own
+directory, and imported Ada code is soft-linked into the directory.
+Note that right now, this is too dangerous, and wrong (in that it does
+not account for files created for the package prefix feature) as well,
+so it is disabled for now. Instead, the files it would have removed
+are printed, so they can be manually removed later.
+
+<<build: extract/prepare Ada files>>=
+# clean
+(
+   cat .genf.$pid
+   while read x; do
+      echo "${x}-body.ada"
+      echo "${x}.ada"
+   done < .adaf.$pid
+) | sort -u > .allf.$pid
+ls *.ad[abs] | diff - .allf.$pid | sed -n -e '/^</{s/..//;p}' | while read x; do
+   test -h $x || echo rm -f $x  # for now, disable auto-clean
+done
+@
+
+Once the files are extracted and ready to compile, they can all be
+compiled to object files. The non-standard options to the compiler
+are:
+
+\begin{itemize}
+\item -gnatU - Precede error messages with error:
+\item -gnatf - Do not suppress redundant messages
+\item -gnatwawFwPwl - Enable all warnings, except implicit
+dereferencing, unreferenced formals, scope hiding, and ineffective
+[[pragma Inline]]s\footnote{-gnatwh = hiding; may be useful but
+generates too much junk right now.}
+\item -gnatN - improved inlining\footnote{Currently kills gnat, so
+it's disabled.}
+\item -gnato - enable numeric overflow checking
+\item -gnatq - continue processing on errors
+\item -gnatyaeknpr - Enable style warnings for casing, end/exit labels
+where possible
+\item -Wuninitialized - extra uninitialized variable detection
+\item -funwind-tables - improved run-time exception information
+\item -O3 - -Wuninitialized doesn't work without -O, and complains
+about it\footnote{Makes compilation way too slow, so currently
+disabled.}
+\item -g - enable debugging when generating code
+\end{itemize}
+
+<<--build: gnat options>>=
+-gnatUfwawFwPwl -gnatNoqyaeknp -funwind-tables -g -O3 -Wuninitialized
+@
+
+<<build: gnat options>>=
+-gnatUfwawFwPwl -gnatoqyaeknp -funwind-tables -g
+@
+
+<<build: compile Ada files>>=
+# compile source
+while read x; do
+   gnatgcc -c -gnatc <<build: gnat options>> $x # && \
+   # should be taken care of by gnatmake below
+   # gnatmake -c <<build: gnat options>> $x
+done <.genf.$pid
+@
+
+Body files generated for programs can then be linked into main programs.
+
+<<build: compile Ada files>>=
+# link
+grep '\.adb$' .progf.$pid | while read x; do
+#   gnatbind ${x%.adb}.ali
+#   gnatlink ${x%.adb}.ali
+   # gnatmake does file time checks, so above 2 are replaced by:
+   gnatmake <<build: gnat options>> ${x%.adb}
+done
+@
+
+Finally, if compilation is unsuccessful, logs would be helpful. When
+invoked from the GUI, messages are generated into a file named
+[[gcc_errs]], and [[$EDITOR]] is invoked on the file, in an
+xterm\footnote{This used to just execute the editor in the background,
+assuming it was X-based. Hopefully adding the xterm makes non-X
+editors work without making the xterm too distracting for X-based
+editors. For xjed, this tends to pop the xterm in front of the editor
+window, but I can live with that.}. When invoked from the
+command-line, messages are dumped to standard output/error as
+usual\footnote{Actually, stdout only, since the old build system
+absorbed stderr.}.  The [[USING_MAKE]] environment variable is the way
+to select ``GUI'' vs. ``make'' mode.  When non-empty, it's in ``make''
+mode.  Since the old build system had trouble passing in the parent
+environment, [[$HOME]] is manually calculated here, and then
+\textasciitilde{}/.profile is executed before the editor.
+
+<<build-script documentation>>=
+#|The error log will be popped up in $EDITOR, spawned from an rxvt, unless the
+#+environment variable USING_MAKE is non-empty.
+#|If USING_MAKE is non-empty, the error log will be dumped to standard output (*not*
+#+standard error).
+@
+
+<<build: initialize>>=
+# save error log
+test -z "$USING_MAKE" && exec >gcc_errs
+exec 2>&1
+@
+
+<<build: finish up>>=
+# view error log
+if [ -z "$USING_MAKE" ]; then
+   test -z "$HOME" && eval "HOME=~`whoami`"
+   export HOME
+   . ~/.profile
+   xt=xterm
+   test -p rxvt && xt=rxvt
+   ($xt -e $EDITOR gcc_errs </dev/null >/dev/null 2>&1 &)
+fi
+@
+
+As a noweb debugging aid, the root chunks are printed before
+extraction.  Also, as a benchmark, the number of actual lines of code
+in the document are printed. This includes unused code chunks and
+strips out lines consiting entirely of whitespace, and Ada comment, a
+C end-of-line comment (//), or a shell comment (\#, which also
+includes C preprocessor directives).
+
+<<build: initialize>>=
+echo "${NOWEB_SOURCE##*/} - Root Nodes:"
+simpinput "$NOWEB_SOURCE" | noroots | sort | sed -e 's/^@<</  /;s/@>>$//'
+echo "Lines/Words/Characters:"
+simpinput "$NOWEB_SOURCE" | sed -n -e '
+       # for every code chunk...
+       /^@<<.*@>>=/{
+           # loop:
+        :l
+           n
+           # skip start of new code chunk
+           /^@<<.*@>>=/bl
+           # finished at end of chunk
+           /^@[@<>]/!{/^@/b}
+           # strip leading space
+           s/^ *//
+           # convert comments to blank lines
+           s/^ *--.*//
+           s/^ *#.*//
+           s%^ *//.*%%
+           # skip blank lines
+           /^$/bl
+           p
+           bl}' | wc
+@
+
+
+\section{Pretty-Printing}
+
+The PDF output format was intended to be produced using
+pretzel,
+a semi-generic code formatter.  I made numerous patches\footnote{The
+patches were submitted to the original author at one point, but were
+not incorporated into an official release, and in the mean time, more
+patches have been made to support multiple languages, and other
+features.  Interested parties can email me for the code.} for
+formatting Ada code and other things I wanted it to do.
+
+Before printing, a custom API documentation tool is run to accumulate
+in-line API documentation into a single appendix.  See appendix
+\ref{sec:Coding-Style} for a brief description of how it works.  The
+tool itself is in a separate package.
+
+<<makefile.rules>>=
+%.tex: %.api
+
+%.api: %.nw
+	mkapi $*.nw *.nw > api.log 2>&1 || touch $@
+@
+
+<<pretzel-highlight>>=
+# Run the Ada Pretzel pretty-printer if it's there
+if test -z "$NO_PRETTY_PRINT" && type adappf_s >/dev/null 2>&1; then
+  # Generate & post-process LaTeX
+  simpinput "$inf" | sed 's/usepackage{noweb}/\0\n\\usepackage{pretzel-noweb}/' | \
+    noweave -delay -filter adappf_s -index | \
+    sed -n -e '<<sed \LaTeX{} post-processor>>' > "$outf"
+else
+  simpinput "$inf" | noweave -delay -backend 'totex -list' -index > "$outf"
+fi
+@
+
+\subsection{\label{sub:Building}Building}
+
+And here's some extra stuff, for integration later:
+
+For TeX4ht:
+
+\lstset{language=[LaTeX]TeX}
+
+<<myhtml.cfg>>=
+% sec-filename may prevent multiple docs in same dir
+%\Preamble{xhtml,2,uni-html4,graphics-}
+\Preamble{xhtml,uni-html4,css-in,fn-in,graphics-}
+\begin{document}
+  \Css{.lstlisting {background-color:\#ffa; color:black}}
+\EndPreamble
+@
+
+Boilerplate header on main-line files:
+
+<<texheader.tex>>=
+\documentclass[twoside,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage[letterpaper,rmargin=1in,bmargin=1in]{geometry}
+% Use standard fonts for PDF output
+\usepackage{ifpdf}
+\ifpdf
+\usepackage{times}
+\usepackage{mathptmx}
+\fi
+\usepackage{noweb}
+\usepackage{babel}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{color}
+%
+% API adds subsubsections - don't add them to toc
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+%
+\pagestyle{headings}
+%
+% Stuff for the listings package
+\lstloadlanguages{C,sh,make,ada,[LaTeX]TeX} %,sed
+\lstset{defaultdialect=[gnu]make,defaultdialect=[LaTeX]TeX}
+% Use ^G for escape char - not likely in document
+\lstset{escapechar=^^G}
+% make it look more like html
+\definecolor{lightyellow}{rgb}{1,1,.66}
+\lstset{backgroundcolor=\color{lightyellow},framexleftmargin=1.5em,framexrightmargin=1em}
+\lstset{columns=[l]fixed}
+
+% from LyX - apparently necessary for footnotes in TOC
+%% Special footnote code from the package 'stblftnt.sty'
+%% Author: Robin Fairbairns -- Last revised Dec 13 1996
+\makeatletter
+\let\SF@@footnote\footnote
+\def\footnote{\ifx\protect\@typeset@protect
+    \expandafter\SF@@footnote
+  \else
+    \expandafter\SF@gobble@opt
+  \fi
+}
+\expandafter\def\csname SF@gobble@opt \endcsname{\@ifnextchar[%]
+  \SF@gobble@twobracket
+  \@gobble
+}
+\edef\SF@gobble@opt{\noexpand\protect
+  \expandafter\noexpand\csname SF@gobble@opt \endcsname}
+\def\SF@gobble@twobracket[#1]#2{}
+\makeatother
+
+% This is from the noweb FAQ
+% Allow code chunks to span pages
+\def\nwendcode{\endtrivlist \endgroup}
+%\def\nwendcode{\endtrivlist \endgroup \vfil\penalty10\vfilneg}
+% Allow docs to be split from code chunks
+\let\nwdocspar=\smallbreak
+%\let\nwdocspar=\par
+
+% try a little harder to keep code chunks on one page
+\nwcodepenalty=1000
+%
+% Ada is huge, so make it smaller (smallcode, scriptsizecode, footnotesizecode)
+% Make chunk index useful (longchunks)
+% Remove xrefs from chunks themselves (noidentxref)
+\noweboptions{footnotesizecode,longchunks,noidentxref}
+\lstset{basicstyle=\footnotesize}
+% Following is for tex4ht only
+\ifpdf
+\else
+\noweboptions{webnumbering,nomargintag}
+% Minimize mangling by tex4ht:
+\lstset{columns=flexible}
+% make spaces in chunk names into nbsp
+\toks0=\expandafter{\setupmodname}
+\edef\oldsetupmodname{\the\toks0}
+\def\setupmodname{\oldsetupmodname\catcode`\ =13}
+\fi
+%
+% Hyperlink it!
+\usepackage{hyperref}
+
+% break lines after _
+\toks0=\expandafter{\_}
+\edef\oldunderscore{\the\toks0}
+\def\_{\oldunderscore\discretionary{}{}{}}
+
+% Removes dependency on pretzel in favor of dependency on totex patch/listings
+% listings aren't as pretty as pretzel's output, but it's cleaner & works with
+% tex4ht to highlight consistently on pdf & html
+\lstset{language=ada}
+\lstset{emphstyle=\texsf}
+% Note: unlike pretzel, lstlisting is extremely stupid about "literate" mode
+% e.g. it replaces strings in mid-identifier (simple problem) and it doesn't
+% take context into consideration (hard problem - e.g. "in" as parameter
+% mode vs. operator)
+\lstset{literate=
+          {:=}{{$\gets$}}1
+          {<=}{{$\leq$}}1
+	  {>=}{{$\geq$}}1
+	  {/=}{{$\neq$}}1
+	  {=>}{{$\Rightarrow$}}1
+	  {=}{{$\equiv$}}1
+	  {@@<<}{{$\langle\!\langle$}}2
+	  {@@>>}{{$\rangle\!\rangle$}}2
+%	  {and then}{{$\wedge\rightarrow$}}2
+%	  {or else}{{$\\vee\rightarrow$}}2
+%	  {and}{{$\wedge$}}1
+%	  {or}{{$\vee$}}1
+%	  {for}{{$\forall$}}1
+%	  {not in}{{$\ni$}}1
+%	  {not}{{$\neg$}}1
+%	  {in}{{$\in$}}1
+%	  {null}{{$\emptyset$}}1
+%         {**...}{^{...}}  % yeah, like that'll ever happen
+%         <base>#123e<exponent># -> 123 \cdot <base>^<exponent>
+% strip out pretzel controls - leaves whitespace, but [il] comments are broken
+          {--@\#}{}0
+          {--@<}{}0
+          {--@>}{}0
+          {--@*}{}0
+          {--@\}}{}0
+          {--@\{}{}0
+          {--@;}{}0
+          {--@/}{}0
+}
+% Lose pretzel comment formatting, so highlight another way
+\lstset{commentstyle=\color{blue}\em}
+
+% stripping out completely seems broken
+%\lstset{morecomment=[il][]{--@}}
+% meaning that finding too-long pure code using following is impossible
+%\lstset{comment=[il]--}
+% so just read all & make sure it looks OK
+\lstset{breaklines=true,breakatwhitespace=true}
+@
+
+\iffalse
+The following patch has been noweb-escaped - extract with:
+
+  notangle -Rtotex.patch -t8 > totex.patch
+
+Specifically, noweb needs @<< and @>> for @-less versions, and @@ for @ at the
+beginning of a line.
+
+<<totex.patch>>=
+Note that to use this, you will need the following in your preamble:
+\usepackage{listings}
+\lstset{escapechar=^^G}
+
+This is done for you if you don't use -delay
+
+--- totex.nw	2007-12-18 18:21:50.000000000 -0500
++++ totex.nw	2007-12-24 10:07:38.000000000 -0500
+@@@ -17,6 +17,7 @@
+ procedure main(args)
+   local delay, name
+   @<<initialization@>>
++  listings := !args == "-list"
+   delay := !args == "-delay"
+   noindex := !args == "-noindex"
+   if !args == "-no-gen-comment" then &null
+@@@ -28,7 +29,9 @@
+ end
+ @ The markup carefully adds no newlines not already present in the input,
+ so that the line numbers of the {\TeX} file will be the same as the
+-numbers of the corresponding {\tt noweb} file.
++numbers of the corresponding {\tt noweb} file.  Unfortunately, this is not
++possible when using the listings package, so this comment does not apply
++with the -list option.
+ The variables are:
+ \begin{description}
+ \item[\tt code] Nonnull if converting a code chunk.
+@@@ -69,10 +72,16 @@
+ @
+ \subsection{Basic text and chunk boundaries}
+ @<<code chunks@>>=
+-if ="@begin code " then	{ code := 1     ; writes("\\nwbegincode{", tab(0), "}")
++if ="@begin code " then	{ code := 1
++                          if \list then writes("\\begin{lstlisting}")
++                                   else writes("\\nwbegincode{", tab(0), "}")
+                           @<<reset cross-reference info@>>                         } else
+-if ="@end code "   then { @<<dump pending cross-reference info@>>
+-                          code := &null ; writes("\\nwendcode{}")
++if ="@end code "   then { if \list then writes("\007")
++                          @<<dump pending cross-reference info@>>
++			  if \list then writes("\007")
++                          code := &null
++			  if \list then writes("\\end{lstlisting}")
++			           else writes("\\nwendcode{}")
+                           lastdefnlabel := pendingprev := pendingnext := &null   } else
+ @<<docs chunks@>>=
+ if ="@begin docs " then	{ if \delay & match(0) then @<<delay for [[@begin docs]]@>>  
+@@@ -86,13 +95,17 @@
+                                  else line)
+                           lastindexref := &null                                  } else
+ @<<possibly indexed quoted [[line]]@>>=
+-if /noindex & \lastindexref then 
++if /noindex & \lastindexref then
+   "\\nwlinkedidentq{" || TeXliteral(line) || "}{" || lastindexref || "}"
+ else 
+   TeXliteral(line)
+ @<<possibly indexed code [[line]]@>>=
+ if /noindex & \lastindexref then 
+-  "\\nwlinkedidentc{" ||   escape(line, '{}\\') || "}{" || lastindexref || "}"
++  (if \list & \code then "\007" else "") ||
++  "\\nwlinkedidentc{" ||   escape(line, '_{}\\') || "}{" || lastindexref || "}" ||
++  (if \list & \code then "\007" else "")
++else if \list then
++  line
+ else 
+   escape(line, '{}\\')
+ 
+@@@ -120,11 +133,13 @@
+ Here we start to see the cross-reference markup, driven by [[lastxreflabel]]
+ and [[lastxrefref]].
+ @<<@defn@>>=
+-if ="@defn " then 	{ writes("\\sublabel{", \lastxreflabel, "}")
++if ="@defn " then 	{ if \code & \list then writes("\n\007")
++                          writes("\\sublabel{", \lastxreflabel, "}")
+ 			  writes("\\nwmargintag{", label2tag(\lastxreflabel), "}")
+                           writes("\\moddef{", convquotes(thischunk := tab(0)), 
+                                  ("~" || label2tag(\lastxrefref)) | "",
+                                  "}\\", defns[thischunk], "endmoddef")
++		          if \code & \list then writes("\007")
+ 			  useitems := \useitemstab[thischunk]
+ 			  pendinguses := 1
+ 			  lastdefnlabel := lastxreflabel
+@@@ -135,9 +150,11 @@
+ @<<initialization@>>=
+ useitemstab := table()
+ @<<@use@>>=
+-if ="@use " then 	{ writes("\\LA{}", convquotes(name := tab(0)), 
++if ="@use " then 	{ if \list & \code then writes("\007")
++                          writes("\\LA{}", convquotes(name := tab(0)), 
+                                  ("~" || label2tag(\lastxrefref)) | "",
+                                  "\\RA{}")
++		          if \list & \code then writes("\007")
+ 			  @<<clear [[lastxref*]]@>>                                } else
+ @<<*@>>=
+ procedure label2tag(label)
+@@@ -163,7 +180,9 @@
+ if ="@trailer tex"   & pos(0) then { write("\\bye")			         } else
+ @<<write {\LaTeX} header@>>=
+ writes("\\documentclass{article}\\usepackage{noweb}\\pagestyle{noweb}\\noweboptions{", tab(0),
+-       "}\\begin{document}")
++       "}")
++if \list then writes("\\usepackage{listings}\\lstset{escapechar=^^G}")
++writes("\\begin{document}")
+ @
+ \subsection{Cross-reference and index support}
+ 
+@@@ -199,9 +218,11 @@
+ if ="prevdef "             then { pendingprev := tab(0)                         } else
+ @<<show definitions and uses on definition line---once@>>=
+ if \pendinguses | \pendingprev | \pendingnext then {
++  if \code & \list then writes("\007")
+   writes("\\nwstartdeflinemarkup")
+   @<<write out definition-line markup@>>
+   writes("\\nwenddeflinemarkup")
++  if \code & \list then writes("\007")
+   pendinguses := pendingprev := pendingnext := &null
+ }
+ @<<write out definition-line markup@>>=
+@@@ -235,9 +256,11 @@
+ @
+ This first round of stuff just handles the basics: definitions, uses, and newlines.
+ Unless it's OK to show the index (by \LA{}SI\RA), we handle nothing but 
+-\hbox{[[@index nl]]}.
++\hbox{[[@index nl]]}.  Note that for listings mode, the nl isn't handled correctly.
++If anything at all is added, the output will include the next line's code.  Doing
++nothing is only slightly better in that extra whitespace is displayed.
+ @<<@index tests@>>=
+-if ="nl" & pos(0)          then        { write(if \code then "\\eatline" else "%")}else
++if ="nl" & pos(0)          then        { write(if \code & \list then "" else if \code then "\\eatline" else "%")}else
+ if =("defn "|"localdefn ") then @<<SI@>> { @<<handle index defn@>>                   } else
+ if ="use "                 then @<<SI@>> { @<<handle index use@>>                    } else
+ @<<SI@>>=
+@@@ -250,9 +273,11 @@
+ (You don't have to know that to understand what happens here, but I thought you
+ might like to.)
+ @<<handle index defn@>>=
++if \code & \list then writes("\007")
+ writes("\\nosublabel{", \lastxreflabel, "}")
+ writes("\\nwindexdefn{\\nwixident{", TeXliteral(name := tab(0)), "}}{", indexlabel(name), "}{",
+ 	\lastxrefref, "}")
++if \code & \list then writes("\007")
+ @<<clear [[lastxref*]]@>>
+ @
+ The {\LaTeX} back end ignores uses in code; they get bundled up by a previous filter
+@@@ -269,17 +294,21 @@
+ Here's the local identifier cross-reference that appears at the end of a code chunk.
+ We guard everything with \LA{}SI\RA, as before.
+ @<<@index tests@>>=
+-if ="begindefs" & pos(0) then @<<SI@>> { @<<dump pending cross-reference info@>>
++if ="begindefs" & pos(0) then @<<SI@>> { if \list & \code then writes("\007")
++                                       @<<dump pending cross-reference info@>>
+                                        writes("\\nwidentdefs{")                   } else
+ if ="isused "            then @<<SI@>> { "handled by latex"                         } else
+ if ="defitem "           then @<<SI@>> { i := tab(0); @<<write [[i]] with [[\\]]@>>   } else
+-if ="enddefs"   & pos(0) then @<<SI@>> { writes("}")                                } else
+-if ="beginuses" & pos(0) then @<<SI@>> { @<<dump pending cross-reference info@>>
++if ="enddefs"   & pos(0) then @<<SI@>> { writes("}")
++                                       if \list & \code then writes("\007")            } else
++if ="beginuses" & pos(0) then @<<SI@>> { if \list & \code then writes("\007")
++                                       @<<dump pending cross-reference info@>>
+                                        writes("\\nwidentuses{"); ulist := []      } else
+ if ="isdefined "         then @<<SI@>> { "latex finds the definitions"              } else
+ if ="useitem "           then @<<SI@>> { i := tab(0); @<<write [[i]] with [[\\]]@>> 
+                                         put(ulist, i);                            } else
+-if ="enduses"   & pos(0) then @<<SI@>> { writes("}"); @<<write [[ulist]]@>>           } else
++if ="enduses"   & pos(0) then @<<SI@>> { writes("}"); @<<write [[ulist]]@>>
++                                       if \list & \code then writes("\007")            } else
+ @<<write [[i]] with [[\\]]@>>=
+ writes("\\\\{{\\nwixident{", TeXliteral(i), "}}{", indexlabel(i), "}}") 
+ @<<write [[ulist]]@>>=
+@
+\fi
+
+
+\section{Code Index}
+% This must be last, because l2h always puts it last & ignores the directives
+\nowebchunks
+
+\end{document}

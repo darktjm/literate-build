@@ -132,7 +132,7 @@ uudecode \jobname.html\\*
 \#{} tr '\textbar$\sim$m`' '<>- ' < \jobname.html | uudecode -o \jobname.tar.gz\\*
 gzip -dc \jobname.tar.gz | tar xf -\\*
 \fi
-\#{} then extract the makefile and build
+\#{} then extract the makefile and build\\*
 notangle -t8 build.nw > makefile\\*
 make install
 }\end{quote}
@@ -448,44 +448,6 @@ $(MISC_FILES): $(NOWEB_ORDER)
 
 <<Clean built files>>=
 rm -f $(MISC_FILES)
-@
-
-\subsection{Preventing Rebuilds}
-
-One issue with making things purely dependent on the NoWeb source as
-above is that making e.g. a change to the text or an unrelated program
-in the same file will force everything to be rebuilt.  To prevent
-this, an attempt is made to use stamps for dependencies where
-possible.  For the makefile, this is impractical.  For the rest, a
-stamp file is built when extracting from the NoWeb source which
-contains either zero if no change was made, or non-zero otherwise.  A
-make function then inherits the stamp file, and only does a full
-rebuild if non-zero.
-
-<<makefile.vars>>=
-# x.stamp: src.nw
-#   notangle ... > x.tmp
-#   cmp x.tmp x >/dev/null; echo $? > x.stamp
-#
-# x.o: x.c
-#   $(call STAMP_CMD,$<,$*,$(CC) -o $< $*)
-#
-STAMP_CMD:= \
-  res=-1; \
-  for x in $2; do \
-    if [ -f $${x}.stamp ]; then \
-      res1=$(cat $${x}.stamp); \
-      test $res1 -gt $res && res=$$res1; \
-    fi; \
-  done; \
-  if [ $res -eq 0 ]; then \
-    echo 0 > $1.stamp; \
-  elif [ $res -eq 1 ]; then \
-    echo 1 > $1.stamp; \
-    $3; \
-  else \
-    $3; \
-  fi
 @
 
 \subsection{Additional Features}

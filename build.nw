@@ -12,7 +12,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.7\\Revision \RCSRevision, 2011}
+\date{Version 3.8\\Revision \RCSRevision, 2011}
 
 \maketitle
 
@@ -174,6 +174,21 @@ improved performance.  This has a disadvantage in that overriding simply
 defined variables will require overriding any of its dependents as well, but
 the performance improvement is usually worth it.
 
+I have made some adjustments to the ordering of this in order to
+support Daniel Pfeiffer's
+Makepp\footnote{\url{http://makepp.sourceforge.net}}, a GNU make clone
+which adds MD5 checksums as a file change detection mechanism.  This
+magically fixes the problem of rebuilding every time, at the expense
+of dealing with Makepp-specific issues.  The first of these is that
+include files cannot be automatically (re)built unless they appear
+after the rules which create them.  This means that the two variables
+which control their creation can no longer come from the configuration
+file.  They can only be set using the command line.  Another, related
+issue is that even though Makepp solves the rebuild problem for most
+files, it makes the problem worse for the makefile and its include
+files.  These are unconditionally rebuilt every single time makepp is
+invoked.
+
 \lstset{language=make}
 <<*>>=
 <<makefile>>
@@ -183,15 +198,19 @@ the performance improvement is usually worth it.
 # See makefile.config for variables to override
 # Put local config in makefile.config or makefile.config.local
 <<Common NoWeb Warning>>
-<<Defaults for [[makefile.config]]>>
+
+# default rule
+all: misc bin doc
+
+<<Build variables for makefile includes>>
+<<Build rules for makefile includes>>
+
 -include makefile.config
 -include makefile.config.local
 
 <<Defaults for [[makefile.vars]]>>
 
 -include makefile.vars
-
-all: misc bin doc
 
 # keep intermediate files
 .SECONDARY:
@@ -272,20 +291,24 @@ as they will be automatically rebuilt as needed, anyway.  A quick check
 before writing out the file ensures that a blank or otherwise seriously
 invalid makefile will never be created due to errors in the source file.
 
+Note that Makepp has issues with recursive make invocation for the
+verification of the makefile, so this step is skipped.
+
 <<makefile.config>>=
 # The name of the file containing the makefile
-BUILD_NOWEB:=build.nw
+# Note: due to Makepp restrictions, this can only be set on the comand line
+#BUILD_NOWEB:=build.nw
 @
 
-<<Defaults for [[makefile.config]]>>=
+<<Build variables for makefile includes>>=
 BUILD_NOWEB=build.nw
 @
 
-<<makefile>>=
+<<Build rules for makefile includes>>=
 makefile: $(BUILD_NOWEB)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
-	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
-	    env -i $(MAKE) -n -f- /dev/null >/dev/null
+	@#notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \ #
+	@#    env -i $(MAKE) -n -f- /dev/null >/dev/null
 	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
 @
 
@@ -302,10 +325,11 @@ from all the other NoWeb files.
 <<makefile.config>>=
 # The name of the source files
 # Any time you change this, makefile.* should be removed and rebuilt
-NOWEB:=$(wildcard *.nw)
+# Note: due to Makepp restrictions, this can only be set on the command line
+#NOWEB:=$(wildcard *.nw)
 @
 
-<<Defaults for [[makefile.config]]>>=
+<<Build variables for makefile includes>>=
 NOWEB:=$(wildcard *.nw)
 @
 
@@ -339,7 +363,7 @@ without the \texttt{.nw} extension, so the filesystem is checked for the
 file, and \texttt{.nw} is added if the file does not exist.  If it still
 does not exist after tacking on \texttt{.nw}, the missing file is an error.
 
-<<Defaults for [[makefile.vars]]>>=
+<<Build variables for makefile includes>>=
 # return rest of words of parm 2, starting at parm 1
 rest = $(wordlist $1,$(words $2),$2)
 
@@ -363,7 +387,7 @@ appear before files upon which it depends, so the dependecies are repeatedly
 tacked onto the start of the list and stripped from the rest until the tree
 settles.
 
-<<Defaults for [[makefile.vars]]>>=
+<<Build variables for makefile includes>>=
 NOWEB_HIGHEST:=$(filter-out $(NOWEB_LOWER),$(NOWEB))
 
 $(if $(NOWEB_HIGHEST),,$(error Invalid dependency tree))
@@ -415,23 +439,23 @@ reverse order, and passed into [[notangle]].  The makefile components in
 particular need to be checked for errors in mostly the same way as the main
 makefile.
 
-<<makefile>>=
+<<Build rules for makefile includes>>=
 makefile.config: $(NOWEB_ORDER)
 	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
-	notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	@#notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
 	-notangle -t8 -R$@ $^ > $@
 
 makefile.vars: makefile.config
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
-	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	@#notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \ #
+	@#        env -i $(MAKE) -n -f- /dev/null >/dev/null
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 
 makefile.rules: makefile.vars
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
-	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
-	                                     $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	@#notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \ #
+	@#                                     $(NOWEB_ORDER) 2>/dev/null | \ #
+	@#        env -i $(MAKE) -n -f- /dev/null >/dev/null #
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 @
 
@@ -659,7 +683,6 @@ Instead, [[makefile.libs]] is generated with the macros expanded.
 
 <<makefile.rules>>=
 MAKEFILES+=makefile.libs
--include makefile.libs
 makefile.libs: makefile.rules
 	for x in $(LOCAL_LIBS_BASE); do \
 	   printf %s lib$$x.a:; \
@@ -668,6 +691,7 @@ makefile.libs: makefile.rules
 	   printf '\tar cr $$@ $$^\n'; \
 	   printf '\tranlib $$@\n'; \
 	done > $@
+-include makefile.libs
 @
 
 <<Clean temporary files>>=
@@ -753,17 +777,18 @@ rm -f $(TEST_EXEC) $(TEST_C_EXEC:%=%.c) $(TEST_EXEC_SUPPORT) \
 \subsection{Support Files}
 
 Since [[noroots]] may not be on the target system, for example when using
-the tar file, a close equivalent is provided.
+the tar file, a close equivalent is provided.  This does not properly
+filter out non-root nodes, but most build operations require specific
+node names that are not likely to be used anywhere but the root level.
+
+Makepp has trouble parsing this, so this is disabled for now.
 
 <<makefile.config>>=
 # The noroots command is used to extract file names from $(NOWEB)
 # The following works well enough in most cases if noweb is missing
-NOROOTS=$(shell if type -p noroots >/dev/null 2>&1; then \
-                  echo noroots; \
-                else \
-		  echo 'sh -c "sed -n '\''/^@<<.*@>>=\$$/{s/=\$$//;p;}'\'' \$$* \
-		                 | sort -u" /dev/null';  \
-                fi)
+#NOROOTS=sh -c "sed -n '/^@<<.*@>>=\$$/{s/=\$$//;p;}' \$$* \
+#		                 | sort -u" /dev/null
+NOROOTS=noroots
 @
 
 In fact, when building just the code, it is likely that the only part
@@ -850,7 +875,15 @@ print $chunkout;
 
 In order to avoid having to duplicate function prototypes in the main code
 and a header, the prototypes are generated automatically using
-cproto\footnote{\url{http://invisible-island.net/cproto/}}.
+cproto\footnote{\url{http://invisible-island.net/cproto/}}.  This uses
+the GNU make method of generating rules:  [[$(eval)]].  Makepp does
+not support this.  Instead, it requires the use of a non-standard
+variable expansion syntax.  In order to select betwween them, the
+existence of a non-empty [[$MAKEPP_VERSION]] is checked for.  Another
+issue triggered here was the original method of creating a temporary
+file, and then moving it to [[cproto.h]].  Makepp decided to add a
+rule dependency on the temporary file's name, which could not be
+removed or overridden.  Now it just makes sure it got deleted on errors.
 
 \lstset{language=make}
 <<makefile.rules>>=
@@ -858,12 +891,17 @@ $(COFILES): $(HEADERS) cproto.h
 
 cproto.h: $(CFILES)
 	echo >$@
-	cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $(CFILES) >$@.new 2>/dev/null
-	mv -f $@.new $@
-
+	test -z "$(CFILES)" || ( \
+	   cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
+	             $(CFILES) >$@ 2>/dev/null || \
+	   ( rm -f $@; false ) )
 
 static_proto_rule=$1: $(1:%.o=%.c.static_proto)
+ifeq ($(MAKEPP_VERSION),)
 $(foreach f,$(COFILES),$(eval $(call static_proto_rule,$f)))
+else
+$[foreach f,$(COFILES),$(call static_proto_rule,$f)]
+endif
 cproto.h: $(CFILES:%=%.static_proto)
 %.c.static_proto: %.c
 	echo >$@
@@ -936,7 +974,8 @@ needs to be invoked repeatedly until the cross references settle down.  Of
 course the figures need to be converted to the appropriate format, too.
 Rules are provided for EPS, xfig, and dia diagrams, since they can be stored
 in-line in the NoWeb source; additional rules can be provided for other
-image formats.
+image formats.  Once again, the use of [[$(eval)]] requires special
+processing for Makepp.
 
 <<Source Code Documentation Files>>=
 $(patsubst %.nw,%.pdf,$(NOWEB)) \
@@ -945,7 +984,11 @@ $(patsubst %.nw,%.pdf,$(NOWEB)) \
 <<makefile.rules>>=
 figs=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $1)
 pdf_figrule=$(basename $1).pdf: $(patsubst %,%.pdf,$(call figs,$1))
+ifeq ($(MAKEPP_VERSION),)
 $(foreach f,$(NOWEB),$(eval $(call pdf_figrule,$f)))
+else
+$[foreach f,$(NOWEB),$[call pdf_figrule,$f]]
+endif
 
 %.pdf: %.tex
 	set -e; \
@@ -2285,7 +2328,7 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 @
 
 <<makefile.rules l2h>>=
-nw2html:  htmlhl nwhlchunk
+nw2html:  htmlhl nwhlchunk latexhl
 
 %.html: %.nw $(FIGS_PNG) nw2html
 	./nw2html $< $@ "$(HL_THEME)"

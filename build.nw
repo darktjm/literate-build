@@ -121,7 +121,9 @@ makefile, and make using GNU make:
 \end{rawhtml}
 \ifpdf
 \#{} if your PDF viewer supports attachments, save the attachment\\*
-\#{} otherwise, use pdftk:\\*
+\#{} otherwise, use pdfdetach:\\*
+pdfdetach -saveall \jobname.pdf\\*
+\#{} or pdftk:\\*
 pdftk \jobname.pdf unpack\_files output .\\*
 \else
 \begin{rawhtml}
@@ -1702,9 +1704,9 @@ Finally, the syntax highlighter adjustments need to be made.
 \subsection{Attaching Files}
 
 In addition to the adjustments for appearance, the source files need to be
-attached.  Attachments are done using the \LaTeX [[embedfile]] package.
+attached.  Attachments are done using the \LaTeX{} [[embedfile]] package.
 Any files in addition to the source files can be attached using its
-[[\\embedfile]] command.
+[[\embedfile]] command.
 
 <<preamble.tex>>=
 \ifpdf

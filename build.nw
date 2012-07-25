@@ -980,11 +980,15 @@ source; additional rules can be provided for other image formats.
 Once again, the use of [[$(eval)]] requires special processing for
 Makepp.
 
-In order to support attachments, the [[xelatex]] backend may need to be
-informed of the file location.  This should include the current
-directory by default, but it does not always work.  Rather than
-hard-code the backend and configuration path, a note is added to the
-config file so the user can set the environment variable appropriately.
+In order to support attachments, the [[xelatex]] backend may need to
+be informed of the file location.  This should include the current
+directory by default, but a common ``security'' measure is to remove
+the current directory from the default configuration file search path,
+which removes it from the attachment search path as a side effect. 
+Rather than hard-code the backend and configuration path, a note is
+added to the config file so the user can set the environment variable
+appropriately (which also coincidentally overrides the security
+feature, as well).
 
 <<makefile.config>>=
 # The PDF command to use: must be pdflatex or xelatex.
@@ -2555,6 +2559,7 @@ will end up coming from the build document every time.
 % l2h ignore embedfile [{
 % \RCS still needs to go into header to get stripped out properly
 % l2h ignore RCS
+% l2h ignore catcode
 %
 % doesn't understand extensionless image names, or that I want png
 % l2h argblock includegraphics <img#src=" .png"><br/> [

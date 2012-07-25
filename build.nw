@@ -973,7 +973,8 @@ EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
 Building the PDF code documentation is simple: just convert to \LaTeX{}
 using [[noweave]], and then convert to PDF using [[pdflatex]] or
 [[xelatex]].  The conversion needs to be invoked repeatedly until the
-cross references settle down.  Of course the figures need to be
+cross references (and other things, such as [[longtable]]
+measurements) settle down.  Of course the figures need to be 
 converted to the appropriate format, too. Rules are provided for EPS,
 xfig, and dia diagrams, since they can be stored in-line in the NoWeb
 source; additional rules can be provided for other image formats.
@@ -1021,7 +1022,7 @@ endif
 @
 
 <<makefile.vars>>=
-LATEX_REDO_MSG:="LaTeX Warning: Label(s) may have changed."
+LATEX_REDO_MSG:=" have changed. Rerun "
 
 FIGS:=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $(NOWEB))
 FIGS_EPS:=$(patsubst %, %.eps, $(FIGS))

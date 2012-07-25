@@ -12,7 +12,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.8\\Revision \RCSRevision, 2011}
+\date{Version 3.9\\Revision \RCSRevision, 2012}
 
 \maketitle
 
@@ -26,7 +26,7 @@ NoWeb\footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}},
 GNU\footnote{\url{http://www.gnu.org}} make, and a number of other freely
 available support tools.
 
-This document is © 2003--2011 Thomas J. Moore.  This document is licensed
+This document is © 2003--2012 Thomas J. Moore.  This document is licensed
 under the Apache License, Version 2.0 (the ``License''); you may not use
 this document except in compliance with the License. You may obtain a copy
 of the License at \url{http://www.apache.org/licenses/LICENSE-2.0}.  Unless
@@ -971,13 +971,27 @@ EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
 \section{PDF Code Documentation}
 
 Building the PDF code documentation is simple: just convert to \LaTeX{}
-using [[noweave]], and then convert to PDF using [[pdflatex]].  [[pdflatex]]
-needs to be invoked repeatedly until the cross references settle down.  Of
-course the figures need to be converted to the appropriate format, too.
-Rules are provided for EPS, xfig, and dia diagrams, since they can be stored
-in-line in the NoWeb source; additional rules can be provided for other
-image formats.  Once again, the use of [[$(eval)]] requires special
-processing for Makepp.
+using [[noweave]], and then convert to PDF using [[pdflatex]] or
+[[xelatex]].  The conversion needs to be invoked repeatedly until the
+cross references settle down.  Of course the figures need to be
+converted to the appropriate format, too. Rules are provided for EPS,
+xfig, and dia diagrams, since they can be stored in-line in the NoWeb
+source; additional rules can be provided for other image formats.
+Once again, the use of [[$(eval)]] requires special processing for
+Makepp.
+
+In order to support attachments, the [[xelatex]] backend may need to be
+informed of the file location.  This should include the current
+directory by default, but it does not always work.  Rather than
+hard-code the backend and configuration path, a note is added to the
+config file so the user can set the environment variable appropriately.
+
+<<makefile.config>>=
+# The PDF command to use: must be pdflatex or xelatex.
+LATEXCMD=pdflatex
+# note: to use attachments with xetex, the following may be necessary:
+#LATEXCMD=env DVIPDFMXINPUTS=.:\$$TEXMF/dvipdfmx/ xelatex
+@
 
 <<Source Code Documentation Files>>=
 $(patsubst %.nw,%.pdf,$(NOWEB)) \
@@ -995,7 +1009,7 @@ endif
 %.pdf: %.tex
 	set -e; \
 	while :; do \
-              pdflatex $< >/dev/null; \
+              $(LATEXCMD) $< >/dev/null; \
               fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
         done
 	@fgrep -i overfull $*.log || :
@@ -1411,6 +1425,7 @@ sed -e 's/\^\^\^/\a\0\a/g
 \lstset{language=TeX}
 <<Preamble Adjustments for [[listings]]>>=
 % Use ^G for escape char - not likely in document
+\catcode`\^^G=9
 \lstset{escapechar=^^G}
 @
 
@@ -1591,26 +1606,36 @@ fi
 @
 
 The \LaTeX{} preamble is fairly straightforward.  The [[fontenc]],
-[[inputenc]], and [[babel]] packages are pretty much required anywhere.  The
-[[geometry]] package allows this document to fit in fewer pages by reducing
-the margins.  The [[noweb]] package is obviously needed for the NoWeb
-output.  The [[rcs]] package is included to easily incorporate those nasty
-\$-heavy RCS/CVS/SVN keywords. The [[ifpdf]] package is needed for using
-this \LaTeX{} source with non-PDF output.  The standard PDF font packages
-are used to reduce the PDF size and hopefully look smoother on a greater
-number of operating systems.  The [[listings]] and [[color]] packages and
-the [[latexhl]] highlight theme file are required for color syntax
-highlighting.  The [[headings]] package gives more informative headers and
-footers by default.  The [[hyperref]] package gives hyperlinks in the PDF
-file.  Links are made less distracting by replacing the red outline box with
+[[inputenc]], [[fontenc]] and [[babel]] packages are pretty much
+required anywhere.  The input encoding is forced to latin1 for
+[[pdflatex]]; it is expected that [[xelatex]] be used for Unicode. The
+[[geometry]] package allows this document to fit in fewer pages by
+reducing the margins.  The [[noweb]] package is obviously needed for
+the NoWeb output.  The [[rcs]] package is included to easily
+incorporate those nasty \$-heavy RCS/CVS/SVN keywords. The [[ifpdf]]
+package is needed for using this \LaTeX{} source with non-PDF output.
+The standard PDF font packages are used to reduce the PDF size and
+hopefully look smoother on a greater number of operating systems.  The
+[[listings]] and [[color]] packages and the [[latexhl]] highlight
+theme file are required for color syntax highlighting.  The
+[[headings]] package gives more informative headers and footers by
+default.  The [[hyperref]] package gives hyperlinks in the PDF file.
+Links are made less distracting by replacing the red outline box with
 dark blue-colored text, and URL links are colored the same way.  The
-[[multitoc]] package provides multi-column tables of contents, which once
-again is to reduce the number of pages a bit.
+[[multitoc]] package provides multi-column tables of contents, which
+once again is to reduce the number of pages a bit.
 
 \lstset{language=TeX}
 <<preamble.tex>>=
 \usepackage[T1]{fontenc}
+\usepackage{ifxetex}
+\ifxetex
+% Use Latin Modern; selecting standard PDF fonts does not work
+\usepackage{fontspec}
+\else
 \usepackage[latin1]{inputenc}
+\usepackage{babel}
+\fi
 \usepackage{rcs}
 \usepackage{ifpdf}
 \ifpdf
@@ -1620,13 +1645,18 @@ again is to reduce the number of pages a bit.
 \usepackage{mathptmx}
 \fi
 \usepackage{noweb}
-\usepackage{babel}
 \usepackage{graphicx}
 % change "never defined" to "imported"
 \makeatletter
 \def\@nwlangdepnvd{imported}
 \makeatother
 \ifpdf
+% Use pdf figs by default (hack)
+\makeatletter
+\def\Gin@extensions{.pdf}
+\makeatother
+\fi
+\ifxetex
 % Use pdf figs by default (hack)
 \makeatletter
 \def\Gin@extensions{.pdf}
@@ -1699,18 +1729,28 @@ Finally, the syntax highlighter adjustments need to be made.
 \ifpdf
 <<Framed Code Preamble>>
 \fi
+\ifxetex
+<<Framed Code Preamble>>
+\fi
 @
 
 \subsection{Attaching Files}
 
-In addition to the adjustments for appearance, the source files need to be
-attached.  Attachments are done using the \LaTeX{} [[embedfile]] package.
-Any files in addition to the source files can be attached using its
-[[\embedfile]] command.
+In addition to the adjustments for appearance, the source files need
+to be attached.  Attachments are done using the \LaTeX{} [[navigator]]
+package.  The [[embedfile]] package used by previous versions of this
+build sytem does not support [[xelatex]].  The old command is
+retained, though; any files in addition to the source files must be
+attached using the [[\embedfile]] command in order for other portions
+of the build system to pick up the files properly.
 
 <<preamble.tex>>=
 \ifpdf
 \usepackage{embedfile}
+\fi
+\ifxetex
+\usepackage{navigator}
+\def\embedfile#1{\embeddedfile{#1}{#1}}
 \fi
 @
 
@@ -2069,6 +2109,8 @@ highlight -S c ${theme:+-s $theme} -I </dev/null | \
 <<preamble.tex>>=
 \ifpdf
 \else
+\ifxetex
+\else
 % Following is for tex4ht only
 \newenvironment{framed}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
 %\renewenvironment{lstlisting}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
@@ -2081,6 +2123,7 @@ highlight -S c ${theme:+-s $theme} -I </dev/null | \
 \toks0=\expandafter{\setupmodname}
 \edef\oldsetupmodname{\the\toks0}
 \def\setupmodname{\oldsetupmodname\catcode`\ =13}
+\fi
 \fi
 @
 
@@ -2498,11 +2541,13 @@ will end up coming from the build document every time.
 % l2h ignore lstdefinelanguage [{[{{
 % l2h ignore definecolor {{{
 % l2h ignore ifpdf
+% l2h ignore ifxetex
 % l2h ignore bkframefalse
 % l2h ignore bkcounttrue
 % l2h ignore ,
 % l2h ignore break
 % l2h substitution textbar |
+% l2h substitution textasciitilde ~
 % l2h substitution sim ~
 % l2h ignoreenv webcode
 % l2h macro input 1 <!-- input #$1 -->

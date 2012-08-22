@@ -772,7 +772,8 @@ test-bin: $(TEST_EXEC) $(TEST_EXEC_SUPPORT)
 $(TEST_EXEC):  $(LIB_FILES)
 
 test: test-bin
-	set -e; for f in $(TEST_EXEC); do echo running $$f:; ./$$f; done
+	@set -e; for f in $(TEST_EXEC); do echo running $$f:; ./$$f; done
+	<<Additional Tests>>
 @
 
 <<makefile.vars>>=
@@ -1084,14 +1085,28 @@ else
 $[foreach f,$(NOWEB),$[call pdf_figrule,$f]]
 endif
 
+# attempt to pull in multi-line messages, each line starts with same char
+# but remove xparse/.*define-command messages, even though they
+# are the only messages known to look like that
+LMSCMD = /xparse\/.*define-command/b; \
+         s/LaTeX $1/&/i;T; \
+	 p; \
+	 s/^\([^ ]\) LaTeX.*/\1/;T; \
+	 h; \
+      :a N; \
+         s/\(.\)\n\1/\1/;T; \
+	 p;g;ba;
+
 %.pdf: %.tex
 	set -e; \
 	while :; do \
               $(LATEXCMD) -interaction batchmode $< >/dev/null; \
               fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
         done
+	@sed -n -e '$(call LMSCMD,info)' $*.log
 	@fgrep -i overfull $*.log || :
 	@fgrep -i underfull $*.log | fgrep -v vbox || :
+	@sed -n -e '$(call LMSCMD,warning)' $*.log
 @
 
 <<makefile.vars>>=
@@ -3145,6 +3160,8 @@ guaranteed to be built before running any tests.
 build for the [[test-bin]] target, as explained by [[<<C Executables>>]].
 These programs are not run, but are guaranteed to be built before
 running any tests.
+\item [[<<Additional Tests>>]]: tests that are more complicated to run
+than simple scripts
 \item [[<<C Build Executables>>]]:  names of executables to build when
 required by other dependencies, as explained by [[<<C Executables>>]].
 This is intended for build support binaries only, such as programs to

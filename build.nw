@@ -12,7 +12,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.9\\Revision \RCSRevision, 2012}
+\date{Version 3.10\\Revision \RCSRevision, 2012}
 
 \maketitle
 
@@ -204,13 +204,17 @@ invoked.
 # default rule
 all: misc bin doc
 
+<<Defaults for [[makefile.config]]>>
+
+# This is the right place to include them, but makepp can't handle it
+#-include makefile.config
+#-include makefile.config.local
+
 <<Build variables for makefile includes>>
 <<Build rules for makefile includes>>
 
 -include makefile.config
 -include makefile.config.local
-
-<<Defaults for [[makefile.vars]]>>
 
 -include makefile.vars
 
@@ -298,11 +302,11 @@ verification of the makefile, so this step is skipped.
 
 <<makefile.config>>=
 # The name of the file containing the makefile
-# Note: due to Makepp restrictions, this can only be set on the comand line
+# Note: due to Makepp restrictions, this can only be set on the command line
 #BUILD_NOWEB:=build.nw
 @
 
-<<Build variables for makefile includes>>=
+<<Defaults for [[makefile.config]]>>=
 BUILD_NOWEB=build.nw
 @
 
@@ -331,7 +335,7 @@ from all the other NoWeb files.
 #NOWEB:=$(wildcard *.nw)
 @
 
-<<Build variables for makefile includes>>=
+<<Defaults for [[makefile.config]]>>=
 NOWEB:=$(wildcard *.nw)
 @
 
@@ -341,21 +345,23 @@ From these files, an order of building must be derived.  This is done using
 a dependency tree created from special comments in the source files.  These
 comments are at the beginning of a line, and are of the form
 \texttt{\%\%\% requires \emph{X}}, where \emph{X} is either the name of a
-NoWeb file or the name with the \texttt{.nw} removed.  Top-level build files
-are those on which no others depend.  The tree order consists of the
-top-level files, followed by their direct dependencies, in the order found
-in those files, followed by those files' direct dependencies, and so forth,
-with no file repeated.
+NoWeb file or the name with the \texttt{.nw} removed.  An explicit
+\verb|\input{|\emph{X}\verb|.nw| creates a dependency as well.
+Top-level build files are those on which no others depend.  The tree
+order consists of the top-level files, followed by their direct
+dependencies, in the order found in those files, followed by those
+files' direct dependencies, and so forth, with no file repeated.
 
-Finding the dependency directives requires [[grep]], and removing the
+Finding the dependency directives requires [[egrep]], and removing the
 pattern requires [[sed]].  Due to the sloppiness of the patterns and other
 parsing, no file names can contain colons or spaces.  This is all done using
 GNU make's internal functions so that the results can be easily used in
 other rules.
 
-<<Defaults for [[makefile.vars]]>>=
-NOWEB_DEPS:=$(shell grep '^%%% requires ' $(NOWEB) /dev/null | \
-                    sed 's/%%% requires //;s/[[:space:]]*\(%.*\)*$$//;s/:/ /')
+<<Build variables for makefile includes>>=
+NOWEB_DEPS:=$(shell egrep '^%%% requires |^\\input{.*\.nw}$$' $(NOWEB) /dev/null | \
+                    sed -e 's/%%% requires //;s/\\input{\(.*\)}$$/\1/' \
+		        -e 's/[[:space:]]*\(%.*\)*$$//;s/:/ /')
 @
 
 After the dependencies are found, they are separated into files which depend
@@ -430,6 +436,7 @@ endif
 <<makefile.rules>>=
 prtree:
 	@echo Project: $(PROJECT_NAME)
+	@echo Deps: $(NOWEB_DEPS)
 	@echo Highest: $(NOWEB_HIGHEST)
 	@echo Upper: $(NOWEB_UPPER)
 	@echo Lower: $(NOWEB_LOWER)
@@ -481,6 +488,10 @@ GENERATED_TEMP_FILES = <<Plain Built Files>>
 @
 
 <<Plain Build Files>>=
+\
+@
+
+<<Plain Built Files>>=
 \
 @
 
@@ -702,13 +713,22 @@ Ideally, this should ensure that libraries dependent on others are listed
 earlier in the library order.  Instead, the list is printed in reverse
 order, so the least dependent libraries are printed first.
 
+Since \texttt{tac} may not be available everywhere, an alternative may
+be specified in [[makefile.config]].
+
+<<makefile.config>>=
+# Where to find the non-standard tac command (GNU coreutils)
+#TACCMD:=sed -n -e '1!G;h;$$p'
+TACCMD:=tac
+@
+
 <<makefile.vars>>=
 # Old sed barfs on T and use of ; to separate commands with labels:
 #   sed -n 's/@<<Library \[\[\(.*\)]] Members>>/\1/;T;p'
 # so use grep instead
 LOCAL_LIBS_BASE:=$(shell $(NOROOTS) $(NOWEB_ORDER) | \
         grep '@<<Library \[\[\(.*\)]] Members@>>' | \
-           sed 's/@<<Library \[\[\(.*\)]] Members@>>/\1/' | tac)
+           sed 's/@<<Library \[\[\(.*\)]] Members@>>/\1/' | $(TACCMD))
 LOCAL_LIBS:=$(LOCAL_LIBS_BASE:%=-l%)
 LOCAL_LIB_FILES:=$(LOCAL_LIBS_BASE:%=lib%.a)
 @
@@ -963,8 +983,8 @@ cproto.h: $(CFILES) $(HEADERS)
 	# this way main args are optional
 	sed -i -e '/^int main(/d' $@
 	# now filter
-	# tac is from GNU coreutils
-	grep -vn '^/\*' $@ | tac | while IFS=: read -r l p; do \
+	-grep -vn '^/\*' $@ | $(TACCMD) | while IFS=: read -r l p; do \
+	  test -z "$$p" && continue; \
 	  fgrep "$$p" $(HEADERS) >/dev/null && sed -i -e "$${l}d" $@; \
 	done
 
@@ -1072,8 +1092,16 @@ LATEXCMD=pdflatex
 #LATEXCMD=env DVIPDFMXINPUTS=.:\$$TEXMF/dvipdfmx/ xelatex
 @
 
+<<makefile.vars>>=
+NOWEB_NINCL:=$(shell \
+  for x in $(NOWEB); do \
+    grep '^\\input{'"$$x"'}$$' $(NOWEB) >/dev/null && continue; \
+    echo "$$x"; \
+  done)
+@
+
 <<Source Code Documentation Files>>=
-$(patsubst %.nw,%.pdf,$(NOWEB)) \
+$(patsubst %.nw,%.pdf,$(NOWEB_NINCL)) \
 @
 
 <<makefile.rules>>=
@@ -1613,10 +1641,12 @@ Rather than looking for that particular line, a special comment is replaced:
 \end{verbatim}
 \end{quote}
 
-The following script does this, and brings all of the above together.  The
-highlight theme can be selected using a command-line parameter. Selection of
-the listings package versus just [[highlight]] is done by prefixing the
-highlight theme name with [[list:]].
+The following script does this, and brings all of the above together.
+In order to merge sources correctly, the dependency order (tree) needs
+to be passed in as well as the input and output file names.  The
+highlight theme can be selected using a command-line parameter.
+Selection of the listings package versus just [[highlight]] is done by
+prefixing the highlight theme name with [[list:]].
 
 \lstset{language=make}
 <<makefile.config>>=
@@ -1627,7 +1657,7 @@ HL_THEME:=
 
 <<makefile.rules>>=
 %.tex: %.nw nw2latex
-	./nw2latex $< $@ "$(HL_THEME)"
+	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)"
 @
 
 <<Build Script Executables>>=
@@ -1645,7 +1675,8 @@ nw2latex: latexhl nwhlchunk addlistings
 
 noweb="$1"
 outf="$2"
-theme="$3"
+noweb_order="$3"
+theme="$4"
 
 # prefix theme with "list:" to enable lstlistings
 uselst="${theme%%:*}"
@@ -1877,7 +1908,6 @@ sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/;T;p' $noweb_order | sort 
 @
 
 <<Prepare for weave>>=
-<<Compute dependency tree for [[$noweb]]>>
 trap "rm -f /tmp/latexhl.*.$$" 0
 <<For each reinserted code chunk>>
   test verbatim = $lang || continue
@@ -1917,43 +1947,6 @@ sed 's/^\\begin{framed}[^%]*/\\begin{quote}\\codemargin=0pt&\\begin{webcode}/;
 sed -f /tmp/latexhl.fmt.$$ | \
 @
 
-Finding the dependency tree is harder than it needs to be, since the POSIX
-shell's scoping and variable expansion rules are inadequate.  Two functions
-are needed in order to expand word lists correctly using [[eval]].  Updating
-the upper-level variables also requires the return to be variable
-assignments that are made at the upper level using [[eval]].
-
-<<Compute dependency tree for [[$noweb]]>>=
-noweb_order="$noweb"
-noweb_deps="$noweb"
-function next_level_loop() {
-  noweb_order="$1"
-  shift
-  noweb_deps=
-  for x; do
-    test -f "$x" || x="$x.nw"
-    case "$noweb_order" in
-      "$x"|*" $x"|"$x "*|*" $x "*) ;;
-      *)
-        noweb_deps="$noweb_deps $x"
-        noweb_order="$x $noweb_order"
-        ;;
-    esac
-  done
-  echo noweb_deps="'$noweb_deps'"
-  echo noweb_order="'$noweb_order'"
-}
-
-function next_level() {
-  noweb_order="$1"
-  shift
-  noweb_req=`sed -n 's/^%%% requires //;T;s/[[:space:]]*\(%.*\)*$//;p' "$@"`
-  eval next_level_loop \"\$noweb_order\" $noweb_req
-}
-while [ -n "$noweb_deps" ]; do
-  eval `eval next_level \"\$noweb_order\" $noweb_deps`
-done
-@
 
 Second, excerpts from the documentation can be reinserted in a similar
 manner. These excerpts are surrounded with begin and end comments, which
@@ -2130,12 +2123,12 @@ script ([[nwtex2html]]) is needed.
 
 \lstset{language=make}
 <<Source Code Documentation Files>>=
-$(patsubst %.nw,%.html,$(NOWEB)) \
+$(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 @
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(HL_THEME)"
+	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)"
 @
 
 <<Clean built files>>=
@@ -2225,7 +2218,8 @@ tex="$1"
 base="${1%.tex}"
 noweb="$base.nw"
 outf="$2"
-theme="${3#*:}"
+noweb_order="$3"
+theme="${4#*:}"
 
 figs=`sed -n '/^\\\\includegraphics/{s/.*{\\(.*\\)}\$/\\1.eps/;p;}' $tex`
 texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/;T;p' "$tex"`
@@ -2262,7 +2256,6 @@ for x in *.html; do
   perl -e '<<Post-process TeX4ht output using perl>>' "$base" $is_outf <"$x" >"../$x"
 done
 
-<<Compute dependency tree for [[$noweb]]>>
 (
   <<Print attachments as HTML comment>>
 ) >>"../$outf"
@@ -2455,7 +2448,7 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 nw2html:  htmlhl nwhlchunk latexhl
 
 %.html: %.nw $(FIGS_PNG) nw2html
-	./nw2html $< $@ "$(HL_THEME)"
+	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)"
 @
 
 <<Clean built files>>=
@@ -2474,7 +2467,8 @@ PDF.
 
 noweb="$1"
 outf="$2"
-theme="$3"
+noweb_order="$3"
+theme="$4"
 
 # tex version allows list: prefix - ignore if there
 theme="${theme#list:}"

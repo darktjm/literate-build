@@ -189,7 +189,8 @@ file.  They can only be set using the command line.  Another, related
 issue is that even though Makepp solves the rebuild problem for most
 files, it makes the problem worse for the makefile and its include
 files.  These are unconditionally rebuilt every single time makepp is
-invoked.
+invoked.  The use of Makepp is detected by checking for the existence
+of a non-empty [[$(MAKEPP_VERSION)]].
 
 \lstset{language=make}
 <<*>>=
@@ -204,16 +205,23 @@ invoked.
 # default rule
 all: misc bin doc
 
+ifneq ($(MAKEPP_VERSION),)
+# not much point, since it doesn't filter out #line directives
+# and therefore most changes to NoWeb source will result in file changes
+signature c_compilation_md5
+endif
+
 <<Defaults for [[makefile.config]]>>
 
 # This is the right place to include them, but makepp can't handle it
 #-include makefile.config
-#-include makefile.config.local
+-include makefile.config.local
 
 <<Build variables for makefile includes>>
 <<Build rules for makefile includes>>
 
 -include makefile.config
+# reinclude to ensure overrides
 -include makefile.config.local
 
 -include makefile.vars
@@ -261,6 +269,7 @@ clean:
 
 distclean: clean
 	<<Clean built files>>
+	rm -rf .makepp
 	<<Remove makefile>>
 @
 
@@ -303,6 +312,7 @@ verification of the makefile, so this step is skipped.
 <<makefile.config>>=
 # The name of the file containing the makefile
 # Note: due to Makepp restrictions, this can only be set on the command line
+# or in makefile.config.local
 #BUILD_NOWEB:=build.nw
 @
 
@@ -332,6 +342,7 @@ from all the other NoWeb files.
 # The name of the source files
 # Any time you change this, makefile.* should be removed and rebuilt
 # Note: due to Makepp restrictions, this can only be set on the command line
+# or in makefile.config.local
 #NOWEB:=$(wildcard *.nw)
 @
 
@@ -642,8 +653,6 @@ $(HEADERS): $(NOWEB)
 $(CFILES): $(NOWEB)
 	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
 
-%: %.c
-
 %.o: %.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@ $<
 
@@ -716,19 +725,28 @@ order, so the least dependent libraries are printed first.
 Since \texttt{tac} may not be available everywhere, an alternative may
 be specified in [[makefile.config]].
 
-<<makefile.config>>=
-# Where to find the non-standard tac command (GNU coreutils)
-#TACCMD:=sed -n -e '1!G;h;$$p'
-TACCMD:=tac
+Here and in other places I use \verb|s/<pat>/<repl>/;T;p| as a
+shortcut for an address expression:
+\verb|/<pat>/{s/<pat>/<repl>/;p;}|.  This shortcut was found to be
+broken on some versions of sed.  If in doubt, use GNU sed.  I use the
+\verb|-i| GNU extension in other places, so GNU sed is probably a
+requirement, anyway.
+
+<<Defaults for [[makefile.config]]>>=
+TACCMD=tac
 @
 
-<<makefile.vars>>=
-# Old sed barfs on T and use of ; to separate commands with labels:
-#   sed -n 's/@<<Library \[\[\(.*\)]] Members>>/\1/;T;p'
-# so use grep instead
+<<makefile.config>>=
+# Where to find the non-standard tac command (GNU coreutils)
+# Note: due to Makepp restrictions, this can only be set on the command line
+# or in makefile.config.local
+#TACCMD:=sed -n -e '1!G;h;$$p'
+@
+
+<<Build variables for makefile includes>>=
 LOCAL_LIBS_BASE:=$(shell $(NOROOTS) $(NOWEB_ORDER) | \
-        grep '@<<Library \[\[\(.*\)]] Members@>>' | \
-           sed 's/@<<Library \[\[\(.*\)]] Members@>>/\1/' | $(TACCMD))
+  sed -n 's/@<<Library \[\[\(.*\)]] Members@>>/\1/;T;p' | \
+    $(TACCMD))
 LOCAL_LIBS:=$(LOCAL_LIBS_BASE:%=-l%)
 LOCAL_LIB_FILES:=$(LOCAL_LIBS_BASE:%=lib%.a)
 @
@@ -756,7 +774,7 @@ notangle.
 
 Instead, [[makefile.libs]] is generated with the macros expanded.
 
-<<makefile.rules>>=
+<<makefile>>=
 MAKEFILES+=makefile.libs
 makefile.libs: makefile.rules
 	for x in $(LOCAL_LIBS_BASE); do \
@@ -787,6 +805,7 @@ results is supported.  It is intended primarily for manual testing.  Sample
 binaries may be placed under these rules, as well.
 
 <<makefile.rules>>=
+.PHONY: test test-bin
 test-bin: $(TEST_EXEC) $(TEST_EXEC_SUPPORT)
 
 $(TEST_EXEC):  $(LIB_FILES)
@@ -859,9 +878,15 @@ node names that are not likely to be used anywhere but the root level.
 
 Makepp has trouble parsing this, so this is disabled for now.
 
+<<Defaults for [[makefile.config]]>>=
+NOROOTS=noroots
+@
+
 <<makefile.config>>=
 # The noroots command is used to extract file names from $(NOWEB)
 # The following works well enough in most cases if noweb is missing
+# Note: due to Makepp restrictions, this can only be set on the command line
+# or in makefile.config.local
 #NOROOTS=sh -c "sed -n '/^@<<.*@>>=\$$/{s/=\$$//;p;}' \$$* \
 #		                 | sort -u" /dev/null
 NOROOTS=noroots
@@ -953,13 +978,23 @@ In order to avoid having to duplicate function prototypes in the main code
 and a header, the prototypes are generated automatically using
 cproto\footnote{\url{http://invisible-island.net/cproto/}}.  This uses
 the GNU make method of generating rules:  [[$(eval)]].  Makepp does
-not support this.  Instead, it requires the use of a non-standard
-variable expansion syntax.  In order to select betwween them, the
-existence of a non-empty [[$MAKEPP_VERSION]] is checked for.  Another
-issue triggered here was the original method of creating a temporary
-file, and then moving it to [[cproto.h]].  Makepp decided to add a
-rule dependency on the temporary file's name, which could not be
-removed or overridden.  Now it just makes sure it got deleted on errors.
+not support this.
+
+The Makepp documentation claims that [[$(eval)]] can be replaced by
+[[$[...]]], but my own experiments have shown me that this does not
+work: variables are not expanded correctly, and only one rule may be
+generated at a time (i.e., newlines are stripped out, even if they are
+explicitly added via perl code).  In fact, using [[$(...)]] works fine
+for one rule, but is broken for multiple rules because, once again,
+newlines are stripped out.  So, instead, it copies Makepp's code for
+adding a dependency directly.  This is liable to break with different
+versions of Makepp, but it at least works with version 2.0.
+
+Another Makepp issue triggered here was the original method of
+creating a temporary file, and then moving it to [[cproto.h]].  Makepp
+decided to add a rule dependency on the temporary file's name, which
+could not be removed or overridden.  Now it just makes sure it got
+deleted on errors.
 
 Of course there are times when blind prototype creation is
 undesirable.  For example, libraries tend to place prototypes in
@@ -988,18 +1023,25 @@ cproto.h: $(CFILES) $(HEADERS)
 	  fgrep "$$p" $(HEADERS) >/dev/null && sed -i -e "$${l}d" $@; \
 	done
 
-static_proto_rule=$1: $(1:%.o=%.c.static_proto)
 ifeq ($(MAKEPP_VERSION),)
+static_proto_rule=$1: $(1:%.o=%.c.static_proto)
 $(foreach f,$(COFILES),$(eval $(call static_proto_rule,$f)))
 else
-$[foreach f,$(COFILES),$(call static_proto_rule,$f)]
+sub f_adddep {
+  my ($targ, $dep) = &args;
+  my (undef, $mkfile, $mkline) = @_;
+  my $tinfo = Mpp::File::file_info $targ, $mkfile->{CWD};
+  Mpp::File::set_additional_dependencies($tinfo, $dep, $mkfile, $mkline);
+  return '';
+}
+$(foreach f,$(COFILES),$(adddep $f,$(f:%.o=%.c.static_proto)))
 endif
 cproto.h: $(CFILES:%=%.static_proto)
 %.c.static_proto: %.c
-	echo >$@
-	notangle -R$<.static_proto $(NOWEB_ORDER) >$@.new 2>/dev/null || :
-	cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $< >>$@.new 2>/dev/null
-	mv -f $@.new $@
+	( \
+	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
+	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $< 2>/dev/null \
+	) >$@ || (rm -f $@; false)
 @
 
 <<Build Source>>=
@@ -1105,12 +1147,18 @@ $(patsubst %.nw,%.pdf,$(NOWEB_NINCL)) \
 @
 
 <<makefile.rules>>=
-figs=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $1)
-pdf_figrule=$(basename $1).pdf: $(patsubst %,%.pdf,$(call figs,$1))
+# returns names of \input'd files
+inc_f=$(shell sed -n -e 's/^\\input{\(.*\.nw\)}$$/\1/;T;p' $1)
+# returns self and any files \input'd, recursively
+inc_all=$1 $(foreach f,$(call inc_f,$1),$(call inc_all,$f))
+figs=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/;T;p' \
+       $(call inc_all,$1))
 ifeq ($(MAKEPP_VERSION),)
-$(foreach f,$(NOWEB),$(eval $(call pdf_figrule,$f)))
+pdf_figrule=$(if $2,$(basename $1).pdf: $(patsubst %,%.pdf,$2))
+$(foreach f,$(NOWEB_NINCL),$(eval $(call pdf_figrule,$f,$(call figs,$f))))
 else
-$[foreach f,$(NOWEB),$[call pdf_figrule,$f]]
+$((foreach f,$(NOWEB_NINCL),
+   $(foreach d,$(call figs,$f),$(adddep $(basename $f).pdf,$d.pdf))))
 endif
 
 # attempt to pull in multi-line messages, each line starts with same char
@@ -1141,7 +1189,7 @@ LMSCMD = /xparse\/.*define-command/b; \
 # picks up changes in references or long tables
 LATEX_REDO_MSG:=" have changed. Rerun "
 
-FIGS:=$(shell sed -n -e '/^\\includegraphics/{s/.*{\(.*\)}$$/\1/;p;}' $(NOWEB))
+FIGS:=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/;T;p' $(NOWEB))
 FIGS_EPS:=$(patsubst %, %.eps, $(FIGS))
 FIGS_PDF:=$(patsubst %, %.pdf, $(FIGS))
 FIGS_DIA:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.dia>>/{s/@<<//;s/@>>//;p;}')
@@ -1710,7 +1758,6 @@ if [ -z "$uselst" ]; then
 else
   filt=./addlistings
   postproc='<<Change [[nwcode]] to [[listings]]>>'
-  # -i is a GNU sed dependency
   sed -i -e '<<Change [[highlight]] style to [[listings]] style>>' latexhl.sty
 fi
 @
@@ -2221,7 +2268,7 @@ outf="$2"
 noweb_order="$3"
 theme="${4#*:}"
 
-figs=`sed -n '/^\\\\includegraphics/{s/.*{\\(.*\\)}\$/\\1.eps/;p;}' $tex`
+figs=`sed -n 's/^\\\\includegraphics.*{\\(.*\\)}\$/\\1.eps/;T;p' $tex`
 texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/;T;p' "$tex"`
 
 # Exit on error

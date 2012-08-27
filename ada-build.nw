@@ -4,6 +4,7 @@
 %%% latex preamble
 \RCS $Id$
 \RCS $Revision$
+\RCS $Date$
 % Build with noweb:
 %  notangle -t8 build.nw > makefile
 %  make
@@ -15,7 +16,7 @@
 
 \title{Ada Build Support for Modular Literate Build System}
 \author{Thomas J. Moore}
-\date{Version 1.0\\Revision \RCSRevision\\2011}
+\date{Version 1.0\\Revision \RCSRevision\\\RCSDate}
 \maketitle
 
 \begin{abstract}

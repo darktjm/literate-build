@@ -4,6 +4,7 @@
 %%% latex preamble
 \RCS $Id$
 \RCS $Revision$
+\RCS $Date$
 % Build with noweb:
 %  notangle -t8 build.nw > makefile
 %  make
@@ -12,7 +13,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.10\\Revision \RCSRevision, 2012}
+\date{Version 3.10\\Revision \RCSRevision\\\RCSDate}
 
 \maketitle
 

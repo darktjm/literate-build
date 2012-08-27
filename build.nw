@@ -653,6 +653,11 @@ $(HEADERS): $(NOWEB)
 $(CFILES): $(NOWEB)
 	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
 
+# disable gmake built-in .c->exe rule
+ifeq ($(MAKEPP_VERSION),)
+%: %.c
+endif
+
 %.o: %.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@ $<
 
@@ -1873,8 +1878,7 @@ underscores.
 
 <<preamble.tex>>=
 % break lines after _
-\toks0=\expandafter{\_}
-\edef\oldunderscore{\the\toks0}
+\let\oldunderscore\_
 \def\_{\oldunderscore\discretionary{}{}{}}
 @
 
@@ -2239,8 +2243,7 @@ highlight -S c ${theme:+-s $theme} -I </dev/null | \
 % Minimize mangling by tex4ht:
 \lstset{columns=flexible}
 % make spaces in chunk names into nbsp
-\toks0=\expandafter{\setupmodname}
-\edef\oldsetupmodname{\the\toks0}
+\let\oldsetupmodname\setupmodname
 \def\setupmodname{\oldsetupmodname\catcode`\ =13}
 \fi
 \fi

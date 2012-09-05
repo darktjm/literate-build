@@ -1,19 +1,19 @@
 % -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
 \documentclass[twoside,english]{article}
 \usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
 %%% latex preamble
 \RCS $Id$
 \RCS $Revision$
 \RCS $Date$
-% Build with noweb:
-%  notangle -t8 build.nw > makefile
-%  make
 
 \begin{document}
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.10\\Revision \RCSRevision\\\RCSDate}
+\date{Version 3.11\\Revision \RCSRevision\\\RCSDate}
 
 \maketitle
 
@@ -731,13 +731,6 @@ order, so the least dependent libraries are printed first.
 Since \texttt{tac} may not be available everywhere, an alternative may
 be specified in [[makefile.config]].
 
-Here and in other places I use \verb|s/<pat>/<repl>/;T;p| as a
-shortcut for an address expression:
-\verb|/<pat>/{s/<pat>/<repl>/;p;}|.  This shortcut was found to be
-broken on some versions of sed.  If in doubt, use GNU sed.  I use the
-\verb|-i| GNU extension in other places, so GNU sed is probably a
-requirement, anyway.
-
 <<Defaults for [[makefile.config]]>>=
 TACCMD=tac
 @
@@ -751,7 +744,7 @@ TACCMD=tac
 
 <<Build variables for makefile includes>>=
 LOCAL_LIBS_BASE:=$(shell $(NOROOTS) $(NOWEB_ORDER) | \
-  sed -n 's/@<<Library \[\[\(.*\)]] Members@>>/\1/;T;p' | \
+  sed -n 's/@<<Library \[\[\(.*\)]] Members@>>/\1/p' | \
     $(TACCMD))
 LOCAL_LIBS:=$(LOCAL_LIBS_BASE:%=-l%)
 LOCAL_LIB_FILES:=$(LOCAL_LIBS_BASE:%=lib%.a)
@@ -868,6 +861,9 @@ $(TEST_SCRIPT_EXEC) $(TEST_SCRIPT_EXEC_SUPPORT): $(NOWEB)
 	-notangle -R$@ $(NOWEB_ORDER) >$@
 	chmod +x $@
 
+@
+
+<<Additional Tests>>=
 @
 
 <<Clean temporary files>>=
@@ -1009,6 +1005,12 @@ every C file.  To allow this, any prototypes detected in a header with
 the exact same syntax as automatically generated is removed from
 [[cproto.h]].  One which tends to vary from mainline to mainline is
 [[main]], so it is always removed.
+
+This uses the GNU [[-i]] extension, which may not be supported on all
+UNIX systems.  If it doesn't, obtaining and using GNU sed is free and
+relatively painless.  GNU sed also does not have a hidden line length
+limit or other misfeatures of other sed implementations, so I
+recommend using it all the time.
 
 \lstset{language=make}
 <<makefile.rules>>=
@@ -1154,10 +1156,10 @@ $(patsubst %.nw,%.pdf,$(NOWEB_NINCL)) \
 
 <<makefile.rules>>=
 # returns names of \input'd files
-inc_f=$(shell sed -n -e 's/^\\input{\(.*\.nw\)}$$/\1/;T;p' $1)
+inc_f=$(shell sed -n -e 's/^\\input{\(.*\.nw\)}$$/\1/p' $1)
 # returns self and any files \input'd, recursively
 inc_all=$1 $(foreach f,$(call inc_f,$1),$(call inc_all,$f))
-figs=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/;T;p' \
+figs=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/p' \
        $(call inc_all,$1))
 ifeq ($(MAKEPP_VERSION),)
 pdf_figrule=$(if $2,$(basename $1).pdf: $(patsubst %,%.pdf,$2))
@@ -1195,7 +1197,7 @@ LMSCMD = /xparse\/.*define-command/b; \
 # picks up changes in references or long tables
 LATEX_REDO_MSG:=" have changed. Rerun "
 
-FIGS:=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/;T;p' $(NOWEB))
+FIGS:=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/p' $(NOWEB))
 FIGS_EPS:=$(patsubst %, %.eps, $(FIGS))
 FIGS_PDF:=$(patsubst %, %.pdf, $(FIGS))
 FIGS_DIA:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.dia>>/{s/@<<//;s/@>>//;p;}')
@@ -1245,11 +1247,11 @@ language is tracked so that the formatter can behave differently depending
 on language.
 
 <<Build Script Executables>>=
-nwhlchunk \
+nwweavefilt \
 @
 
 \lstset{language=perl}
-<<nwhlchunk>>=
+<<Common Perl Prefix>>=
 #!/bin/sh
 #!perl
 <<Common NoWeb Warning>>
@@ -1257,10 +1259,15 @@ eval 'exec perl -x -f "$0" "$@"'
   if 0;
 
 use strict;
+@
 
-<<Initialize [[nwhlchunk]]>>
+<<nwweavefilt>>=
+<<Common Perl Prefix>>
+
+<<Initialize [[nwweavefilt]]>>
 
 while(<STDIN>) {
+  <<Filter lines from NoWeb token stream>>
   print $_; # print most lines
   <<Process lines from NoWeb token stream>>
 }
@@ -1270,7 +1277,7 @@ Language is determined by scanning for language settings from the listings
 package, which may be commented out if the listings package isn't currently
 being used.
 
-<<Initialize [[nwhlchunk]]>>=
+<<Initialize [[nwweavefilt]]>>=
 my $lang = 'txt';
 @
 
@@ -1288,9 +1295,11 @@ all lines are sucked in as part of the code, until the end of the chunk.
 if(/^\@begin code/) {
   # skip @defn
   $_ = <STDIN> or last;
+  <<Filter lines from NoWeb token stream>>
   print $_;
   # skip @nl
   $_ = <STDIN> or last;
+  <<Filter lines from NoWeb token stream>>
   print $_;
   # accumulate code in $code
   my $code = '';
@@ -1310,7 +1319,7 @@ backticks ([[`]]).  Index definitions are moved to the bottom of the chunk
 rather than being marked and replaced like [[@use]]; this removes the
 immediate context, but also eliminates highlighter confusion.
 
-<<Initialize [[nwhlchunk]]>>=
+<<Initialize [[nwweavefilt]]>>=
 my $marker = '^'.'^^';
 @
 
@@ -1320,6 +1329,7 @@ my @use;
 # accumulate index defns in $end
 my $end = '';
 while(<STDIN>) {
+  <<Filter lines from NoWeb token stream>>
   if(/^\@text/) {
     s/^\@text //;
     s/\n//;
@@ -1357,14 +1367,16 @@ This requires the [[open2()]] function.  In addition, the command is passed
 as individual arguments, gaining a little more speed by not calling the
 shell to parse the command at every invocation.
 
-<<Initialize [[nwhlchunk]]>>=
+<<Initialize [[nwweavefilt]]>>=
 use FileHandle;
 use IPC::Open2;
+# first arg is name of highlighting helper
+my $filt = shift @ARGV;
 @
 
 <<Highlight accumulated code>>=
 my ($pid, $reader, $writer);
-$pid = open2($reader, $writer, @ARGV, $lang);
+$pid = open2($reader, $writer, $filt, $lang);
 
 print $writer $code;
 close $writer;
@@ -1660,17 +1672,58 @@ is shifted over a bit, and the font layout is set for minimum mangling.
 
 Now that code chunks can be pretty-printed, a few more adjustments need to
 be made.  Underscores in chunk names (such as when the chunk name is a file
-name) need to be escaped.  The code to do this was copied from the NoWeb
-FAQ, with minor quoting changes and disabling for chunk names with embedded
-code.
+name) need to be escaped.  The easiest place to do this is in a
+filter, which has the chunk names separated out already.  For maximum
+flexibility, this is done in a perl script.
 
-\lstset{language=sed}
-<<Escape underscores in chunk names>>=
-{/\[\[/!s/_/\\\\_/g}
+\lstset{language=perl}
+<<Filter lines from NoWeb token stream>>=
+if(/^\@use / or /^\@defn /) {
+  s/_/\\_/g unless /\[\[/;
+}
 @
 
-<<Adjust use/def chunk names>>=
-/^@use /<<Escape underscores in chunk names>>;/^@defn /<<Escape underscores in chunk names>>
+Chunk names referring to chunks in other files should be indicated as
+such.  For now, this is done by prepending the chunk name with the
+source file in parentheses.  The parentheses are to help force the
+index entry to the top of the list.  The printed source file is the
+top-most file which includes this definition; in other words, if a
+file is included by another, its definitions are owned by the
+includer.
+
+\lstset{language=perl}
+<<Initialize [[nwweavefilt]]>>=
+my %ch;
+# final args are $noweb_order
+my %feqv;
+# find included files
+for my $a (@ARGV) {
+  open(A, $a);
+  while(<A>) {
+    /^\\\\input/ && print STDERR $_;
+    /^\\input{(.*\.nw)}$/ or next;
+    $feqv{$1} = $a;
+  }
+}
+my $myf = pop @ARGV; # my name is always last; skip it
+# now loop over files, making included files look like includer
+for my $a (@ARGV) {
+  my $f = $a;
+  while($feqv{$f}) { $f = $feqv{$f}; }
+  next if($f eq $myf);
+  open(A, $a);
+  while(<A>) {
+    if(/^@<<(.*)@>>=$/) {
+      $ch{$1} = $f unless $ch{$1};
+    }
+  }
+}
+@
+
+<<Filter lines from NoWeb token stream>>=
+if((/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
+  $_ = "$1($ch{$2}) $2\n";
+}
 @
 
 There is little point in separating consecutive code chunks with a lot of
@@ -1719,7 +1772,7 @@ nw2latex \
 @
 
 <<makefile.rules>>=
-nw2latex: latexhl nwhlchunk addlistings
+nw2latex: latexhl nwweavefilt addlistings
 @
 
 \lstset{language=sh}
@@ -1749,8 +1802,7 @@ fi
 EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -filter 'sed -e "<<Adjust use/def chunk names>>"' \
-          -filter "./nwhlchunk $filt" \
+  noweave -filter "./nwweavefilt $filt $noweb_order" \
           -delay -index - | <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -1954,7 +2006,7 @@ sed '/^\\input{.*\.tex} % [^ ]*$/{s/\[\[/@\0/g;s/<</@\0/g;}' | \
 @
 
 <<For each reinserted code chunk>>=
-sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/;T;p' $noweb_order | sort -u | \
+sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/p' $noweb_order | sort -u | \
     while read -r lang f; do
       fesc=$(printf %s "$f" | sed 's/[][\\.*?^$]/\\\0/g')
 @
@@ -2024,7 +2076,7 @@ different files.  The first pass extracts the chunks, and the second pass
 replaces any remaining unresolved internal references.
 
 <<Prepare for weave>>=
-eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/;T;p'\' $noweb_order | \
+eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/p'\' $noweb_order | \
   sort -u | while read c; do
     printf %s\\n "/^\\\\input{${c}\\.tex} %%% doc\$/{s/.*/%/;a\\%\\"
     eval sed -n "'/^% Begin-doc $c\$/,/^% End-doc $c\$/{
@@ -2096,7 +2148,7 @@ endif
 
 \lstset{language=sh}
 <<For each reinserted C prototype>>=
-sed -n 's/^% \([_a-zA-Z0-9]*\) prototype$/\1/;T;p' "$noweb" | while read f; do
+sed -n 's/^% \([_a-zA-Z0-9]*\) prototype$/\1/p' "$noweb" | while read f; do
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
@@ -2272,8 +2324,8 @@ outf="$2"
 noweb_order="$3"
 theme="${4#*:}"
 
-figs=`sed -n 's/^\\\\includegraphics.*{\\(.*\\)}\$/\\1.eps/;T;p' $tex`
-texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/;T;p' "$tex"`
+figs=`sed -n 's/^\\\\includegraphics.*{\\(.*\\)}\$/\\1.eps/p' $tex`
+texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/p' "$tex"`
 
 # Exit on error
 set -e
@@ -2316,7 +2368,7 @@ done
 # Attach original file as comment
 # adds 64 to <>- to avoid HTML comment escapes
 echo "<!--"
-at="`sed -n -e 's/^\\\\embedfile.*{\([^}]*\)}%*$/\1/;T;p' $noweb | sort -u`"
+at="`sed -n -e 's/^\\\\embedfile.*{\([^}]*\)}%*$/\1/p' $noweb | sort -u`"
 echo begin 644 ${noweb%.*}.tar.gz
 eval tar chf - $noweb_order $at | gzip | \
   uuencode "${noweb%.*}".tar.gz | tail -n +2 | tr '<>-' '|~m'
@@ -2496,7 +2548,7 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 @
 
 <<makefile.rules l2h>>=
-nw2html:  htmlhl nwhlchunk latexhl
+nw2html:  htmlhl nwweavefilt latexhl
 
 %.html: %.nw $(FIGS_PNG) nw2html
 	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)"
@@ -2596,7 +2648,7 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -html -filter './nwhlchunk ./htmlhl' -filter l2h -index \
+  noweave -html -filter "./nwweavefilt ./htmlhl $noweb_order" -filter l2h -index \
           -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx - | \
          <<Post-process HTML after weave>>
          cat
@@ -2652,6 +2704,8 @@ will end up coming from the build document every time.
 % template is {, A=arg, [=optarg, C=optarg/save, ==assign, +=white, (=..)
 % l2h macro hypertxt 2 <a href="###$1">#2</a>
 % l2h macro url 1 <a href="#$1">#$1</a>
+% l2h substitution nowebchunks <nowebchunks>
+% l2h substitution nowebindex <nowebindex>
 % l2h substitution ref * A{
 % l2h envblock centering center
 % l2h ignore discretionary {{{
@@ -2996,14 +3050,14 @@ system's preamble in the place marked by \verb!%%% latex preamble!. Copying
 the beginning of this document to start with would not be a bad idea:
 
 \begin{quote}
+\verb!% Build with noweb:!\\*
+\verb!%  notangle -t8 build.nw > makefile!\\*
+\verb!%  make!\\*
 \verb!\documentclass[twoside,english]{article}!\\*
 \verb!\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}!\\*
 \verb!%%% latex preamble!\\*
 \verb!\RCS $!\verb!Id$!\\*
 \verb!\RCS $!\verb!Revision$!\\*
-\verb!% Build with noweb:!\\*
-\verb!%  notangle -t8 build.nw > makefile!\\*
-\verb!%  make!\\*
 \\*
 \verb!\begin{document}!\\*
 \\*
@@ -3050,8 +3104,6 @@ its own line at the end.  This is intended to be used as follows:
 \footnotesize
 \verb!% hidden section - notangle chunks that shouldn't appear in printed output!\\*
 \verb!% mainly for diagrams, which are extracted and included in visual form.!\\*
-\verb!% noweb doesn't actually strip these out - iffalse does that!\\*
-\verb!% This can't be the last part of the doc, or xrefs won't work!\\*
 \verb!\begin{rawhtml}!\\*
 \verb|<!-->|\\*
 \verb!\end{rawhtml}!\\*
@@ -3065,6 +3117,12 @@ its own line at the end.  This is intended to be used as follows:
 \verb!\end{rawhtml}!\\*
 
 \end{quote}
+NoWeb doesn't actually strip these out --- iffalse does that.  Because
+NoWeb generates cross-reference information and the chunk index after
+the last chunk, the last chunk may not be commented out in this way.
+If you see a message like ``LaTeX Warning: The are no
+\textbackslash{}nowebchunks on input line \ldots{}'', there are eiher
+no code chunks at all, or the last code chunk was commented out.
 
 \item Syntax highlighted, fully extracted code chunks: a code chunk can be
 repeated in e.g. a users' guide appendix, fully extracted and syntax
@@ -3112,17 +3170,38 @@ PDF or HTML output can be attached using the [[embedfile]] package's
 
 \end{itemize}
 
-At the end of the document, the code chunk index and \LaTeX{} end should be
-added.  The index needs to be at the end for consistency between HTML and
-PDF output, since the HTML converter always sticks it at the end.
+Somewhere in the document, the code chunk index should be added.
+Right now, an identifier index is not supported.
 
 \begin{quote}
 \footnotesize
 \begin{verbatim}
 \section{Code Index}
-% This must be last, because l2h always puts it last & ignores the directives
 \nowebchunks
 
+% note: no identifier indexing is done right now
+
+\begin{rawhtml}
+<!-->
+\end{rawhtml}
+%\vspace{1ex}
+%\hrule
+%\vspace{1ex}
+\begin{rawhtml}
+<-->
+\end{rawhtml}
+
+%\nowebindex
+
+\end{verbatim}
+\end{quote}
+
+Of course the document must be ended with \verb|\end{document}|, like
+any \LaTeX{} document.
+
+\begin{quote}
+\footnotesize
+\begin{verbatim}
 \end{document}
 \end{verbatim}
 \end{quote}
@@ -3235,6 +3314,8 @@ files safe to be included by all C source
 \item [[<<Common C Header>>]]: stuff safe for the top of every C file,
 including the warning, common includes, static version string, and
 automatically generated prototypes.
+\item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
+executables.
 \item [[<<Version Strings>>]]: A C string containing the version ID of all
 contributing source files; extend with [["$]][[Id$\n"]].
 \item [[<<Sources>>]]: A simple text chunk containing the version ID of all
@@ -3242,15 +3323,13 @@ contributing source files; extend with just [[$]][[Id$]].
 \end{itemize}
 
 \section{Code Index}
-% This must be last, because l2h always puts it last & ignores the directives
-
 \nowebchunks
 
 % note: no identifier indexing is done right now
 
 \begin{rawhtml}
 <!-->
-%\end{rawhtml}
+\end{rawhtml}
 %\vspace{1ex}
 %\hrule
 %\vspace{1ex}

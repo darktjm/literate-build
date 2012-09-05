@@ -1,13 +1,13 @@
 % -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
 \documentclass[twoside,english]{article}
 \usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
 %%% latex preamble
 \RCS $Id$
 \RCS $Revision$
 \RCS $Date$
-% Build with noweb:
-%  notangle -t8 build.nw > makefile
-%  make
 
 %%% requires build
 \lstset{language=ada}
@@ -587,7 +587,7 @@ Place ayacc and aflex in your path, and you can then use them with
 this build system.  Using variables like [[$(AFLEX)]] and [[$(AYACC)]]
 is not worth the effort.
 
-<<Makefile.rules>>=
+<<makefile.rules>>=
 %.a: %.l
 	aflex $(ALFLAGS) -i $<
 	# also generates %_dfa.a and %_io.a
@@ -601,7 +601,7 @@ is not worth the effort.
 	# rm -f $*.s $*_goto.s $*_shift_reduce.s $*_tokens.s
 @
 
-<<Makefile.rules>>=
+<<makefile.rules>>=
 %.a.stamp: %.a
 	gnatchop -w -r $< | grep '.adb$' | while read x; do \
 	   gnatmake -gnatf -gnatwawFwPwl -Wuninitialized -funwind-tables -g -O3 $$x; \
@@ -5038,11 +5038,8 @@ build-script : compile.nw
 	touch $@
 @
 
-<<Remove all intermediate files>>=
+<<Clean temporary files>>=
 rm -f *.{ali,[os]} gcc_errs
-@
-
-<<Remove all generated files>>=
 rm -f build-script *.{ad[abs]}
 @
 
@@ -5525,7 +5522,7 @@ formatting Ada code and other things I wanted it to do.
 
 Before printing, a custom API documentation tool is run to accumulate
 in-line API documentation into a single appendix.  See appendix
-\ref{sec:Coding-Style} for a brief description of how it works.  The
+\ref{sub:Building} for a brief description of how it works.  The
 tool itself is in a separate package.
 
 <<makefile.rules>>=
@@ -5562,147 +5559,6 @@ For TeX4ht:
 \begin{document}
   \Css{.lstlisting {background-color:\#ffa; color:black}}
 \EndPreamble
-@
-
-Boilerplate header on main-line files:
-
-<<texheader.tex>>=
-\documentclass[twoside,english]{article}
-\usepackage[T1]{fontenc}
-\usepackage[latin1]{inputenc}
-\usepackage[letterpaper,rmargin=1in,bmargin=1in]{geometry}
-% Use standard fonts for PDF output
-\usepackage{ifpdf}
-\ifpdf
-\usepackage{times}
-\usepackage{mathptmx}
-\fi
-\usepackage{noweb}
-\usepackage{babel}
-\usepackage{graphicx}
-\usepackage{listings}
-\usepackage{color}
-%
-% API adds subsubsections - don't add them to toc
-\setcounter{secnumdepth}{3}
-\setcounter{tocdepth}{2}
-%
-\pagestyle{headings}
-%
-% Stuff for the listings package
-\lstloadlanguages{C,sh,make,ada,[LaTeX]TeX} %,sed
-\lstset{defaultdialect=[gnu]make,defaultdialect=[LaTeX]TeX}
-% Use ^G for escape char - not likely in document
-\lstset{escapechar=^^G}
-% make it look more like html
-\definecolor{lightyellow}{rgb}{1,1,.66}
-\lstset{backgroundcolor=\color{lightyellow},framexleftmargin=1.5em,framexrightmargin=1em}
-\lstset{columns=[l]fixed}
-
-% from LyX - apparently necessary for footnotes in TOC
-%% Special footnote code from the package 'stblftnt.sty'
-%% Author: Robin Fairbairns -- Last revised Dec 13 1996
-\makeatletter
-\let\SF@@footnote\footnote
-\def\footnote{\ifx\protect\@typeset@protect
-    \expandafter\SF@@footnote
-  \else
-    \expandafter\SF@gobble@opt
-  \fi
-}
-\expandafter\def\csname SF@gobble@opt \endcsname{\@ifnextchar[%]
-  \SF@gobble@twobracket
-  \@gobble
-}
-\edef\SF@gobble@opt{\noexpand\protect
-  \expandafter\noexpand\csname SF@gobble@opt \endcsname}
-\def\SF@gobble@twobracket[#1]#2{}
-\makeatother
-
-% This is from the noweb FAQ
-% Allow code chunks to span pages
-\def\nwendcode{\endtrivlist \endgroup}
-%\def\nwendcode{\endtrivlist \endgroup \vfil\penalty10\vfilneg}
-% Allow docs to be split from code chunks
-\let\nwdocspar=\smallbreak
-%\let\nwdocspar=\par
-
-% try a little harder to keep code chunks on one page
-\nwcodepenalty=1000
-%
-% Ada is huge, so make it smaller (smallcode, scriptsizecode, footnotesizecode)
-% Make chunk index useful (longchunks)
-% Remove xrefs from chunks themselves (noidentxref)
-\noweboptions{footnotesizecode,longchunks,noidentxref}
-\lstset{basicstyle=\footnotesize}
-% Following is for tex4ht only
-\ifpdf
-\else
-\noweboptions{webnumbering,nomargintag}
-% Minimize mangling by tex4ht:
-\lstset{columns=flexible}
-% make spaces in chunk names into nbsp
-\toks0=\expandafter{\setupmodname}
-\edef\oldsetupmodname{\the\toks0}
-\def\setupmodname{\oldsetupmodname\catcode`\ =13}
-\fi
-%
-% Hyperlink it!
-\usepackage{hyperref}
-
-% break lines after _
-\toks0=\expandafter{\_}
-\edef\oldunderscore{\the\toks0}
-\def\_{\oldunderscore\discretionary{}{}{}}
-
-% Removes dependency on pretzel in favor of dependency on totex patch/listings
-% listings aren't as pretty as pretzel's output, but it's cleaner & works with
-% tex4ht to highlight consistently on pdf & html
-\lstset{language=ada}
-\lstset{emphstyle=\texsf}
-% Note: unlike pretzel, lstlisting is extremely stupid about "literate" mode
-% e.g. it replaces strings in mid-identifier (simple problem) and it doesn't
-% take context into consideration (hard problem - e.g. "in" as parameter
-% mode vs. operator)
-\lstset{literate=
-          {:=}{{$\gets$}}1
-          {<=}{{$\leq$}}1
-	  {>=}{{$\geq$}}1
-	  {/=}{{$\neq$}}1
-	  {=>}{{$\Rightarrow$}}1
-	  {=}{{$\equiv$}}1
-	  {@@<<}{{$\langle\!\langle$}}2
-	  {@@>>}{{$\rangle\!\rangle$}}2
-%	  {and then}{{$\wedge\rightarrow$}}2
-%	  {or else}{{$\\vee\rightarrow$}}2
-%	  {and}{{$\wedge$}}1
-%	  {or}{{$\vee$}}1
-%	  {for}{{$\forall$}}1
-%	  {not in}{{$\ni$}}1
-%	  {not}{{$\neg$}}1
-%	  {in}{{$\in$}}1
-%	  {null}{{$\emptyset$}}1
-%         {**...}{^{...}}  % yeah, like that'll ever happen
-%         <base>#123e<exponent># -> 123 \cdot <base>^<exponent>
-% strip out pretzel controls - leaves whitespace, but [il] comments are broken
-          {--@\#}{}0
-          {--@<}{}0
-          {--@>}{}0
-          {--@*}{}0
-          {--@\}}{}0
-          {--@\{}{}0
-          {--@;}{}0
-          {--@/}{}0
-}
-% Lose pretzel comment formatting, so highlight another way
-\lstset{commentstyle=\color{blue}\em}
-
-% stripping out completely seems broken
-%\lstset{morecomment=[il][]{--@}}
-% meaning that finding too-long pure code using following is impossible
-%\lstset{comment=[il]--}
-% so just read all & make sure it looks OK
-\lstset{breaklines=true,breakatwhitespace=true}
 @
 
 \iffalse
@@ -5887,6 +5743,146 @@ This is done for you if you don't use -delay
 @
 \fi
 
+Boilerplate header on main-line files:
+
+<<texheader.tex>>=
+\documentclass[twoside,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin1]{inputenc}
+\usepackage[letterpaper,rmargin=1in,bmargin=1in]{geometry}
+% Use standard fonts for PDF output
+\usepackage{ifpdf}
+\ifpdf
+\usepackage{times}
+\usepackage{mathptmx}
+\fi
+\usepackage{noweb}
+\usepackage{babel}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{color}
+%
+% API adds subsubsections - don't add them to toc
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+%
+\pagestyle{headings}
+%
+% Stuff for the listings package
+\lstloadlanguages{C,sh,make,ada,[LaTeX]TeX} %,sed
+\lstset{defaultdialect=[gnu]make,defaultdialect=[LaTeX]TeX}
+% Use ^G for escape char - not likely in document
+\lstset{escapechar=^^G}
+% make it look more like html
+\definecolor{lightyellow}{rgb}{1,1,.66}
+\lstset{backgroundcolor=\color{lightyellow},framexleftmargin=1.5em,framexrightmargin=1em}
+\lstset{columns=[l]fixed}
+
+% from LyX - apparently necessary for footnotes in TOC
+%% Special footnote code from the package 'stblftnt.sty'
+%% Author: Robin Fairbairns -- Last revised Dec 13 1996
+\makeatletter
+\let\SF@@footnote\footnote
+\def\footnote{\ifx\protect\@typeset@protect
+    \expandafter\SF@@footnote
+  \else
+    \expandafter\SF@gobble@opt
+  \fi
+}
+\expandafter\def\csname SF@gobble@opt \endcsname{\@ifnextchar[%]
+  \SF@gobble@twobracket
+  \@gobble
+}
+\edef\SF@gobble@opt{\noexpand\protect
+  \expandafter\noexpand\csname SF@gobble@opt \endcsname}
+\def\SF@gobble@twobracket[#1]#2{}
+\makeatother
+
+% This is from the noweb FAQ
+% Allow code chunks to span pages
+\def\nwendcode{\endtrivlist \endgroup}
+%\def\nwendcode{\endtrivlist \endgroup \vfil\penalty10\vfilneg}
+% Allow docs to be split from code chunks
+\let\nwdocspar=\smallbreak
+%\let\nwdocspar=\par
+
+% try a little harder to keep code chunks on one page
+\nwcodepenalty=1000
+%
+% Ada is huge, so make it smaller (smallcode, scriptsizecode, footnotesizecode)
+% Make chunk index useful (longchunks)
+% Remove xrefs from chunks themselves (noidentxref)
+\noweboptions{footnotesizecode,longchunks,noidentxref}
+\lstset{basicstyle=\footnotesize}
+% Following is for tex4ht only
+\ifpdf
+\else
+\noweboptions{webnumbering,nomargintag}
+% Minimize mangling by tex4ht:
+\lstset{columns=flexible}
+% make spaces in chunk names into nbsp
+\toks0=\expandafter{\setupmodname}
+\edef\oldsetupmodname{\the\toks0}
+\def\setupmodname{\oldsetupmodname\catcode`\ =13}
+\fi
+%
+% Hyperlink it!
+\usepackage{hyperref}
+
+% break lines after _
+\toks0=\expandafter{\_}
+\edef\oldunderscore{\the\toks0}
+\def\_{\oldunderscore\discretionary{}{}{}}
+
+% Removes dependency on pretzel in favor of dependency on totex patch/listings
+% listings aren't as pretty as pretzel's output, but it's cleaner & works with
+% tex4ht to highlight consistently on pdf & html
+\lstset{language=ada}
+\lstset{emphstyle=\texsf}
+% Note: unlike pretzel, lstlisting is extremely stupid about "literate" mode
+% e.g. it replaces strings in mid-identifier (simple problem) and it doesn't
+% take context into consideration (hard problem - e.g. "in" as parameter
+% mode vs. operator)
+\lstset{literate=
+          {:=}{{$\gets$}}1
+          {<=}{{$\leq$}}1
+	  {>=}{{$\geq$}}1
+	  {/=}{{$\neq$}}1
+	  {=>}{{$\Rightarrow$}}1
+	  {=}{{$\equiv$}}1
+	  {@@<<}{{$\langle\!\langle$}}2
+	  {@@>>}{{$\rangle\!\rangle$}}2
+%	  {and then}{{$\wedge\rightarrow$}}2
+%	  {or else}{{$\\vee\rightarrow$}}2
+%	  {and}{{$\wedge$}}1
+%	  {or}{{$\vee$}}1
+%	  {for}{{$\forall$}}1
+%	  {not in}{{$\ni$}}1
+%	  {not}{{$\neg$}}1
+%	  {in}{{$\in$}}1
+%	  {null}{{$\emptyset$}}1
+%         {**...}{^{...}}  % yeah, like that'll ever happen
+%         <base>#123e<exponent># -> 123 \cdot <base>^<exponent>
+% strip out pretzel controls - leaves whitespace, but [il] comments are broken
+          {--@\#}{}0
+          {--@<}{}0
+          {--@>}{}0
+          {--@*}{}0
+          {--@\}}{}0
+          {--@\{}{}0
+          {--@;}{}0
+          {--@/}{}0
+}
+% Lose pretzel comment formatting, so highlight another way
+\lstset{commentstyle=\color{blue}\em}
+
+% stripping out completely seems broken
+%\lstset{morecomment=[il][]{--@}}
+% meaning that finding too-long pure code using following is impossible
+%\lstset{comment=[il]--}
+% so just read all & make sure it looks OK
+\lstset{breaklines=true,breakatwhitespace=true}
+@
 
 \section{Code Index}
 % This must be last, because l2h always puts it last & ignores the directives

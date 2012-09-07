@@ -5546,21 +5546,6 @@ fi
 
 \subsection{\label{sub:Building}Building}
 
-And here's some extra stuff, for integration later:
-
-For TeX4ht:
-
-\lstset{language=[LaTeX]TeX}
-
-<<myhtml.cfg>>=
-% sec-filename may prevent multiple docs in same dir
-%\Preamble{xhtml,2,uni-html4,graphics-}
-\Preamble{xhtml,uni-html4,css-in,fn-in,graphics-}
-\begin{document}
-  \Css{.lstlisting {background-color:\#ffa; color:black}}
-\EndPreamble
-@
-
 \iffalse
 The following patch has been noweb-escaped - extract with:
 

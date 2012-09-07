@@ -2734,10 +2734,7 @@ cat <<EOF > myhtml.cfg
 EOF
 
 # runs latex 3x, regardless
-# WTF?  htlatex now generates its own myhtml.cfg and appends it to the
-# one that was passed in.
-#htlatex $1 myhtml >&2
-htlatex $1 >&2
+htlatex $1 myhtml >&2
 
 mv *.png .. 2>/dev/null || :
 for x in *.html; do

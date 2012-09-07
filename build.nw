@@ -13,7 +13,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.11\\Revision \RCSRevision\\\RCSDate}
+\date{Version 3.12\\Revision \RCSRevision\\\RCSDate}
 
 \maketitle
 
@@ -1449,6 +1449,10 @@ HLPROG_TYPE=
 
 \lstset{language=sh}
 <<Prepare for weave>>=
+<<Check highlighter>>
+@
+
+<<Check highlighter>>=
 if [ -z "$HLPROG_TYPE" ]; then
   if type highlight >/dev/null 2>&1; then
     v=`highlight --version 2>&1 | fgrep highlight`
@@ -1615,13 +1619,7 @@ decimal RGB triples.
 <<Prepare for [[latexhl]]>>=
 if [ $HLPROG_TYPE = source-highlight ]; then
   echo 'onestyle "\hl$style{$text}"' >> mylatex.outlang
-  # need to sort in reverse order because source-highlight uses first match
-  # rather than longest match
-  for x in $(source-highlight --lang-list | cut -d\  -f3 | sort -u); do
-    source-highlight --show-lang-elements=$x
-  done | sort -ur | fgrep -v 'named subexps' > source-hl-elts
-  # lang def simply makes a type its name
-  sed 's/.*/& = "&"/' < source-hl-elts > source-hl-elts.lang
+  <<Get all [[source-highlight]] color names>>
   # outlang def for background color only, in same format as latexcolor
   echo 'nodoctemplate
         "\definecolor{bgcolor}\textcolor{$docbgcolor}"
@@ -1647,6 +1645,16 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 	       s/{/{named}{/
 	     }' > latexhl.sty
 fi
+@
+
+<<Get all [[source-highlight]] color names>>=
+# need to sort in reverse order because source-highlight uses first match
+# rather than longest match
+for x in $(source-highlight --lang-list | cut -d\  -f3 | sort -u); do
+  source-highlight --show-lang-elements=$x
+done | sort -ur | fgrep -v 'named subexps' > source-hl-elts
+# lang def simply makes a type its name
+sed 's/.*/& = "&"/' < source-hl-elts > source-hl-elts.lang
 @
 
 <<Clean temporary files>>=
@@ -1803,6 +1811,10 @@ names, but any which mismatch what is supported by the external
 highlighter should be listed here.
 
 <<Do per-chunk highlighting preparation for [[latexhl]]>>=
+<<Do generic per-chunk highlighting preparation>>
+@
+
+<<Do generic per-chunk highlighting preparation>>=
 if [ source-highlight = $HLPROG_TYPE ]; then
   case $1 in
     [cC]) larg="--lang-def=myc.lang" ;;
@@ -1818,10 +1830,10 @@ fi
 @
 
 <<[[highlight]]-2 options for [[latexhl]]>>=
---out-format=latex -S $1 -E `pwd` -f
+--out-format=latex -f -S $1 -E `pwd`
 @
 
-<<Do per-chunk highlighting preparation for [[latexhl]]>>=
+<<Do generic per-chunk highlighting preparation>>=
 if [ highlight-3 = $HLPROG_TYPE ]; then
   case $1 in
     [cC]) larg="--config-file=myc.lang" ;;
@@ -2590,7 +2602,7 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)"
+	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
 @
 
 <<Clean built files>>=
@@ -2624,21 +2636,32 @@ doing some other fine tuning for TeX4ht is done in the preamble.
 }
 % end bug fix
 \begin{document}
-  \Css{.lstlisting {`<<Extract HTML CSS for current theme's background>>`
+  \Css{.lstlisting {$(<<Extract HTML CSS for current theme's background>>)
                     margin-left: 10pt; margin-right: 10pt;}}
 \EndPreamble
 @
 
-% FIXME: support source-highlight here
-% FIXME: support missing highlighter here
 \lstset{language=sh}
 <<Extract HTML CSS for current theme's background>>=
-highlight -S c ${theme:+-s $theme} -I </dev/null | \
-  sed -n -e '/pre.hl/{s/.*{//;s/}.*//;
-             s/\(background-color:#\)ffffff/\1fafafa/;
-             s/#/\\\\#/g;
-             s/font-size.*/font-size: smaller;/
-             p;}'
+case "$HLPROG_TYPE" in
+  highlight-[23])
+    highlight -S c ${theme:+-s $theme} -I </dev/null | \
+      sed -n -e '/pre.hl/{s/.*{//;s/}.*//;
+                 s/\(background-color:#\)ffffff/\1fafafa/;
+                 s/#/\\#/g;
+                 s/font-size.*/font-size: smaller;/
+                 p;}'
+    ;;
+  source-highlight)
+    echo 'nodoctemplate
+          "background-color:$docbgcolor; font-size: smaller;"
+	  end' > mybg.outlang
+    source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
+                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+      sed 's/#ffffff/#fafafa/i;s/white/#f6f6f6/i'
+    ;;
+  *) echo "background-color:#fafafa; font-size: smaller;" ;;
+esac
 @
 
 \lstset{language=TeX}
@@ -2648,9 +2671,9 @@ highlight -S c ${theme:+-s $theme} -I </dev/null | \
 \ifxetex
 \else
 % Following is for tex4ht only
+\def\embedfile#1{}
 \newenvironment{framed}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
 %\renewenvironment{lstlisting}{\HCode{<div class="lstlisting">}}{\HCode{</div>}}
-
 \noweboptions{webnumbering,nomargintag}
 
 % Minimize mangling by tex4ht:
@@ -2683,6 +2706,9 @@ noweb="$base.nw"
 outf="$2"
 noweb_order="$3"
 theme="${4#*:}"
+export HLPROG_TYPE="$5"
+
+<<Check highlighter>>
 
 figs=`sed -n 's/^\\\\includegraphics.*{\\(.*\\)}\$/\\1.eps/p' $tex`
 texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/p' "$tex"`
@@ -2708,7 +2734,10 @@ cat <<EOF > myhtml.cfg
 EOF
 
 # runs latex 3x, regardless
-htlatex $1 myhtml >&2
+# WTF?  htlatex now generates its own myhtml.cfg and appends it to the
+# one that was passed in.
+#htlatex $1 myhtml >&2
+htlatex $1 >&2
 
 mv *.png .. 2>/dev/null || :
 for x in *.html; do
@@ -2896,12 +2925,30 @@ htmlhl \
 #!/bin/sh
 <<Common NoWeb Warning>>
 
-echo '<ol class="code">'
-# FIXME: support source-highlight here
-# FIXME: support missing highlighter here
-highlight -l --ordered-list -S $1 -E `pwd` -f | \
-    sed 's%^</li>$%<li></li>%;s/<li[^>]*>/<li><pre>/;s%</li>%</pre></li>%'
-echo '</ol>'
+case $HLPROG_TYPE in
+  highlight-[23]) echo '<ol class="code">' ;;
+esac
+<<Do generic per-chunk highlighting preparation>>
+case $HLPROG_TYPE in
+  highlight-2)
+    highlight -l --ordered-list -f -S $1 -E `pwd` | \
+      <<Filter [[highlight]] HTML output>> ;;
+  highlight-3)
+    highlight -l --ordered-list -f $larg | \
+      <<Filter [[highlight]] HTML output>> ;;
+  source-highlight)
+    # remove last line and move /pre up
+    # should probably retain one line if empty
+    source-highlight -f xhtml-css $larg | \
+      sed -n -e 's/<pre><tt>/<pre class="code">/;x;$s%$%</pre>%;1!p'
+esac
+case $HLPROG_TYPE in
+  highlight-[23]) echo '</ol>'
+esac
+@
+
+<<Filter [[highlight]] HTML output>>=
+sed 's%^</li>$%<li></li>%;s/<li[^>]*>/<li><pre>/;s%</li>%</pre></li>%'
 @
 
 \lstset{language=make}
@@ -2913,7 +2960,7 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 nw2html:  htmlhl nwweavefilt latexhl
 
 %.html: %.nw $(FIGS_PNG) nw2html
-	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)"
+	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
 @
 
 <<Clean built files>>=
@@ -2934,9 +2981,12 @@ noweb="$1"
 outf="$2"
 noweb_order="$3"
 theme="$4"
+export HLPROG_TYPE="$5"
 
 # tex version allows list: prefix - ignore if there
 theme="${theme#list:}"
+
+<<Prepare for weave>>
 
 (
 # This replaces l2h's header
@@ -2946,24 +2996,47 @@ Extract with uudecode, or, if uudecode chokes, use:
    tr '|~m\`' '<>- ' | uudecode -o '${noweb%.*}.tar.gz'
 -->
  <head>
-<meta name=\"generator\" content=\"noweave -html -filter l2h, highlight\">
-  <style type=\"text/css\">"
-# FIXME: support source-highlight here
-# FIXME: support missing highlighter here
-highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
-  # replace white bg with very light gray to distinguish from text
-  s/\(background-color:#\)ffffff/\1fafafa/g
-  # remove extra junk from block style
-  /pre.hl/{
-     s/pre.hl/ .code/
-     s/font-size:.*;/font-size: smaller;/
-     p
-     # make links look like normal text
-     s/.code/& a/;s/margin.*;//
-     p
-     }
-  # fix class names
-  /^\./{s/^/.code /;s/\.hl\././;p;}'
+<meta name=\"generator\" content=\"noweave -html -filter l2h, $HLPROG_TYPE\">
+  <style type=\"text/css\">
+  <!--"
+case "$HLPROG_TYPE" in
+  highlight-[23])
+    highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
+      # replace white bg with very light gray to distinguish from text
+      s/\(background-color:#\)ffffff/\1fafafa/g
+      # remove extra junk from block style
+      /pre.hl/{
+        s/pre.hl/ .code/
+        s/font-size:.*;/font-size: smaller;/
+        p
+        # make links look like normal text
+        s/.code/& a/;s/margin.*;//
+        p
+      }
+      # fix class names
+      /^\./{s/^/.code /;s/\.hl\././;p;}'
+    # option: line #s or not (leave both in HTML for user to see)
+    echo ".code li {display: block;}"
+    echo "/* either above line to remove line #s, or make space for line #s with: */"
+    echo "/* .code {margin-left: 2em;} */"
+    ;;
+  source-highlight)
+    <<Get all [[source-highlight]] color names>>
+    source-highlight ${theme:+--style-css-file=$theme.css} --doc -f xhtml \
+                     --lang-def=source-hl-elts.lang < source-hl-elts | \
+      sed -n -e '
+        # replace white bg with very light gray to distinguish from text
+        s/\(background-color: *#\)ffffff/\1fafafa/ig
+	s/\(background-color: *\)white/\1#fafafa/ig
+	s/<body style="\(.*\)">/.code { \1; font-size: smaller }/p
+	ta; :a s%</span>%%g;T
+	s/\(.*>\)\([^>]*\)$/.code .\2 { \1 }/
+	s/<span style="//g; s/">/; /g;p'
+    ;;
+esac
+# option: border or not (leave both in HTML for user to see)
+echo "/* optional: add border around code */"
+echo "/* .code {border: thin solid black;} */"
 # display code within chunk names correctly
 echo "code {font-style: normal;}"
 # display code chunk immediately below chunk name
@@ -2975,14 +3048,8 @@ echo ".code li,pre {margin-top: 0; margin-bottom: 0;}"
 # make chunk refs more legible by removing underline
 echo ".code a {text-decoration: none;}"
 echo "pre.dfn a {text-decoration: none;}"
-# option: line #s or not (leave both in HTML for user to see)
-echo ".code li {display: block;}"
-echo "/* either above line to remove line #s, or make space for line #s with: */"
-echo "/* .code {margin-left: 2em;} */"
-# option: border or not (leave both in HTML for user to see)
-echo "/* optional: add border around code */"
-echo "/* .code {border: thin solid black;} */"
-echo "  </style>"
+echo "//-->"
+echo "</style>"
 ) >"$outf"
 @
 
@@ -2998,7 +3065,6 @@ manually.   In any case, post processing of the HTML is required.  After the
 document is generated, the source is once again tacked on as an HTML comment.
 
 <<nw2html>>=
-<<Prepare for weave>>
 ( (
   ln=`grep -n '^%%% latex preamble' "$noweb" | cut -d: -f1 | head -n 1`
   head -n $ln "$noweb"
@@ -3088,9 +3154,10 @@ will end up coming from the build document every time.
 % l2h substitution textbar |
 % l2h substitution textasciitilde ~
 % l2h substitution sim ~
+% l2h substitution textbackslash \
+% l2h substitution backslash \
 % l2h ignoreenv webcode
 % l2h macro input 1 <!-- input #$1 -->
-% l2h substitution backslash \
 % l2h ignore embedfile [{
 % \RCS still needs to go into header to get stripped out properly
 % l2h ignore RCS

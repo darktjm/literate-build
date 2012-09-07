@@ -1399,11 +1399,14 @@ close $reader;
 waitpid $pid, 0;
 @
 
-\subsection{Pretty Printing with [[highlight]] and [[framed]]}
+\subsection{Pretty Printing with a highlighter and [[framed]]}
 
-So, to use the [[highlight]]\footnote{\url{http://www.andre-simon.de}}
-utility with this wrapper, an additional wrapper script needs to be made.
-It runs [[highlight]] and massages the output a bit.
+One method of highlighting is to use an external highlighting program.
+Two related programs which work are
+[[highlight]]\footnote{\url{http://www.andre-simon.de}} and GNU
+[[source-highlight]]\footnote{\url{http://www.gnu.org/software/src-highlite/}}.
+An additional wrapper script needs to be made to invoke the
+highlighter and massage the output a bit.
 
 \lstset{language=sh}
 <<Build Script Executables>>=
@@ -1413,56 +1416,136 @@ latexhl \
 <<latexhl>>=
 #!/bin/sh
 <<Common NoWeb Warning>>
-
-<<Highlight background color>>
-highlight --out-format=latex -S $1 -E `pwd` -f | sed -n '
- # removes 1st 2 lines (setting font & spacing - already done)
- 3 {
-  :a
-   # remove last few lines (just extra whitespace & restoring font/spacing)
-   /^\\mbox{}$/bb
-   # detexify triple-^
-   s/\(\\textasciicircum \)\1\1/^''^^/g
-   # remove unnecessary fill on every line
-   s/\\hspace\*{\\fill}\\\\$//
-   # add strut to first line
-   3s/$/\\strut{}/
-   # use {} instead of single space to terminate TeX cmds
-   s/\(\\[a-z][a-z]*\) /\1{}/g
-   # remove last CR by tacking on % to last line; requires deferred print
-   x;3!p;n
-   ba
-  :b
-   3b
-   g;s/$/%/;p
- }'
 @
 
-To make [[highlight]] do its job, background color needs to be supported as
-well.  To do this, a box-type environment that sets background colors and
-can span pages is needed.  The [[framed]] package comes close, but requires
-a bit of work to get the chunk to associate strongly with its header line.
-Without moving the code margin outside of the frame, it also extends the
-color box too far to the left.  In the interest of simplicity, though, it
-will be used instead of writing an equivalent replacement.
+Since multiple highlighters are supported, the first thing to do is
+figure out which one to use.  In previous versions of this system,
+only [[highlight]] version 2 was supported, so it is the preferred
+highlighter, if available.  Since this needs to take advantage of a
+few low-level features, compatibility is not guaranteed.  For
+[[highlight]] in particular, a check is made for major version 2 or 3
+(early versions of 2 are not supported, but that is not checked).  For
+either highlighter, it is difficult to come up with tests that ensure
+that this will actually work.  If it doesn't, changes will need to be
+made here.
 
-One problem to watch out for with [[framed]] is that if a code chunk starts
-at the bottom of a page, it is sometimes not broken at subsequent page
-boundaries.  These chunks can be detected by scanning the \LaTeX{} log for
-\texttt{Overfull $\backslash$vbox} messages.  This can be cured by inserting
-an explicit [[\break]] before the affected code chunk.  All [[\break]]
-commands should be revisited regularly to make sure they are still necessary
-as the document changes.  Of course this could also be taken as a sign that
-it is time to break the code chunk into smaller chunks, but sometimes
-breaking things up just for the sake of making them smaller just makes
-things messier.
+Rather than checking this for every chunk, the overall wrapper sets an
+environment variable to indicate which version to use.  It also does
+any setup steps that do not need to be repeated for every chunk.
 
-<<Highlight background color>>=
-echo '\begin{framed}\advance\leftskip-\codemargin%'
+If the user wants, the check can be skipped entirely.  Of course if
+the user setting does not match what the system actually has, there
+will be plenty of error messages while this runs.
+
+\lstset{language=make}
+<<makefile.config>>=
+# if non-blank, specify which highlighter to use:
+#  highlight-2  named highlight, acts like highlight-2.x
+#  highlight-3  named highlight, acts like highlight-3.x
+#  source-highlight named source-highlight (probably 3.x)
+# if blank, autodetect
+HLPROG_TYPE=
+@
+
+\lstset{language=sh}
+<<Prepare for weave>>=
+if [ -z "$HLPROG_TYPE" ]; then
+  if type highlight >/dev/null 2>&1; then
+    v=`highlight --version 2>&1 | fgrep highlight`
+    v="${v##*version }"
+    v="${v%%.*}"
+    export HLPROG_TYPE=highlight-$v
+    if [ $HLPROG_TYPE != highlight-2 -a $HLPROG_TYPE != highlight-3 ]; then
+      # echo "Only version 2 or 3 of highlight supported." >&2
+      # exit 1
+      HLPROG_TYPE=
+    fi
+  elif type source-highlight >/dev/null 2>&1; then
+    export HLPROG_TYPE=source-highlight
+  else
+    export HLPROG_TYPE=
+  fi
+else
+  case "$HLPROG_TYPE" in
+    highlight-[23]) type highlight >/dev/null 2>&1 || HLPROG_TYPE= ;;
+    source-highlight) type source-highlight >/dev/null 2>&1 || HLPROG_TYPE= ;;
+    *) HLPROG_TYPE= ;;
+  esac
+  if [ -z "$HLPROG_TYPE" ]; then
+    echo "Invalid highlighter specified in HLPROG_TYPE" >&2
+    exit 1
+  fi
+fi
+@
+
+Next, any preparations before running the source highlighter should be
+made, and the highlighter itself should be called.
+
+<<latexhl>>=
+<<Do per-chunk highlighting preparation for [[latexhl]]>>
+case $HLPROG_TYPE in
+  highlight-2)
+    highlight <<[[highlight]]-2 options for [[latexhl]]>> | \
+      sed -n -e '<<Adjust [[highlight]]-2 \LaTeX{}>>' ;;
+  highlight-3)
+    highlight <<[[highlight]]-3 options for [[latexhl]]>> | \
+      sed -n -e '<<Adjust [[highlight]]-3 \LaTeX{}>>' ;;
+  source-highlight)
+    source-highlight <<[[source-highlight]] options for [[latexhl]]>> | \
+      sed -n -e '<<Adjust [[source-highlight]] \LaTeX{}>>' ;;
+esac
+@
+
+To make the highlighter do its job, changing the block's background
+color needs to be supported as well.  To do this, a box-type
+environment that sets background colors and can span pages is needed.
+The [[framed]] package comes close, but requires a bit of work to get
+the chunk to associate strongly with its header line.  Without moving
+the code margin outside of the frame, it also extends the color box
+too far to the left.  In the interest of simplicity, though, it will
+be used instead of writing an equivalent replacement.  The background
+color itself is the named color [[bgcolor]].
+
+One problem to watch out for with [[framed]] is that if a code chunk
+starts at the bottom of a page, it is sometimes not broken at
+subsequent page boundaries.  These chunks can be detected by scanning
+the \LaTeX{} log for \texttt{Overfull $\backslash$vbox} messages.
+This can be cured by inserting an explicit [[\break]] before the
+affected code chunk.  All [[\break]] commands should be revisited
+regularly to make sure they are still necessary as the document
+changes.  Of course this could also be taken as a sign that it is time
+to break the code chunk into smaller chunks, but sometimes breaking
+things up just for the sake of making them smaller just makes things
+messier.
+
+<<Do per-chunk highlighting preparation for [[latexhl]]>>=
+case "$HLPROG_TYPE" in
+  highlight-[23]) echo '\begin{framed}\advance\leftskip-\codemargin%' ;;
+esac
 @
 
 <<latexhl>>=
-echo '\end{framed}%'
+case "$HLPROG_TYPE" in
+  highlight-[23]) echo '\end{framed}%' ;;
+esac
+@
+
+<<Prepare for [[latexhl]]>>=
+if [ $HLPROG_TYPE = source-highlight ]; then
+printf %s\\n \
+  'include "latexcolor.outlang"
+   nodoctemplate
+     "\begin{framed}\advance\leftskip-\codemargin%
+"
+     "
+\end{framed}%
+"
+   end' >mylatex.outlang
+fi
+@
+
+<<Clean temporary files>>=
+rm -f mylatex.outlang
 @
 
 \lstset{language=TeX}
@@ -1499,68 +1582,311 @@ echo '\end{framed}%'
 /\\nwbegincode/s/\(sublabel{[^}]*}\)\(.*\)/\1\\def\\nwdoita{}\\def\\nwdoit{\2}%/
 @
 
-The color itself comes from [[highlight]]'s style file output.  This is
-further adjusted to make sure all code has a visible background color, to
-easily distinguish code from documentation.  This is done by generating the
-style file on standard output instead of \texttt{latexhl.sty}, and adjusting
-with [[sed]].
+The actual colors come from a style file in [[highlight]]; there is
+actually no need to worry about which style to use when highlighting
+the chunks.  This style file can be extracted by highlighting a dummy
+file, and parsing the output.  If the background color is white, it is
+converted to a very light gray to ensure that code always looks a
+little different.
 
 \lstset{language=sh}
-<<Generate [[latexhl.sty]]>>=
-# Replace white bg by really light gray to distinguish code from text
-highlight ${theme:+-s $theme} -S c -L -I < /dev/null | \
-  egrep 'newcommand|definecolor' | \
-    sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty
+<<Prepare for [[latexhl]]>>=
+case "$HLPROG_TYPE" in
+  highlight-[23])
+    highlight ${theme:+-s $theme} -S c --out-format=latex -I </dev/null | \
+      egrep 'newcommand|definecolor' | \
+        sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty
+esac
 @
 
 <<Clean temporary files>>=
-rm -f *.sty
+rm -f latexhl.sty
 @
 
-Finally, a few syntax changes need to be made for [[highlight]].  First, a
-language definition for highlighting sed comments is provided.  Second, the
-C language gets multi-line macros highlighted like regular source, and
-support for 64-bit integer constants.   Finally, data types are being
-highlighted using the listings package's [[moreemph]] directive, so these
-directives are extracted and inserted into the keyword highlight list.  This
-is actually done by using the name of the chunk containing all of these data
-types, so they are properly combined ahead of time.
+On the other hand, [[source-highlight]] inserts the colors directly.
+However, since the colors don't change from chunk to chunk, it is
+better to extract them once, and use color names instead.  This is
+done by creating an appropriate language definition and source file to
+get all possible entity types. In addition, [[source-highlight]] uses
+color names directly from HTML CSS files, which include invalid
+hexadecimal color specifiers.  These need to be converted to valid
+decimal RGB triples.
 
-This code has several issues.  First, since it needs to modify the
-existing C language definition, it makes an assumption on its
-location.  This assumption is easily overridden using [[HL_DATA_DIR]],
-though.  Second, it requires the ability to override/add only a few
-language definitions, which in turn requires the -E option which was
-eliminated in highlight 3.0.  Finally, it makes assumptions about the
-language definition format which are not true in much older versions
-or any versions using pure Lua (3.0 and above).  In short, this will
-only work with the versions of highlight I've tested, which include
-2.x releases.
-
-<<Adjust [[highlight]] language defs>>=
-mkdir -p langDefs
-# sed language only supports comments
-# #include supported for HDF
-echo '$SL_COMMENT=regex(^\s*(#(?!include\W)))' > langDefs/sed.lang
-# c language needs a lot of help
-hl_kw="`printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
-        sed -e 's/[[:space:]]//g;s/,/ /g;s/%.*//;\$!s/\$/\\\\/'`"
-sed < ${HL_DATA_DIR:-/usr/share/highlight}/langDefs/c.lang -e '
-   # remove cont to fully highlight multi-line macros
-   s/.*CONTINUATIONSYMBOL.*//
-   # fix preproc expression
-   /DIRECTIVE/s/#/regex(^\\s*(#))/
-   # add some kws to kwb using old listings package moreemph decls
-   /KW_LIST(kwb)/a\'"${hl_kw}"'
-   # same thing, but newer versions of highlight
-   /KEYWORDS(kwb)/a\'"${hl_kw}"'
-   # change number RE to include UL, LL, ULL, etc.
-   $a\$DIGIT=regex((?:0x|0X)[0-9a-fA-F]+|\\d*[.]?\\d+(?:[eE][\\-+]\\d+)?[lLuU]*)
-   ' > langDefs/c.lang
+<<Prepare for [[latexhl]]>>=
+if [ $HLPROG_TYPE = source-highlight ]; then
+  echo 'onestyle "\hl$style{$text}"' >> mylatex.outlang
+  # need to sort in reverse order because source-highlight uses first match
+  # rather than longest match
+  for x in $(source-highlight --lang-list | cut -d\  -f3 | sort -u); do
+    source-highlight --show-lang-elements=$x
+  done | sort -ur | fgrep -v 'named subexps' > source-hl-elts
+  # lang def simply makes a type its name
+  sed 's/.*/& = "&"/' < source-hl-elts > source-hl-elts.lang
+  # outlang def for background color only, in same format as latexcolor
+  echo 'nodoctemplate
+        "\definecolor{bgcolor}\textcolor{$docbgcolor}"
+	""
+	end' > mybg.outlang
+  (
+    source-highlight ${theme:+--style-css-file=$theme.css} -f latexcolor \
+                     --lang-def=source-hl-elts.lang < source-hl-elts | \
+      sed -n -e '/^\\mbox{}/{
+                   s/\\mbox{}//;s/ \\\\//;s/\$\\_\$//g;
+                   s/\(.*{\)\([^}]*\)\(}*\)$/\\newcommand{\\hl\2}[1]{\1#1\3}/p;
+		   s/^[^\\].*/\\newcommand{\\hl&}[1]{#1}/p;}'
+    # fa is ff * .98
+    source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
+                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+      sed 's/#ffffff/#fafafa/i;s/white/#f6f6f6/i'
+  ) | <<Convert HTML color codes to \LaTeX{}>> | \
+     sed -e '/^\\definecolor/{
+               s/\\textcolor//
+	       # convert textcolor rgb to definecolor rgb
+	       s/\[rgb\]/{rgb}/;t
+	       # convert textcolor named to definecolor named
+	       s/{/{named}{/
+	     }' > latexhl.sty
+fi
 @
 
 <<Clean temporary files>>=
-rm -rf langDefs
+rm -f mybg.outlang source-hl-elts*
+@
+
+In order to convert HTML colors to \LaTeX{} colors, the HTML color
+needs to be parsed and converted to decimal.  Awk can do that, as long
+as it is POSIX awk.  GNU awk does not work in non-POSIX mode because
+it does not support converting hexadecimal strings to numbers.  To
+enable POSIX mode, either the non-portable [[--posix]] option can be
+given, or the slightly more portable [[POSIXLY_CORRECT]] environment
+variable can be set.
+
+<<Convert HTML color codes to \LaTeX{}>>=
+POSIXLY_CORRECT=1 awk '<<Convert HTML color codes to \LaTeX{} using [[awk]]>>'
+@
+
+\lstset{language=awk}
+<<Convert HTML color codes to \LaTeX{} using [[awk]]>>=
+# change color styles from HTML color IDs to rgb color triples
+# save RE in variable to avoid having to repeat
+# note that this assumes 6-digit hex string, not 3-digit.
+BEGIN { re1 = "\\\\textcolor\\{#[0-9a-fA-F]{6}\\}"
+        re2 = "\\\\colorbox\\{#[0-9a-fA-F]{6}\\}" }
+# print non-matching lines first
+$0 !~ re1 "|" re2 { print }
+# helper to convert to decimal triple
+function todec3(start,   val, rv) {
+    val = "0x" substr($0, RSTART + start, 2);
+    rv = (val / 255) ",";
+    val = "0x" substr($0, RSTART + start + 2, 2);
+    rv = rv (val / 255) ",";
+    val = "0x" substr($0, RSTART + start + 4, 2);
+    rv = rv (val / 255);
+    return rv
+}
+$0 ~ re1 "|" re2 {
+  # loop to match all unconverted colors in this line
+  while(match($0, re1)) {
+    # capture groups would be real handy now
+    # but instead, we extract each digit pair manually and append to
+    # replacement string (ns)
+    ns = "\\textcolor[rgb]{" todec3(12) "}";
+    # convert string to be replaced to a regex by escaping \ { }
+    nsre = "\\" substr($0, RSTART, RLENGTH);
+    gsub("[{}]", "\\\\&", nsre);
+    # globally replace all occurrences of this color
+    gsub(nsre, ns);
+  }
+  while(match($0, re2)) {
+    ns = "\\begingroup\\definecolor{boxcolor}{rgb}{" todec3(11) "}" \
+         "\\colorbox{boxcolor}";
+    # match the entire box so \endgroup can be placed after it
+    match($0, re2 "\\{([^}\\\\]|\\\\[^a-zA-Z]|\\\\[a-z]+\\{\\})*\\}");
+    $0 = substr($0, 1, RSTART - 1) ns \
+         substr($0, RSTART + 18, RLENGTH - 18) "\\endgroup" \
+	 substr($0, RSTART + RLENGTH);
+  }
+  print
+}
+@
+
+A few syntax changes need to be made to the default language
+definitions.  First, a language definition for highlighting sed
+comments is provided.  As a special hack, [[#include]] is detected and
+not considered a comment (this is due to my use of HDF in a particular
+project, which uses this format).  Second, the C language gets
+multi-line macros highlighted like regular source (already there in
+[[source-highlight]]), and support for 64-bit integer constants (already
+there in [[highlight]]-3).  Finally, data types are being highlighted
+using the listings package's [[moreemph]] directive, so these
+directives are extracted and inserted into the keyword highlight list.
+This is actually done by using the name of the chunk containing all of
+these data types, so they are properly combined ahead of time.
+
+\lstset{language=sh}
+<<Prepare for weave>>=
+case "$HLPROG_TYPE" in
+  source-highlight)
+    # sed language only supports comments
+    # #include supported for HDF
+    echo "comment start '#(?!include\\W)'" > sed.lang
+    # c language needs a lot of help
+    cat <<"EOF" > myc.lang
+      include "c.lang"
+      subst number =
+'\<[+-]?((0x[[:xdigit:]]+)|(([[:digit:]]*\.)?
+[[:digit:]]+([eE][+-]?[[:digit:]]+)?))[uUlL]*\>'
+type =
+EOF
+    printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
+      sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' >>myc.lang
+    ;;
+  highlight-2)
+    mkdir -p langDefs
+    # sed language only supports comments
+    # #include supported for HDF
+    echo '$SL_COMMENT=regex(^\s*(#(?!include\W)))' > langDefs/sed.lang
+    # c language needs a lot of help
+    hl_kw="`printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
+            sed -e 's/[[:space:]]//g;s/,/ /g;s/%.*//;\$!s/\$/\\\\/'`"
+    langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
+    sed < ${langdir:-/usr/share/highlight/langDefs}/c.lang -e '
+      # remove cont to fully highlight multi-line macros
+      s/.*CONTINUATIONSYMBOL.*//
+      # fix preproc expression
+      /DIRECTIVE/s/#/regex(^\\s*(#))/
+      # add some kws to kwb using old listings package moreemph decls
+      /KW_LIST(kwb)/a\'"${hl_kw}"'
+      # same thing, but newer versions of highlight
+      /KEYWORDS(kwb)/a\'"${hl_kw}"'
+      # change number RE to include UL, LL, ULL, etc.
+      $a\$DIGIT=regex((?:0x|0X)[0-9a-fA-F]+|\\d*[.]?\\d+(?:[eE][\\-+]\\d+)?[lLuU]*)
+      ' > langDefs/c.lang
+    ;;
+  highlight-3)
+    # sed language only supports comments
+    # #include supported for HDF
+    echo 'Description="sed"
+          Keywords={}
+          Comments={
+            {Block=false, Delimiter={[[^\s*(#(?!include\W))]]}}
+	  }' > sed.lang
+    # c language needs a lot of help
+    langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
+    echo "dofile('${langdir}c.lang')" > myc.lang
+    cat @<<"EOF" @>> myc.lang
+      -- fix preproc expression and remove cont to highlight multi-line macros
+      Preprocessor = { Prefix=[[^\\s*(#)]] }
+      --add some kws to ID=2 using old listings package moreemph decls
+      for i, v in ipairs({
+EOF
+    printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
+      sed -e 's/[[:space:]]//g;s/,/","/g;s/%.*//;s/$/"/;s/^/"/;s/""//;' >> myc.lang
+    cat @<<"EOF" @>>myc.lang
+                         }) do
+        table.insert(Keywords[2].List, v)
+      end
+EOF
+    ;;
+esac
+@
+
+To actually invoke the highlighter, the language specified on the
+command line must be passed in.  If it is one of the overrides, the
+override should be used instead.  For [[highlight]]-2, this is done using
+the [[-E]] option.  For the other two, it is done by specifying the
+language definition file directly.  Since these require checking the
+language argument anyway, they can also change the language to a
+different one if necessary.  I have not tested all languages available
+to the [[listings]] package, which is used to determine legal language
+names, but any which mismatch what is supported by the external
+highlighter should be listed here.
+
+<<Do per-chunk highlighting preparation for [[latexhl]]>>=
+if [ source-highlight = $HLPROG_TYPE ]; then
+  case $1 in
+    [cC]) larg="--lang-def=myc.lang" ;;
+    sed) larg="--lang-def=sed.lang" ;;
+    make) larg="-s makefile" ;;
+    *) larg="-s $1"
+  esac
+fi
+@
+
+<<[[source-highlight]] options for [[latexhl]]>>=
+--outlang-def=mylatex.outlang --failsafe $larg
+@
+
+<<[[highlight]]-2 options for [[latexhl]]>>=
+--out-format=latex -S $1 -E `pwd` -f
+@
+
+<<Do per-chunk highlighting preparation for [[latexhl]]>>=
+if [ highlight-3 = $HLPROG_TYPE ]; then
+  case $1 in
+    [cC]) larg="--config-file=myc.lang" ;;
+    sed) larg="--config-file=sed.lang" ;;
+    *) larg="-S $1"
+  esac
+fi
+@
+
+<<[[highlight]]-3 options for [[latexhl]]>>=
+--out-format=latex -f $larg
+@
+
+Finally, the output needs to be adjusted.  All three need a strut on
+the first line to ensure consistent appearance.  All three generate a
+final blank line, which is just excess whitespace.  All three encode
+the triple-hat sequence which is used to indicate chunk references as
+\LaTeX{}, which must be decoded.  All three also add unnecessary
+garbage at the end of each line.  The [[highlight]] program also
+terminages \LaTeX{} commands with a space rather than curly braces,
+which has caused me problems in some places.  The last line should
+also be terminated by a percent sign to remove excess whitespace.
+
+\lstset{language=sed}
+<<Adjust [[source-highlight]] \LaTeX{}>>=
+# remove blank line at end
+/^\\mbox{}$/d
+# detexify triple-^
+s/\(\\textasciicircum{}\)\1\1/^''^^/g
+# remove unnecessary EOL stuff
+s/ \\\\$//
+# fix _ in command names
+s/\(\\hl[a-z]*\)_/\1/g
+# add strut to first line
+2s/$/\\strut{}/
+# add a % to 2nd-to-last line
+x;${s/$/%/;G};1!p
+@
+
+<<Adjust [[highlight]]-2 \LaTeX{}>>=
+# removes 1st 2 lines (setting font & spacing - already done)
+1,2d
+# remove last few lines (just extra whitespace & restoring font/spacing)
+/^\\mbox{}$/,$d
+# since multiple lines were deleted, just start sed over so $ works right
+p' | sed -e '
+# detexify triple-^
+s/\(\\textasciicircum \)\1\1/^''^^/g
+# remove unnecessary fill on every line
+s/\\hspace\*{\\fill}\\\\$//
+# use {} instead of single space to terminate TeX cmds
+s/\(\\[a-z][a-z]*\) /\1{}/g
+# add strut to first line
+1s/$/\\strut{}/
+# remove last CR by tacking on % to last line
+$s/$/%/
+@
+
+<<Adjust [[highlight]]-3 \LaTeX{}>>=
+<<Adjust [[highlight]]-2 \LaTeX{}>>
+@
+
+\lstset{language=sh}
+<<Clean temporary files>>=
+rm -rf langDefs myc.lang sed.lang
 @
 
 \subsection{Pretty Printing with [[listings]]}
@@ -1588,7 +1914,7 @@ addlistings \
 <<Common NoWeb Warning>>
 
 # use the ctrl-g escape (\a = ann = bell)
-sed -e 's/\^\^\^/\a\0\a/g
+sed -e 's/\^\^\^/\a&\a/g
         # insert dummy escapes into potential listing ender tokens
         s/\\end{lstlisting}/\\\a\aend{lstlisting}/g
         s/\\nwbegincode/\\\a\anwbegincode/g
@@ -1598,7 +1924,7 @@ sed -e 's/\^\^\^/\a\0\a/g
 \lstset{language=TeX}
 <<Preamble Adjustments for [[listings]]>>=
 % Use ^G for escape char - not likely in document
-\catcode`\^^G=9
+\catcode`\^^G=13
 \lstset{escapechar=^^G}
 @
 
@@ -1640,25 +1966,49 @@ pthread_mutex_t,pthread_cond_t,uid_t,gid_t,mode_t,pid_t,time_t,socklen_t,%
 sockaddr_in,sockaddr,off_t,utimbuf,%
 @
 
-Plus of course the [[highlight]] style file needs to be converted into the
-appropriate listings package directives.
+Since there are not really any styles for this package, the
+highlighter program's styles can be used instead.  If they are
+present, they need to be converted to the appropriate directives.  If
+there is no highlighter program available, a dummy [[latexhl.sty]]
+needs to be created as well.  The format of a listings style command
+is a declaration rather than a command, so the style file needs to be
+converted as well.
+
+\lstset{language=sh}
+<<Prepare for weave>>=
+if [ -z "$HLPROG_TYPE" ]; then
+  echo >latexhl.sty
+fi
+@
 
 \lstset{language=sed}
 <<Change [[highlight]] style to [[listings]] style>>=
-s/\[1\]//;s/#1//
-s/^[^{]*{[^}]*}$/\0{}/
+s/\[1\]//;s/#1//g
+s/^[^{]*{[^}]*}$/&{}/
+# colorbox is not supported, so silently delete
+s/\\colorbox{[^}]*}{\(.*\)}/\1/
 s/\\text\(color[^}]*}\){\(.*\)}/\\\1\2/
 s/\\bf{\(.*\)}/\\bfseries\1/
+s/\\textbf{\(.*\)}/\\bfseries\1/
 s/\\it{\(.*\)}/\\itshape\1/
-# highlight never generates this, anyway
+s/\\textit{\(.*\)}/\\itshape\1/
+# underline is not supported, so silently turn into sans-serif
 s/\\underline{\(.*\)}/\\sffamily\1/
+s/\\texttt{\(.*\)}/\\ttfamily\1/
 @
 
 \lstset{language=TeX}
 <<Preamble Adjustments for [[listings]]>>=
 \lstset{backgroundcolor=\color{bgcolor}}
+\ifx\hlstd\undefined\else
 \lstset{basicstyle=\hlstd\footnotesize,keywordstyle=\hlkwa,emphstyle=\hlkwb,%
         commentstyle=\hlcom,stringstyle=\hlstr,directivestyle=\hldir}
+\fi
+\ifx\hlnormal\undefined\else
+\lstset{basicstyle=\hlnormal\footnotesize,keywordstyle=\hlkeyword,%
+        emphstyle=\hltype,commentstyle=\hlcomment,stringstyle=\hlstring,%
+	directivestyle=\hlpreproc}
+\fi
 @
 
 Finally, some general appearance adjustments are made.  The entire listing
@@ -1752,8 +2102,8 @@ The following script does this, and brings all of the above together.
 In order to merge sources correctly, the dependency order (tree) needs
 to be passed in as well as the input and output file names.  The
 highlight theme can be selected using a command-line parameter.
-Selection of the listings package versus just [[highlight]] is done by
-prefixing the highlight theme name with [[list:]].
+Selection of the listings package versus an external highlighter is
+done by prefixing the highlight theme name with [[list:]].
 
 \lstset{language=make}
 <<makefile.config>>=
@@ -1764,7 +2114,7 @@ HL_THEME:=
 
 <<makefile.rules>>=
 %.tex: %.nw nw2latex
-	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)"
+	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
 @
 
 <<Build Script Executables>>=
@@ -1784,6 +2134,7 @@ noweb="$1"
 outf="$2"
 noweb_order="$3"
 theme="$4"
+export HLPROG_TYPE="$5"
 
 # prefix theme with "list:" to enable lstlistings
 uselst="${theme%%:*}"
@@ -1794,6 +2145,7 @@ else
 fi
 
 <<Prepare for weave>>
+<<Prepare for [[latexhl]]>>
 (
   ln=`grep -n '^%%% latex preamble' "$noweb" | cut -d: -f1 | head -n 1`
   head -n $ln "$noweb"
@@ -1808,9 +2160,7 @@ EOF
 @
 
 <<Prepare for weave>>=
-<<Generate [[latexhl.sty]]>>
-if [ -z "$uselst" ]; then
-  <<Adjust [[highlight]] language defs>>
+if [ -z "$uselst" -a -n "$HLPROG_TYPE" ]; then
   filt=./latexhl
   postproc='<<Insert code header into frame>>'
 else
@@ -1821,18 +2171,20 @@ fi
 @
 
 The \LaTeX{} preamble is fairly straightforward.  The [[fontenc]],
-[[inputenc]], [[fontenc]] and [[babel]] packages are pretty much
+[[inputenc]], [[fontspec]] and [[babel]] packages are pretty much
 required anywhere.  The input encoding is forced to latin1 for
-[[pdflatex]]; it is expected that [[xelatex]] be used for Unicode. The
-[[geometry]] package allows this document to fit in fewer pages by
-reducing the margins.  The [[noweb]] package is obviously needed for
-the NoWeb output.  The [[rcs]] package is included to easily
-incorporate those nasty \$-heavy RCS/CVS/SVN keywords. The [[ifpdf]]
-package is needed for using this \LaTeX{} source with non-PDF output.
-The standard PDF font packages are used to reduce the PDF size and
-hopefully look smoother on a greater number of operating systems.  The
-[[listings]] and [[color]] packages and the [[latexhl]] highlight
-theme file are required for color syntax highlighting.  The
+[[pdflatex]]; it is expected that [[xelatex]] be used for Unicode. 
+The [[noweb]] package is obviously needed for the NoWeb output.  The
+[[rcs]] package is included to easily incorporate those nasty \$-heavy
+RCS/CVS/SVN keywords.  The [[ifpdf]] and [[ifxetex]] packages are
+needed for using this \LaTeX{} source with non-PDF output and
+non-Unicode input.  The standard PDF font packages are used to reduce
+the PDF size and hopefully look smoother on a greater number of
+operating systems.  The [[graphicx]] package is the easiest way to
+include figures; the PDF output styles should use scalable PDF for
+figure sources (most other types can be converted to this).  The
+[[listings]], [[color]], and [[xcolor]] packages and the [[latexhl]]
+highlight theme file are required for color syntax highlighting.  The
 [[headings]] package gives more informative headers and footers by
 default.  The [[hyperref]] package gives hyperlinks in the PDF file.
 Links are made less distracting by replacing the red outline box with
@@ -1861,10 +2213,6 @@ once again is to reduce the number of pages a bit.
 \fi
 \usepackage{noweb}
 \usepackage{graphicx}
-% change "never defined" to "imported"
-\makeatletter
-\def\@nwlangdepnvd{imported}
-\makeatother
 \ifpdf
 % Use pdf figs by default (hack)
 \makeatletter
@@ -1878,7 +2226,8 @@ once again is to reduce the number of pages a bit.
 \makeatother
 \fi
 \usepackage{listings}
-\usepackage[usenames]{color}
+\usepackage{color}
+\usepackage[usenames,dvipsnames,svgnames,x11names,table]{xcolor}
 \usepackage{latexhl}
 %
 \pagestyle{headings}
@@ -1902,7 +2251,11 @@ does some adjustments to \LaTeX{} layout that override the code
 highlighting, so that is disabled.  NoWeb tries too hard to keep code chunks
 on one page, so some adjustments are made to those parameters.  Finally, the
 NoWeb cross reference listings are adjusted a bit and the code size is made
-smaller.
+smaller.  Also, the ``never defined'' message should probably be
+changed for imported symbols, and in fact all imported symbols should
+be shown identically.  It is not currently possible to remove the
+``never defined'' message completely, so it is changed to
+``(imported)'' even if it is not imported.
 
 <<preamble.tex>>=
 % Code formatting is done by highlight/lstlisting, not noweb
@@ -1924,6 +2277,11 @@ smaller.
 % Make chunk index useful (longchunks)
 % Remove xrefs from chunks themselves (noidentxref)
 \noweboptions{footnotesizecode,longchunks,noidentxref}
+
+% change "never defined" to "imported"
+\makeatletter
+\def\@nwlangdepnvd{imported}
+\makeatother
 @
 
 One other thing I usually do for code is to allow line breaks after
@@ -2002,13 +2360,13 @@ not so, a special language \texttt{verbatim} can be used to instead
 insert the code as verbatim quoted plain text.
 
 <<Pre-process before weave>>=
-sed '/^\\input{.*\.tex} % [^ ]*$/{s/\[\[/@\0/g;s/<</@\0/g;}' | \
+sed '/^\\input{.*\.tex} % [^ ]*$/{s/\[\[/@&/g;s/<</@&/g;}' | \
 @
 
 <<For each reinserted code chunk>>=
 sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/p' $noweb_order | sort -u | \
     while read -r lang f; do
-      fesc=$(printf %s "$f" | sed 's/[][\\.*?^$]/\\\0/g')
+      fesc=$(printf %s "$f" | sed 's/[][\\.*?^$]/\\&/g')
 @
 
 <<Prepare for weave>>=
@@ -2271,6 +2629,8 @@ doing some other fine tuning for TeX4ht is done in the preamble.
 \EndPreamble
 @
 
+% FIXME: support source-highlight here
+% FIXME: support missing highlighter here
 \lstset{language=sh}
 <<Extract HTML CSS for current theme's background>>=
 highlight -S c ${theme:+-s $theme} -I </dev/null | \
@@ -2537,6 +2897,8 @@ htmlhl \
 <<Common NoWeb Warning>>
 
 echo '<ol class="code">'
+# FIXME: support source-highlight here
+# FIXME: support missing highlighter here
 highlight -l --ordered-list -S $1 -E `pwd` -f | \
     sed 's%^</li>$%<li></li>%;s/<li[^>]*>/<li><pre>/;s%</li>%</pre></li>%'
 echo '</ol>'
@@ -2576,9 +2938,6 @@ theme="$4"
 # tex version allows list: prefix - ignore if there
 theme="${theme#list:}"
 
-<<Adjust [[highlight]] language defs>>
-
-
 (
 # This replaces l2h's header
 echo "<html><!--
@@ -2589,6 +2948,8 @@ Extract with uudecode, or, if uudecode chokes, use:
  <head>
 <meta name=\"generator\" content=\"noweave -html -filter l2h, highlight\">
   <style type=\"text/css\">"
+# FIXME: support source-highlight here
+# FIXME: support missing highlighter here
 highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
   # replace white bg with very light gray to distinguish from text
   s/\(background-color:#\)ffffff/\1fafafa/g
@@ -2598,7 +2959,7 @@ highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
      s/font-size:.*;/font-size: smaller;/
      p
      # make links look like normal text
-     s/.code/\0 a/;s/margin.*;//
+     s/.code/& a/;s/margin.*;//
      p
      }
   # fix class names
@@ -2808,7 +3169,7 @@ sed -e '<<Filter noweave output without removal>>' | \
   s/h1>/title>/g
   s/<a name=[^>]*>//
   s%</a>%%
-  s%/title>%\0\n </head>\n<body>%
+  s%/title>%&\n </head>\n<body>%
   p
   x
 }
@@ -3295,7 +3656,8 @@ built using objects listed in these chunks.  [[name]] can of course be
 anything appropriate.  Unlike the chunks which expand into specific [[make]]
 variables, no backslashes are required or allowed at the end of each line.
 \item [[<<Known Data Types>>]]: comma-separated list of data types to
-emphasize; end each line with a comma and a percent-sign.
+emphasize; end each line (including the last) with a comma and a
+percent-sign.
 \item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
 always add a backslash to the end of each added line.  In particular, any
 specially processed plain files with their own rules should be added to this

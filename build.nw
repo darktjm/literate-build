@@ -1182,15 +1182,21 @@ LMSCMD = /xparse\/.*define-command/b; \
 	 p;g;ba;
 
 %.pdf: %.tex
-	set -e; \
-	while :; do \
-              $(LATEXCMD) -interaction batchmode $< >/dev/null; \
-              fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+	while $(LATEXCMD) -interaction batchmode $< >/dev/null; do \
+          fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
         done
 	@sed -n -e '$(call LMSCMD,info)' $*.log
 	@fgrep -i overfull $*.log || :
 	@fgrep -i underfull $*.log | fgrep -v vbox || :
 	@sed -n -e '$(call LMSCMD,warning)' $*.log
+	@# maybe removing output file is too drastic, but manual run of
+	@# pdflatex is not that hard
+	@if sed -n -e '/^!.*Error/,/^l./p' $*.log | grep .; then \
+	  rm -f $@; \
+	  false; \
+	else \
+	  :; \
+	fi
 @
 
 <<makefile.vars>>=
@@ -3764,5 +3770,130 @@ contributing source files; extend with just [[$]][[Id$]].
 \end{rawhtml}
 
 %\nowebindex
+
+\section{TODO}
+
+This is an unorganized TODO list for my own amusement.  It in no way
+represents a promise to get anything done; sometimes I completely
+reverse my position on these items, and some have been lingering on my
+TODO list for years.
+
+\subsection{Not missing}
+
+\begin{itemize}
+\item Plain \TeX{}: not really an option, even though NoWeb supports
+it.  Porting framed and listings from \LaTeX{} is beyond the scope of
+this project.  Most of the highlighters I find also expect to be used
+with \LaTeX{}.
+\item texinfo: Way too \TeX{}-depedent; see above item about that.
+It's not really as output-independent as claimed; much of its
+independence comes from having to use output-specific escapes
+everywhere.  Most output independence I need is HTML vs. PDF, and I
+get that with latex-to-HTML converters with about as much utility as
+texinfo provides.  And the texinfo format itself (having to repeat
+section titles in node definitions and manually insert TOC entries as
+menus) is not that appealing (although I could automate some of that).
+\item docbook: probably not possible, but should look at it since it's
+popular.  It's definitely a pain in the ass raw; like all XML formats,
+it's not meant to be edited by a plain text editor or read/understood
+by humans (even though the XML movement started with the exact
+opposite claims).
+\item asciidoc: docbook in a way humans can edit it, but still can't
+produce PDF easily or correctly.
+\item reStructuredText: slightly better than asciidoc; may be worth a
+look some day.
+\end{itemize}
+
+\subsection{Missing}
+
+\begin{itemize}
+\item bibtex, makeindex
+\item optional automatic symbol index (requires a lot of work; the
+symbol extractor for NoWeb is way too simplistic and in fact anything
+short of a compiler can't deal with name spaces and other issues).
+\end{itemize}
+
+\subsection{Needs testing}
+
+\begin{itemize}
+\item tex4ht is an undocumented piece of crap (well, I guess the
+original author being dead may have something to do with that, but I
+doubt the situation would be any different were that not the case)
+that is flaky and in fact the last release does not work any more and
+I don't have the energy to try and fix it.
+\item I don't have access to commercial UNIX any more, so I don't know
+what does or does not work.  In particular, I use GNU sed's [[-i]]
+option too much now.  I should probably just convert all that to perl
+or something like that that people regularly install on systems.
+\end{itemize}
+
+\subsection{Improvements}
+
+\begin{itemize}
+\item Go back to explicit import/export: maybe just require a prefix
+like @ for all globals.
+
+How:
+\begin{itemize}
+\item In tangle, prepend source name to all nodes that don't have @
+prefix in a filter:
+\begin{quote}
+\begin{verbatim}
+@file <fn> -> set file
+@defn <x> -> convert <x> if not @-prefixed
+@use <x> -> convert <x> if not @-prefixed
+\end{verbatim}
+\end{quote}
+\item In weave, remove @, but add "(exported)" to node name if first
+defined in this file, or "(source-file.nw)" to node name if defined
+elsewhere.  Note that r77 already implemented the latter, but could
+not implement the former because exports are not specially flagged.
+Perhaps printing the first file that defines the symbol is not so
+good:  the last file before this would be better, as any extensions
+would be included, and presumably that file then links to the previous
+file in the chain anyway.  On the other hand, documentation for the
+symbol is likely only in the first.
+\item Would need backend work to support hyperlinking to other
+documents, although adding a label in front of the first definition of
+an exported symbol and then modifying the chunk index and the first
+chunk's previous reference somehow.  That would be nearly impossible
+with split HTML, though, unless the split HTML were generated first.
+\end{itemize}
+\item Related to above:  it might be possible to come up with
+alternate methods of combining globals:
+\begin{quote}
+\begin{verbatim}
+Global import/export requires prefix char:
+@<<+...@>>= -> append to inherited global
+@<<-...@>>= -> prepend to inherited global
+@<<=...@>>= -> replace inherited global
+@<<!...@>>= -> same as @<<+, but disallow replacement
+@<<@...@>>= -> reference to a global (import only)
+\end{verbatim}
+\end{quote}
+How:
+\begin{itemize}
+\item Actual symbol name is renamed to
+<sourcename>+<node\_without\_prefix> in tangle
+\item If an inherited global is not defined in a file, the symbol is
+inherited from parent by defining a single chunk with the parent's
+chunk as contents.  In other words, as if an empty @<<+...@>>= chunk
+defined.
+\item In one file, can only use one prefix.  Same node name with two
+different prefixes raises error and refuses to tangle/weave.
+\item If any file declares !, and later one decalres =, raises error and
+refuses to tangle/weave.
+\item in tangle, insert parent's global after first +. 
+\item in tangle, insert parent's global after end of last -.
+\item in tangle, ignore parent's global if =.
+\item in tangle, replace all @-references with top-level source file's
+version
+\end{itemize}
+\item Switch to something other than GNU make.  GNU make shows bugs:
+sometimes dependencies are just ignored, especially in parallel builds
+where they are most important.  Makepp is a little better in some
+respects, but is only stopgap.  Something like Odin would be best, but
+Odin needs a lot of work.
+\end{itemize}
 
 \end{document}

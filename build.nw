@@ -2131,7 +2131,7 @@ HL_THEME:=
 @
 
 <<makefile.rules>>=
-%.tex: %.nw nw2latex
+%.tex: %.nw nw2latex $(call tree,%.nw)
 	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
 @
 

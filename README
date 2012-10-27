@@ -1,0 +1,10 @@
+This is my literate programming support package.  Converting it to
+PDF/HTML is non-trivial (easy to do, but lots of prerequisites), so I
+have provided the PDF and HTML output as well.  One of these is all you
+need, since they have the source attached (and have instructions for
+detaching).  Don't bother with ada-build.nw, since it is a work in
+progress abandoned years ago.
+
+For details, I have an older version up at
+http://darkalpha.homelinux.org/literate/ with versions 1 and 2 (this
+is version 3+).

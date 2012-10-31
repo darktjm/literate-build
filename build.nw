@@ -580,6 +580,7 @@ consecutive code chunks, but it is required by some of the document
 converters.
 
 <<makefile.rules>>=
+.PHONY: check
 check:
 	@$(NOROOTS) $(NOWEB) | sed 's/@<<//;s/@>>//;' | sort | while read x; do \
           echo "Root: $$x"; \
@@ -3839,9 +3840,9 @@ How:
 prefix in a filter:
 \begin{quote}
 \begin{verbatim}
-@file <fn> -> set file
-@defn <x> -> convert <x> if not @-prefixed
-@use <x> -> convert <x> if not @-prefixed
+ @file <fn> -> set file
+ @defn <x> -> convert <x> if not @-prefixed
+ @use <x> -> convert <x> if not @-prefixed
 \end{verbatim}
 \end{quote}
 \item In weave, remove @, but add "(exported)" to node name if first
@@ -3864,11 +3865,11 @@ alternate methods of combining globals:
 \begin{quote}
 \begin{verbatim}
 Global import/export requires prefix char:
-@<<+...@>>= -> append to inherited global
-@<<-...@>>= -> prepend to inherited global
-@<<=...@>>= -> replace inherited global
-@<<!...@>>= -> same as @<<+, but disallow replacement
-@<<@...@>>= -> reference to a global (import only)
+ @<<+...@>>= -> append to inherited global
+ @<<-...@>>= -> prepend to inherited global
+ @<<=...@>>= -> replace inherited global
+ @<<!...@>>= -> same as @<<+, but disallow replacement
+ @<<@...@>>= -> reference to a global (import only)
 \end{verbatim}
 \end{quote}
 How:

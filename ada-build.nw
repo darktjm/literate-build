@@ -5156,9 +5156,7 @@ features.  Interested parties can email me for the code.} for
 formatting Ada code and other things I wanted it to do.
 
 Before printing, a custom API documentation tool is run to accumulate
-in-line API documentation into a single appendix.  See appendix
-\ref{sub:Building} for a brief description of how it works.  The
-tool itself is in a separate package.
+in-line API documentation into a single appendix.
 
 <<makefile.rules>>=
 %.api: %.nw mkapi ada_extractdoc

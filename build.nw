@@ -20,12 +20,14 @@
 \begin{abstract}
 
 This document describes, implements, and is built using a modular ``literate
-programming\footnote{\url{http://www.literateprogramming.com/articles.html}
-is a good starting point.}'' build system with syntax highlighting,
-based on Norman Ramsey's
-NoWeb\footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}},
-GNU\footnote{\url{http://www.gnu.org}} make, and a number of other freely
-available support tools.
+programming%
+\footnote{\url{http://www.literateprogramming.com/articles.html}
+is a good starting point.}%
+'' build system with syntax highlighting, based on Norman Ramsey's NoWeb%
+\footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}}%
+, GNU%
+\footnote{\url{http://www.gnu.org}}%
+ make, and a number of other freely available support tools.
 
 This document is © 2003--2012 Thomas J. Moore.  This document is licensed
 under the Apache License, Version 2.0 (the ``License''); you may not use
@@ -179,19 +181,20 @@ the performance improvement is usually worth it.
 
 I have made some adjustments to the ordering of this in order to
 support Daniel Pfeiffer's
-Makepp\footnote{\url{http://makepp.sourceforge.net}}, a GNU make clone
-which adds MD5 checksums as a file change detection mechanism.  This
-magically fixes the problem of rebuilding every time, at the expense
-of dealing with Makepp-specific issues.  The first of these is that
-include files cannot be automatically (re)built unless they appear
-after the rules which create them.  This means that the two variables
-which control their creation can no longer come from the configuration
-file.  They can only be set using the command line.  Another, related
-issue is that even though Makepp solves the rebuild problem for most
-files, it makes the problem worse for the makefile and its include
-files.  These are unconditionally rebuilt every single time makepp is
-invoked.  The use of Makepp is detected by checking for the existence
-of a non-empty [[$(MAKEPP_VERSION)]].
+Makepp%
+\footnote{\url{http://makepp.sourceforge.net}}%
+, a GNU make clone which adds MD5 checksums as a file change detection
+mechanism.  This magically fixes the problem of rebuilding every time,
+at the expense of dealing with Makepp-specific issues.  The first of
+these is that include files cannot be automatically (re)built unless
+they appear after the rules which create them.  This means that the
+two variables which control their creation can no longer come from the
+configuration file.  They can only be set using the command line.
+Another, related issue is that even though Makepp solves the rebuild
+problem for most files, it makes the problem worse for the makefile
+and its include files.  These are unconditionally rebuilt every single
+time makepp is invoked.  The use of Makepp is detected by checking for
+the existence of a non-empty [[$(MAKEPP_VERSION)]].
 
 \lstset{language=make}
 <<*>>=
@@ -979,9 +982,10 @@ print $chunkout;
 
 In order to avoid having to duplicate function prototypes in the main code
 and a header, the prototypes are generated automatically using
-cproto\footnote{\url{http://invisible-island.net/cproto/}}.  This uses
-the GNU make method of generating rules:  [[$(eval)]].  Makepp does
-not support this.
+cproto%
+\footnote{\url{http://invisible-island.net/cproto/}}%
+.  This uses the GNU make method of generating rules: [[$(eval)]].
+Makepp does not support this.
 
 The Makepp documentation claims that [[$(eval)]] can be replaced by
 [[$[...]]], but my own experiments have shown me that this does not
@@ -1362,11 +1366,12 @@ argument - the name of the current language.  It takes raw code (with
 markers for chunk references), and returns pretty code.  Steps must be taken
 by the prettifier to ensure that the markers remain intact.  The output of
 the prettifier is placed in the NoWeb stream as [[@literal]]
-lines\footnote{Ramsey says I should write a new back end for this purpose,
-and has deprecated the [[@literal]] directive for this reason.  Writing an
-entire back end just to reformat the code chunks a bit seems extreme,
-though.  As of 2.11b, the directive still works.}; markers are replaced by
-the appropriate [[@use]] line from [[$use]].
+lines%
+\footnote{Ramsey says I should write a new back end for this purpose,
+and has deprecated the [[@literal]] directive for this reason. 
+Writing an entire back end just to reformat the code chunks a bit
+seems extreme, though.  As of 2.11b, the directive still works.}%
+; markers are replaced by the appropriate [[@use]] line from [[$use]].
 
 The whole reason this was written in perl, rather than shell or awk, was to
 get speed (which awk already gave over the shell) and bidirectional pipes.
@@ -1409,10 +1414,11 @@ waitpid $pid, 0;
 \subsection{Pretty Printing with a highlighter and [[framed]]}
 
 One method of highlighting is to use an external highlighting program.
-Two related programs which work are
-[[highlight]]\footnote{\url{http://www.andre-simon.de}} and GNU
-[[source-highlight]]\footnote{\url{http://www.gnu.org/software/src-highlite/}}.
-An additional wrapper script needs to be made to invoke the
+Two related programs which work are [[highlight]]%
+\footnote{\url{http://www.andre-simon.de}}
+and GNU [[source-highlight]]%
+\footnote{\url{http://www.gnu.org/software/src-highlite/}}%
+.  An additional wrapper script needs to be made to invoke the
 highlighter and massage the output a bit.
 
 \lstset{language=sh}
@@ -2596,11 +2602,11 @@ after and/or during the weave process.
 
 \subsection{HTML from TeX4ht}
 
-One way to generate HTML would be to use
-TeX4ht\footnote{\url{http://www.cse.ohio-state.edu/~gurari/TeX4ht/}}.  It is
-supposed to produce output very similar to what [[pdflatex]] produces,
-because it uses \LaTeX{} as its underlying engine.  Once again a wrapper
-script ([[nwtex2html]]) is needed.
+One way to generate HTML would be to use TeX4ht%
+\footnote{\url{http://www.cse.ohio-state.edu/~gurari/TeX4ht/}}%
+.  It is supposed to produce output very similar to what [[pdflatex]]
+produces, because it uses \LaTeX{} as its underlying engine.  Once
+again a wrapper script ([[nwtex2html]]) is needed.
 
 \lstset{language=make}
 <<Source Code Documentation Files>>=
@@ -3385,9 +3391,9 @@ nw2html: cproto.h
 @
 
 Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be
-standards compliant any more, HTML
-Tidy\footnote{\url{http://tidy.sourceforge.net}} is used to clean up the
-output.
+standards compliant any more, HTML Tidy%
+\footnote{\url{http://tidy.sourceforge.net}}
+is used to clean up the output.
 
 \lstset{language=sed}
 <<Filter noweave output without removal>>=
@@ -3419,8 +3425,9 @@ EOF
 @
 
 Generation of the figures depends on
-ImageMagick\footnote{\url{http://www.imagemagick.org}} with GhostScript
-support to convert them to PNG format, even though using GhostScript
+ImageMagick%
+\footnote{\url{http://www.imagemagick.org}}
+with GhostScript support to convert them to PNG format, even though using GhostScript
 directly would have worked as well.
 
 \lstset{language=make}

@@ -587,18 +587,24 @@ Place ayacc and aflex in your path, and you can then use them with
 this build system.  Using variables like [[$(AFLEX)]] and [[$(AYACC)]]
 is not worth the effort.
 
+\lstset{language=make}
 <<makefile.rules>>=
-%.a: %.l
+%.ada: %.adal
 	aflex $(ALFLAGS) -i $<
-	# also generates %_dfa.a and %_io.a
-	# gnatchop -w -r $*.a $*_dfa.a $*_io.a
-	# rm -f $*.s $*_dfa.s $*_io.s
+	cat $*{,_dfa,_io}.a | <<build: apply package prefix>> \
+	     $(call ADA_POSTPROCESS,$@) > $*.ada
+	rm -f $*{,_dfa,_io}.a
 
-%.a: %.y
-	ayacc -i $< Verbose '=>' On $(AYFLAGS) # Debug '=>' On
-	# also generates %_goto.a, %_shift_reduce.a and %_tokens.a
-	# gnatchop -w -r $*.a $*_goto.a $*_shift_reduce.a $*_tokens.a
-	# rm -f $*.s $*_goto.s $*_shift_reduce.s $*_tokens.s
+#AYFLAGS=Debug '=>' On
+
+%.ada: %.aday
+	tmpy=tmp$$$$; \
+	trap "rm -f $$tmpy[._]*" 0; \
+	ln -sf $< $$tmpy.y; \
+	ayacc $$tmpy.y Verbose '=>' On $(AYFLAGS); \
+	cat $${tmpy}{,_goto,_shift_reduce,_tokens}.a | \
+	     sed -e "s/$$tmpy\\.y/$</g;s/$$tmpy/$*/ig" | \
+	     <<build: apply package prefix>> $(call ADA_POSTPROCESS,$@) >$*.ada
 @
 
 <<makefile.rules>>=
@@ -622,7 +628,7 @@ this invovles a modification of existing code, very little will be
 described here, unless it involves one of those modifications.
 
 \lstset{language=ada}
-<<a95.l>>=
+<<a95.adal>>=
 ----------------------------------------------------------------------------
 --                  written for use with aflex
 ----------------------------------------------------------------------------
@@ -970,7 +976,7 @@ with A95p_Tokens; use A95p_Tokens;
 @
 
 <<Ada lexer function definitions>>=
-procedure Reset (File_Name : in STRING);
+procedure Reset (File_Name : in String);
 --| PURPOSE
 --| Zero line number count for current file and update total line
 --| count for all files.  Reset key variables for current file.
@@ -983,7 +989,7 @@ procedure Reset (File_Name : in STRING);
 -- * Ada95_Lexical_Analyzer.Reset                            *
 -- *                                                         *
 -- ***********************************************************
-procedure Reset (File_Name : in STRING) is
+procedure Reset (File_Name : in String) is
 --| PURPOSE
 --| Zero line number count and reset key variables for current
 --| file.  Open input and output files.
@@ -1044,7 +1050,7 @@ function YYLex return TOKEN;
 @
 
 <<Ada lexer function definitions>>=
-function Get_Token_Value return STRING;
+function Get_Token_Value return String;
 --| PURPOSE
 --| Return value associated with current token (e.g., if current
 --| token is an identifier, this is the name of the identifier);
@@ -1058,7 +1064,7 @@ function Get_Token_Value return STRING;
 -- * Ada95_Lexical_Analyzer.Get_Token_Value                  *
 -- *                                                         *
 -- ***********************************************************
-function Get_Token_Value return STRING is
+function Get_Token_Value return String is
 --| PURPOSE
 --| Return value associated with current token (e.g., if current
 --| token is an identifier, this is the name of the identifier);
@@ -1070,7 +1076,7 @@ end Get_Token_Value;
 @
 
 <<Ada lexer function definitions>>=
-function Get_Current_Line return NATURAL;
+function Get_Current_Line return Natural;
 --| PURPOSE
 --| Return line on which current token is located
 @
@@ -1081,7 +1087,7 @@ function Get_Current_Line return NATURAL;
 -- * Ada95_Lexical_Analyzer.Get_Current_Line                 *
 -- *                                                         *
 -- ***********************************************************
-function Get_Current_Line return NATURAL is
+function Get_Current_Line return Natural is
 --| PURPOSE
 --| Return line on which current token is located
 begin -- Get_Current_Line
@@ -1090,7 +1096,7 @@ end Get_Current_Line;
 @
 
 <<Ada lexer function definitions>>=
-procedure Get_Statistics (Number_of_Lines : out NATURAL);
+procedure Get_Statistics (Number_of_Lines : out Natural);
 --| PURPOSE
 --| Return statistics on the last file processed.  These
 --| counters are reset by a call to Reset.  This
@@ -1103,7 +1109,7 @@ procedure Get_Statistics (Number_of_Lines : out NATURAL);
 -- * Ada95_Lexical_Analyzer.Get_Statistics                   *
 -- *                                                         *
 -- ***********************************************************
-procedure Get_Statistics (Number_of_Lines : out NATURAL) is
+procedure Get_Statistics (Number_of_Lines : out Natural) is
 --| PURPOSE
 --| Return statistics on the last file processed.  These
 --| counters are reset by a call to Reset.  This
@@ -1181,8 +1187,8 @@ with Ada.Strings.Hash; use Ada.Strings;
 @
 
 <<Ada lexer private definitions>>=
-Lines            : NATURAL := 1;
-Was_ID           : BOOLEAN := FALSE;
+Lines            : Natural := 1;
+Was_ID           : Boolean := FALSE;
 @
 
 <<Ada lexer private definitions>>=
@@ -1299,13 +1305,12 @@ The parser is also based off of the public domain one provided by the
 SCATC DSK project.  As above, very little will be described here,
 unless it involves a modification.
 
---  Adjusted to work w/ "standard" ayacc
---  Fixed ** rule
-
-<<a95p.y>>=
+<<a95p.aday>>=
 -- package Ada95_Parser for SCATC DSK
 --   Modified from the original by Richard Conn
 -- Modified again by tjm for API doc extraction
+--  Adjusted to work w/ "standard" ayacc
+--  Fixed ** rule
 
 ------------------------------------------------------------------------------
 
@@ -1354,6 +1359,12 @@ package body A95P is
 end A95P;
 @
 
+\lstset{language=TeX}
+<<Preamble Adjustments for [[listings]]>>=
+\lstdefinelanguage{y}[ANSI]{C}{}
+@
+
+\lstset{language=y}
 <<Ada parser tokens>>=
 -- Single Character Tokens
 
@@ -1484,7 +1495,7 @@ different purpose.
 %start compilation
 @
 
-Most of the following rule have been modified to actually return
+Most of the following rules have been modified to actually return
 something useful.  In addtion, some rules were split in order to allow
 actions without shift/reduce conflicts.
 
@@ -2282,7 +2293,7 @@ adding  : '+' { $$ := $1; }
 
 <<Ada grammar rules>>=
 term    : factor { $$ := $1; }
-	| term multiplying factor 
+	| term multiplying factor
 	    { $$ := $1 & ' ' & $2 & ' ' & $3; Free($2); Free($3); }
 	;
 @
@@ -2733,7 +2744,7 @@ rename_decl : def_id_s ':' object_qualifier_opt subtype_ind renames {
 	;
 @
 
-Here is wher the [[pkg_prefix]] split above is needed as well.
+Here is where the [[pkg_prefix]] split above is needed as well.
 
 <<Ada grammar rules>>=
 rename_unit : pkg_prefix renames ';'
@@ -3349,8 +3360,9 @@ code_stmt : qualified ';' { Free($1); Free($2); }
 	;
 @
 
+\lstset{language=Ada}
 <<Ada parser function definitions>>=
-procedure Run (File_Name : in STRING);
+procedure Run (File_Name : in String);
 --| PURPOSE:
 --| Cause the Parser to execute.  This is simply a call to YYParse.
 @
@@ -3363,7 +3375,7 @@ This routine now catches exceptions and prints errors.
 -- * Ada95_Parser.Run                                        *
 -- *                                                         *
 -- ***********************************************************
-procedure Run (File_Name : in STRING) is
+procedure Run (File_Name : in String) is
 begin	     
   A95.Reset (File_Name);
   begin
@@ -3561,7 +3573,7 @@ required a renaming of the lexer.  This is not required here.
 -- * Ada95_Parser.YYError                                    *
 -- *                                                         *
 -- ***********************************************************
-procedure YYError(S: in STRING := "Syntax Error") is
+procedure YYError(S: in String := "Syntax Error") is
 begin
   Put(Standard_Error, S);
 end YYError;
@@ -3583,7 +3595,7 @@ end YYError;
 \subsection{The API documentation generator}
 Next we have the general wrapper code.
 
-<<ada_extractdoc.ada>>=
+<<extract_doc.ada>>=
 -- TODO:
 --   take multiple documents to process (not just multiple xrefs)
 --   sort compilation units & package contents by name
@@ -3601,6 +3613,9 @@ Next we have the general wrapper code.
 package Extract_Doc is
    procedure Main;
 end Extract_Doc;
+@
+
+<<extract_doc-body.ada>>=
 with A95P;
 pragma Elaborate_All(A95P);
 with A95P_Tokens;  use A95P_Tokens;
@@ -3662,7 +3677,7 @@ package body Extract_Doc is
    end Get_Prefix;
 
    function Expanded_Name(N : Node_Access) return Unbounded_String is
-      P : Unbounded_String := Get_Prefix(N);
+      P : constant Unbounded_String := Get_Prefix(N);
    begin
       if Length(P) > 0 then
 	 return P & '.' & Get_Name(N);
@@ -4363,7 +4378,7 @@ package body Extract_Doc is
 	    if Cur = Real_Compilation then
 	       Put("\subsection{");
 	       declare
-		  N : Unbounded_String := Get_Name(Cur);
+		  N : constant Unbounded_String := Get_Name(Cur);
 		  I : constant Natural := Index(N, ".", Going => Backward);
 	       begin
 		  if I = 0 then
@@ -4895,7 +4910,13 @@ package body Extract_Doc is
       Print_Node(Documents.Child);
    end Main;
 end Extract_Doc;
+@
 
+<<C Build Executables>>=
+ada_extractdoc \
+@
+
+<<ada_extractdoc-body.ada>>=
 with Extract_Doc;
 procedure Ada_ExtractDoc is
 begin
@@ -4906,14 +4927,12 @@ end Ada_ExtractDoc;
 The "mkapi" script works just like the ada\_extractdoc program, except that
 it works with .nw files instead of .ada files, and generates the combined
 documentation on a file with the same name as the first file, but with
-".api" instead of ".nw".  As described in my compilation document, the
-simpinput program is needed to convert external file references to the
-files' contents to correct issues with noweb.
+".api" instead of ".nw".
 
 \lstset{language=sh}
 <<mkapi>>=
 #!/bin/sh
-# usage: mkapi <noweb file> <xref noweb files>
+# usage: mkapi <noweb file> <noweb order>
 # TODO: test resolution of external chunk references
 fn="$1"
 shift
@@ -4922,64 +4941,10 @@ shift
 pid=$$
 trap "rm -rf .*.$pid" 0
 
-function extract_chunk()
-{
-  test -f ".imports.$1.$pid" || expand_references "$1"
-  echo "@<<$2@>>="
-  simpinput "$1" | notangle -R"$2" - ".imports.$1.$pid" | \
-      sed 's/@<</@@<</g;s/@>>/@@>>/g;s/^@/@@/'
-  echo @
-}
-
-function extract_references()
-{
-   simpinput "$1" | sed -n -e '
-        # at the start of a chunk:
-        /^@<<.*@>>=/{
-         # save the name (unless it is a repeat)
-         /@<<@>>=/!h
-         # clear the pattern space & get the next line
-         s/.*//;n
-         # if it is an external reference, print the saved chunk name
-         /^@<<External Reference@>>$/{g;s/@<<\(.*\)@>>=/\1/;p}
-       }' | sort -u
-}
-
-function expand_references()
-{
-  local ref f
-  touch ".imports.${1##*/}.$pid"  # prevent infinite recursion
-  extract_references "$1" | sort -u | while read -r ref; do
-    f=$(fgrep "@<<${ref}@>>=" *.nw | grep '\.nw:@<<.*@>>=$' | cut -d: -f1 | uniq | \
-        while read x; do
-          if [ "x$x" != "x$1" ]; then
-             if [ -z $(has_ref "$x" "$ref") ]; then
-                echo "$x"
-                break
-             fi
-          fi
-        done 2>/dev/null)
-    if [ -z "$f" ]; then
-      echo "Error: External Reference @<<$ref@>> not found!" >&2
-    else
-      extract_chunk "$f" "$ref"
-    fi
-  done >".imports.${1##*/}.$pid"
-}
-function has_ref()
-{
-   local x
-   extract_references "$1" | while read x; do
-      if [ "x$x" = "x$2" ]; then
-         echo "$1"
-         break
-      fi
-   done
-}
-
 mkdir .tmp.$pid
 i=1
-an=`<<Extract Ada nodes for API docs>>`
+<<Extract Ada nodes for API docs>>
+an=`<<Ada nodes to document>>`
 PATH=.:$PATH  # get ada_extractdoc from cur dir if available
 for x in $an; do
    echo "Extracting docs for $x." >&2
@@ -4988,92 +4953,80 @@ done  > ${fn%.nw}.api
 @
 
 <<Extract Ada nodes for API docs>>=
-for x in "$@" "$fn"; do
-  expand_references "$x"
-  test "${x##*/}" = "${fn##*/}" -a "$x" != "$fn" && continue
-  echo "Extracting Ada from $x." >&2
-  simpinput "$x" | noroots | sed -n -e '/.ada@>>$/{s/@<<//;s/@>>//;p}' | while read r; do
-     echo "$r" >&2
-     simpinput "$x" | notangle -R"$r" - .imports."${x##*/}".$pid > .tmp.$pid/"$r".tmp
-     if [ "$x" = "$fn" ]; then
-        echo "$r"
-	mv -f .tmp.$pid/"$r".tmp .tmp.$pid/"$r"
-     else
-        cat .tmp.$pid/"$r".tmp @>>.tmp.$pid/"$r"
-	rm -f .tmp.$pid/"$r".tmp
-     fi
-  done
-done | sort -u
+noroots "$@" | sed -n -e '/.ada@>>$/{s/@<<//;s/@>>//;p}' | while read r; do
+  echo "$r" >&2
+  notangle -R"$r" "$@" > .tmp.$pid/"$r"
+done
+@
+
+<<Ada nodes to document>>=
+noroots "$fn" | sed -n -e '/.ada@>>$/{s/@<<//;s/@>>//;p}'
 @
 
 \section{Compilation}
 
 Any Ada compiler installation has different methods of converting the
-source code to compiled units. At the moment, the only Ada compiler
-available to the author is gcc/gnat. The makefile prepares and compiles Ada
-code named in [[<<Ada Packages>>]] and [[<<Ada Programs>>]], and links any code listed in [[<<Ada Programs>>]] into
-executable binaries using gcc/gnat. It then deals with any generated
-error messages (either printing them or displaying them in
-[[$EDITOR]]).  The [[<<Ada Packages>>]] and [[<<Ada Programs>>]]
-chunks are a list of base names; the actual top-level chunk names are
-generated by appending [[.ada]] and [[-body.ada]], and ignoring
-non-existence of either.  Chunks can be imported from external sources
-by making them dependent on [[<<External Reference>>]]; they are
-extracted manually, so care must be taken that the chunks contain
-nothing but that reference.\footnote{TODO: Add chunk to list provided
-external references.}
+source code to compiled units.  At the moment, the only Ada compiler
+available to the author is gcc/gnat. The makefile extracts all Ada
+code using the extension [[.ada] and all ayacc and aflex code using
+the extensions [[.aday]] and [[.adal]], respectively, whenever any Ada
+compilation is to take place.  It does not bother trying to parse the
+Ada to extract only the packages it needs.  An Ada compilation is
+requested by adding a package basename to [[<<C Executables>>]] or
+[[<<Ada Packages>>]].  While no other naming convention is enforced,
+it is expected that Ada bodies will be named
+\emph{somthing}\texttt{-body.ada} and that Ada package specs will be
+named \emph{somthing}\texttt{.ada}.
 
-\lstset{language=[gnu]make}
-
-<<Makefile.inc>>=
-build-script : compile.nw
-	notangle -R$@ $< > $@
-	chmod +x $@
-
-# build a .nw by making <basename>.built
-%.built: %.nw
-	$(MAKE) -$(MAKEFLAGS) simpinput
-	PATH=.:$$PATH USING_MAKE=y \
-	   simpinput $< | notangle -Rbuild-script | env NOWEB_SOURCE=$< sh
-	touch $@
-@
+\lstset{language=make}
 
 <<Clean temporary files>>=
-rm -f *.{ali,[os]} gcc_errs
-rm -f build-script *.{ad[abs]}
+rm -f *.{ali,[os],ad[abs],ada[ly],chop}
 @
 
-<<build-script>>=
-#!/bin/sh
-#|build-script: Build Ada programs from literate sources
-#|Extract "Ada Packages" and "Ada Programs" from literate file, compile, and link "Ada Programs".
-#|"Ada Packages" and "Ada Programs" chunks should contain file base names; actual file
-#+names are generated by appending ".ada" and "-body.ada"; both need not exist.
-#|Also, attempts to resolve @<<External References@>> to parent's symbol name from .nw
-#+files in same directory.
-<<build-script documentation>>
+<<makefile.vars>>=
+ADAFILES_DIRECT:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.ada>>/{s/@<<//;s/@>>//;p;}')
+ADAFILES_LY:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.ada[ly]>>/{s/@<<//;s/@>>//;p;}')
+ADAFILES:=$(ADAFILES_DIRECT) $(patsubst %l,%,$(ADAFILES_LY:%y=%))
 
-<<build: functions>>
+%: %-body.chop $(ADAFILES:.ada=.chop)
+	trap "rm -f $*.o" 0; \
+	gnatmake <<build: gnat options>> $@
 
-<<build: initialize>>
+ADA_PKG=<<Ada Packages>>
 
-echo "Extracting..."
-<<build: extract/prepare Ada files>>
 
-echo "Building..."
-<<build: compile Ada files>>
-
-<<build: finish up>>
 @
 
-On additional feature of this script is to allow any compiled packages
+<<Ada Packages>>=
+\
+@
+
+<<makefile.rules>>=
+%.chop: %.ada
+	$(call chop_ada,$*.ada)
+	$(call chop_ada,$*-body.ada)
+	touch $@
+
+$(ADAFILES_DIRECT): $(NOWEB) .ada_package_prefix
+	-notangle $(ADA_USE_LINE) -R$@ $(NOWEB_ORDER) | \
+	   sed 's/[[:space:]]*--@.$//g' | \
+           <<build: apply package prefix>> $(call ADA_POSTPROCESS,$@) >$@
+
+$(ADAFILES_LY):
+	-notangle $(ADA_USE_LINE) -R$@ $(NOWEB_ORDER) | \
+	   sed 's/[[:space:]]*--@.$//g' | sed 's/[ \t]*##/##/' >$@
+@
+
+On additional feature of this package is to allow any compiled packages
 to be placed under a single, global container package. This allows any
 extracted code to coexist with other packages with the same
-name.\footnote{The AARM describes another method, libraries and
-library import, in 10.1.4-9b, but that's purely
-implementation-defined, so I'll stick with this method.} The name of
-the top-level package is specified by the [[PACKAGE_LOCATION]]
-environment variable, and is referred to in source using the pacakge
+name.%
+\footnote{The AARM describes another method, libraries and library import,
+in 10.1.4-9b, but that's purely implementation-defined, so I'll stick with
+this method.}
+The name of the top-level package is specified by the [[PACKAGE_LOCATION]]
+configuration variable, and is referred to in source using the pacakge
 prefix [[Package_Prefix]]. For simplicity, \emph{any} occurence of
 [[Package_Prefix]] within the source, including inside strings,
 comments, etc. will be converted. This should rarely cause problems,
@@ -5081,163 +5034,36 @@ and if noticed during unit testing, it can usually be easily worked
 around.  Since trailing dots are not eliminated if
 [[PACKAGE_LOCATION]] is empty, a default will have to be provided.
 
-<<build-script documentation>>=
-#|The environment variable PACKAGE_LOCATION may be set to a package hierarchy in which
-#+to place the resulting code; the default is "TJM".
+<<makefile.config>>=
+# Set to a package hierarchy in which to place the Ada code
+# Any occurrence of Package_Prefix in code will be replaced by this.
+# The entire hierarchy of packages named by this will be created as
+# empty, pure packages in the current directory.  These means that placement
+# in a non-empty package requires compiling in a separate directory.
+PACKAGE_LOCATION=No_Web_Code
 @
 
 <<build: apply package prefix>>=
-sed "s/Package_Prefix/${PACKAGE_LOCATION}/g"
-@
-
-<<build: initialize>>=
-test -z "$PACKAGE_LOCATION" && PACKAGE_LOCATION=TJM # my initials are default
+sed 's/Package_Prefix/$(PACKAGE_LOCATION)/g'
 @
 
 The parent packages must exist; dummy packages are created and
 compiled for each element in the dot-separated hierarchy.
 
-<<build-script documentation>>=
-#|The entire hierarchy of packages named by PACKAGE_PREFIX will be created as empty,
-#+pure packages in the current directory.  These means that placement in a non-empty
-#+package requires compiling in a separate directory.
-@
-
-<<build: initialize>>=
-# .<whatever>.$$ is used for temp files in general
-pid=$$
-trap "rm -rf .*.$pid" 0
-@
-
-<<build: extract/prepare Ada files>>=
-x="$PACKAGE_LOCATION"
-while [ -n "$x" ]; do
-   echo "package $x is pragma Pure; end $x;" >.tmp.$pid
-   <<build: compile [[.tmp.$pid]]>>
-   rm -f .tmp.$pid
-   x=".$x"
-   x="${x%.*}"
-   x="${x#.}"
-done
-@
-
-Before compilation, the Ada code must be extracted from the document
-using [[notangle]].  Since [[notangle]] must be run multiple times on
-the same document, the name of the document file must be passed in to
-the script.  While passing in the file name as an argument to the
-script would have been nice, it would have precluded the ability to
-pass the script as standard input to the shell rather than generating
-an actual script file before running it. Thus, the name of the
-document source is passed in using the [[NOWEB_SOURCE]] environment
-variable.
-
-<<build-script documentation>>=
-#|The noweb file being processed must be placed in the NOWEB_SOURCE
-#+environment variable.  This is due to legacy restrictions on
-#+command-line parameters
-@
-
-<<build: initialize>>=
-if [ ! -f "$NOWEB_SOURCE" ]; then
-   echo "NOWEB_SOURCE must be set to the noweb document name"
-   exit 1
-fi
-@
-
-Before extracting the source, any external references must be
-resolved.  It'd be nice to use a noweb filter to accomplish this, but
-instead, this parses chunks out of the source manually. The extraction
-happens recursively, so that references within referenced chunks are
-resolved correctly. Self-references will cause unresolved chunks, but
-not an infinite loop.
-
-<<External Reference>>=
-@
-
-<<build: extract/prepare Ada files>>=
-expand_references "$NOWEB_SOURCE"
-@
-
-<<build: functions>>=
-function extract_chunk()
-{
-  test -f ".imports.$1.$pid" || expand_references "$1"
-  echo "@<<$2@>>="
-  simpinput "$1" | notangle -R"$2" - ".imports.$1.$pid" | \
-      sed 's/@<</@@<</g;s/@>>/@@>>/g;s/^@/@@/'
-  echo @
-}
-
-function extract_references()
-{
-   <<build: extract external references of [[$1]]>>
-}
-
-function expand_references()
-{
-  local ref f
-  touch ".imports.${1##*/}.$pid"  # prevent infinite recursion
-  extract_references "$1" | sort -u | while read -r ref; do
-    f=$(fgrep "@<<${ref}@>>=" *.nw | grep '\.nw:@<<.*@>>=$' | cut -d: -f1 | uniq | \
-        <<build: return name of first file not importing [[$ref]]>>)
-    if [ -z "$f" ]; then
-      echo "Error: External Reference @<<$ref@>> not found!" >&2
-    else
-      extract_chunk "$f" "$ref"
-    fi
-  done >".imports.${1##*/}.$pid"
-}
-@
-
-Extracting all external references to find out if [[$ref]] is one of
-them is kind of expensive, but since the entire file needs to be
-parsed to extract any external references, the only way to improve
-performance would be to stop once [[$ref]] is found. Unless this
-becomes a serious performance problem, this code will remain as is.
-
-<<build: functions>>=
-function has_ref()
-{
-   local x
-   extract_references "$1" | while read x; do
-      if [ "x$x" = "x$2" ]; then
-         echo "$1"
-         break
-      fi
-   done
-}
-@
-
-<<build: return name of first file not importing [[$ref]]>>=
-while read x; do
-  if [ "x$x" != "x$1" ]; then
-     if [ -z $(has_ref "$x" "$ref") ]; then
-        echo "$x"
-        break
-     fi
-  fi
-done 2>/dev/null
-@
-
-While better methods exist to parse code out of the source, using sed
-like this is good enough. The code just looks for chunk starts, and
-prints the name of the chunk started (assuming a blank name means
-{}``repeat the last name'') whenever the first line of the chunk is a
-line matching the external reference chunk name exactly. This means,
-among other things, that no spaces are allowed around the external
-referece.
-
-<<build: extract external references of [[$1]]>>=
-simpinput "$1" | sed -n -e '
-     # at the start of a chunk:
-     /^@<<.*@>>=/{
-      # save the name (unless it is a repeat)
-      /@<<@>>=/!h
-      # clear the pattern space & get the next line
-      s/.*//;n
-      # if it is an external reference, print the saved chunk name
-      /^@<<External Reference@>>$/{g;s/@<<\(.*\)@>>=/\1/;p}
-    }' | sort -u
+<<makefile.rules>>=
+# note: makepp doesn't support files starting with . as %-targets
+# so tmp.* must be used instead of .tmp.*
+.ada_package_prefix:
+	x='$(PACKAGE_LOCATION)'; \
+	tf=tmp.$$$$; \
+	trap "rm -f $$tf.*" 0; \
+	while [ -n "$$x" ]; do \
+	  echo "package $$x is pragma Pure; end $$x;" > $$tf.ada; \
+  	  ($(call chop_ada,$$tf.ada)); \
+	  rm -f $$tf.*; \
+	  x=".$x"; x="$${x%.*}"; x="$${x#.}"; \
+	done; \
+	touch .ada_package_prefix
 @
 
 The [[notangle]] command can improve error location by inserting
@@ -5250,11 +5076,9 @@ that all new chunks begin on a new line. The [[%F]], [[%L]], and
 [[%N]] directives specify replacement with the file name, line number,
 and a newline, respectively.
 
-<<build: extract Ada from document>>=
+<<makefile.vars>>=
 # Can't use -L'pragma Source_Reference(%L,"%F");%N due to Ada restrictions
-# -L'-- %f:%L%N' works, but screws up indentation
-simpinput "$NOWEB_SOURCE" | notangle -R<<build: file to extract>> - \
-   ".imports.${NOWEB_SOURCE##*/}.$pid"
+ADA_USE_LINE=$(if $(USE_LINE),-L'-- %f:%L%N')
 @
 
 This script enforces no naming convention, other than the [[.ada]] and
@@ -5271,114 +5095,22 @@ files just because code preceeding them caused line number
 changes. The [[-r]] option also causes problems when the source file
 changes all the time, like for [[.tmp.$pid]].
 
-<<build: functions>>=
-function gnatchop_cpif()
-{
-   mkdir .chop.$pid
-   cp "$1" .chop.$pid
-   (
-      cd .chop.$pid
-      gnatchop "$1"
-   ) | grep '\.ad[sb]$' | while read f; do
-      echo "$f"
-      cpif "$f" < .chop.$pid/"$f"
-   done
-   rm -rf .chop.$pid
-}
-@
-
-<<build: compile [[.tmp.$pid]]>>=
-y="`gnatchop_cpif .tmp.$pid`"
-echo "$y" | while read y; do
-  gnatgcc -gnatc -c $y
-done
-@
-
 While not strictly necessary, the extraction process for Ada code
 chunks only extracts chunks if they are different from previous
-extractions, and deletes them if they are empty. Files are extracted
-by passing chunk base names into the standard input of
-[[generate_files()]], and the resulting compilable file names are
-printed on standard output.  Since the script is editing the output
+extractions.  Since the script is editing the output
 anyway, it also removes pretzel-specific special control comments.
 
-<<build: functions>>=
-function extract_ada()
-{
-  echo "$1:" >&2
-  <<build: extract Ada from document>> | \
-    <<build: apply package prefix>> | \
-    sed 's/[[:space:]]*--@.$//g' | \
-    cpif $1
-  if [ `du -s $1 | cut -f1` -eq 0 ]; then
-     rm -f $1
-  else
-     echo -n "Lines of code: " >&2
-     egrep -v '^[[:space:]]*($|--)' $1 | wc -l >&2
-     gnatchop_cpif $1
-  fi
-}
-
-function generate_files()
-{
-  while read x; do
-    test -z "$x" && continue
-    extract_ada $x.ada
-    extract_ada $x-body.ada
-  done | grep '\.ad[sb]$'
-}
+<<makefile.vars>>=
+chop_ada = \
+	chf=.chop.$$$$; \
+	trap "rm -rf $$chf" 0; \
+	mkdir $$chf; \
+	cp $1 $$chf; \
+	( cd $$chf; gnatchop -w -r "$1" ) | grep '\.ad[sb]$$' | while read f; do \
+	  echo "$$f"; cpif "$$f" < $$chf/"$$f"; \
+	done
 @
 
-<<build: file to extract>>=
-$1
-@
-
-Chunk names are extracted from the document, and passed into the
-[[generate_files]] function. The generated files are kept in temporary
-files so that they can be passed to the compiler later. The
-[[.progf.$pid]] list contains compilable files generated for programs,
-the [[.genf.$pid]] list contains all generated compilable files, and
-the [[.adaf.$pid]] list contains the base names of all Ada files. They
-will be deleted by the [[trap]] above on script exit. Note that the
-extra the [[notangle]] commands to extract the file names could have
-been avoided by using an in-line reference to the chunks, but then the
-script could not be stand-alone, and the indentation of the code might
-cause problems.\footnote{In fact, it used to be done in-line all the
-time using a here-doc ([[cat]]<\/<[[EOF]]), but the EOF token was
-being indented after a (since removed) change to allow both. It's
-safer, and definitely easier to test, if the script is standalone.}
-
-<<build: extract/prepare Ada files>>=
-simpinput "$NOWEB_SOURCE" | notangle -R"Ada Packages" | \
-    tee .adaf.$pid | generate_files >.genf.$pid
-simpinput "$NOWEB_SOURCE" | notangle -R"Ada Programs" | \
-    tee -a .adaf.$pid | generate_files >.progf.$pid
-cat .progf.$pid >>.genf.$pid
-@
-
-In order to prevent old source files from interfering with the build
-process, they are removed before starting. This is a bit dangerous, as
-any test files that were created in the same directory will be deleted
-as well. This also assumes that the master source is in its own
-directory, and imported Ada code is soft-linked into the directory.
-Note that right now, this is too dangerous, and wrong (in that it does
-not account for files created for the package prefix feature) as well,
-so it is disabled for now. Instead, the files it would have removed
-are printed, so they can be manually removed later.
-
-<<build: extract/prepare Ada files>>=
-# clean
-(
-   cat .genf.$pid
-   while read x; do
-      echo "${x}-body.ada"
-      echo "${x}.ada"
-   done < .adaf.$pid
-) | sort -u > .allf.$pid
-ls *.ad[abs] | diff - .allf.$pid | sed -n -e '/^</{s/..//;p}' | while read x; do
-   test -h $x || echo rm -f $x  # for now, disable auto-clean
-done
-@
 
 Once the files are extracted and ready to compile, they can all be
 compiled to object files. The non-standard options to the compiler
@@ -5413,106 +5145,9 @@ disabled.}
 -gnatUfwawFwPwl -gnatoqyaeknp -funwind-tables -g
 @
 
-<<build: compile Ada files>>=
-# compile source
-while read x; do
-   gnatgcc -c -gnatc <<build: gnat options>> $x # && \
-   # should be taken care of by gnatmake below
-   # gnatmake -c <<build: gnat options>> $x
-done <.genf.$pid
-@
-
-Body files generated for programs can then be linked into main programs.
-
-<<build: compile Ada files>>=
-# link
-grep '\.adb$' .progf.$pid | while read x; do
-#   gnatbind ${x%.adb}.ali
-#   gnatlink ${x%.adb}.ali
-   # gnatmake does file time checks, so above 2 are replaced by:
-   gnatmake <<build: gnat options>> ${x%.adb}
-done
-@
-
-Finally, if compilation is unsuccessful, logs would be helpful. When
-invoked from the GUI, messages are generated into a file named
-[[gcc_errs]], and [[$EDITOR]] is invoked on the file, in an
-xterm\footnote{This used to just execute the editor in the background,
-assuming it was X-based. Hopefully adding the xterm makes non-X
-editors work without making the xterm too distracting for X-based
-editors. For xjed, this tends to pop the xterm in front of the editor
-window, but I can live with that.}. When invoked from the
-command-line, messages are dumped to standard output/error as
-usual\footnote{Actually, stdout only, since the old build system
-absorbed stderr.}.  The [[USING_MAKE]] environment variable is the way
-to select ``GUI'' vs. ``make'' mode.  When non-empty, it's in ``make''
-mode.  Since the old build system had trouble passing in the parent
-environment, [[$HOME]] is manually calculated here, and then
-\textasciitilde{}/.profile is executed before the editor.
-
-<<build-script documentation>>=
-#|The error log will be popped up in $EDITOR, spawned from an rxvt, unless the
-#+environment variable USING_MAKE is non-empty.
-#|If USING_MAKE is non-empty, the error log will be dumped to standard output (*not*
-#+standard error).
-@
-
-<<build: initialize>>=
-# save error log
-test -z "$USING_MAKE" && exec >gcc_errs
-exec 2>&1
-@
-
-<<build: finish up>>=
-# view error log
-if [ -z "$USING_MAKE" ]; then
-   test -z "$HOME" && eval "HOME=~`whoami`"
-   export HOME
-   . ~/.profile
-   xt=xterm
-   test -p rxvt && xt=rxvt
-   ($xt -e $EDITOR gcc_errs </dev/null >/dev/null 2>&1 &)
-fi
-@
-
-As a noweb debugging aid, the root chunks are printed before
-extraction.  Also, as a benchmark, the number of actual lines of code
-in the document are printed. This includes unused code chunks and
-strips out lines consiting entirely of whitespace, and Ada comment, a
-C end-of-line comment (//), or a shell comment (\#, which also
-includes C preprocessor directives).
-
-<<build: initialize>>=
-echo "${NOWEB_SOURCE##*/} - Root Nodes:"
-simpinput "$NOWEB_SOURCE" | noroots | sort | sed -e 's/^@<</  /;s/@>>$//'
-echo "Lines/Words/Characters:"
-simpinput "$NOWEB_SOURCE" | sed -n -e '
-       # for every code chunk...
-       /^@<<.*@>>=/{
-           # loop:
-        :l
-           n
-           # skip start of new code chunk
-           /^@<<.*@>>=/bl
-           # finished at end of chunk
-           /^@[@<>]/!{/^@/b}
-           # strip leading space
-           s/^ *//
-           # convert comments to blank lines
-           s/^ *--.*//
-           s/^ *#.*//
-           s%^ *//.*%%
-           # skip blank lines
-           /^$/bl
-           p
-           bl}' | wc
-@
-
-
 \section{Pretty-Printing}
 
-The PDF output format was intended to be produced using
-pretzel,
+The PDF output format was intended to be produced using pretzel,
 a semi-generic code formatter.  I made numerous patches\footnote{The
 patches were submitted to the original author at one point, but were
 not incorporated into an official release, and in the mean time, more
@@ -5526,9 +5161,7 @@ in-line API documentation into a single appendix.  See appendix
 tool itself is in a separate package.
 
 <<makefile.rules>>=
-%.tex: %.api
-
-%.api: %.nw
+%.api: %.nw mkapi ada_extractdoc
 	mkapi $*.nw *.nw > api.log 2>&1 || touch $@
 @
 
@@ -5537,340 +5170,27 @@ tool itself is in a separate package.
 if test -z "$NO_PRETTY_PRINT" && type adappf_s >/dev/null 2>&1; then
   # Generate & post-process LaTeX
   simpinput "$inf" | sed 's/usepackage{noweb}/\0\n\\usepackage{pretzel-noweb}/' | \
-    noweave -delay -filter adappf_s -index | \
-    sed -n -e '<<sed \LaTeX{} post-processor>>' > "$outf"
+    noweave -delay -filter adappf_s -index >"$outf"
 else
   simpinput "$inf" | noweave -delay -backend 'totex -list' -index > "$outf"
 fi
 @
 
-\subsection{\label{sub:Building}Building}
-
-\iffalse
-The following patch has been noweb-escaped - extract with:
-
-  notangle -Rtotex.patch -t8 > totex.patch
-
-Specifically, noweb needs @<< and @>> for @-less versions, and @@ for @ at the
-beginning of a line.
-
-<<totex.patch>>=
-Note that to use this, you will need the following in your preamble:
-\usepackage{listings}
-\lstset{escapechar=^^G}
-
-This is done for you if you don't use -delay
-
---- totex.nw	2007-12-18 18:21:50.000000000 -0500
-+++ totex.nw	2007-12-24 10:07:38.000000000 -0500
-@@@ -17,6 +17,7 @@
- procedure main(args)
-   local delay, name
-   @<<initialization@>>
-+  listings := !args == "-list"
-   delay := !args == "-delay"
-   noindex := !args == "-noindex"
-   if !args == "-no-gen-comment" then &null
-@@@ -28,7 +29,9 @@
- end
- @ The markup carefully adds no newlines not already present in the input,
- so that the line numbers of the {\TeX} file will be the same as the
--numbers of the corresponding {\tt noweb} file.
-+numbers of the corresponding {\tt noweb} file.  Unfortunately, this is not
-+possible when using the listings package, so this comment does not apply
-+with the -list option.
- The variables are:
- \begin{description}
- \item[\tt code] Nonnull if converting a code chunk.
-@@@ -69,10 +72,16 @@
- @
- \subsection{Basic text and chunk boundaries}
- @<<code chunks@>>=
--if ="@begin code " then	{ code := 1     ; writes("\\nwbegincode{", tab(0), "}")
-+if ="@begin code " then	{ code := 1
-+                          if \list then writes("\\begin{lstlisting}")
-+                                   else writes("\\nwbegincode{", tab(0), "}")
-                           @<<reset cross-reference info@>>                         } else
--if ="@end code "   then { @<<dump pending cross-reference info@>>
--                          code := &null ; writes("\\nwendcode{}")
-+if ="@end code "   then { if \list then writes("\007")
-+                          @<<dump pending cross-reference info@>>
-+			  if \list then writes("\007")
-+                          code := &null
-+			  if \list then writes("\\end{lstlisting}")
-+			           else writes("\\nwendcode{}")
-                           lastdefnlabel := pendingprev := pendingnext := &null   } else
- @<<docs chunks@>>=
- if ="@begin docs " then	{ if \delay & match(0) then @<<delay for [[@begin docs]]@>>  
-@@@ -86,13 +95,17 @@
-                                  else line)
-                           lastindexref := &null                                  } else
- @<<possibly indexed quoted [[line]]@>>=
--if /noindex & \lastindexref then 
-+if /noindex & \lastindexref then
-   "\\nwlinkedidentq{" || TeXliteral(line) || "}{" || lastindexref || "}"
- else 
-   TeXliteral(line)
- @<<possibly indexed code [[line]]@>>=
- if /noindex & \lastindexref then 
--  "\\nwlinkedidentc{" ||   escape(line, '{}\\') || "}{" || lastindexref || "}"
-+  (if \list & \code then "\007" else "") ||
-+  "\\nwlinkedidentc{" ||   escape(line, '_{}\\') || "}{" || lastindexref || "}" ||
-+  (if \list & \code then "\007" else "")
-+else if \list then
-+  line
- else 
-   escape(line, '{}\\')
- 
-@@@ -120,11 +133,13 @@
- Here we start to see the cross-reference markup, driven by [[lastxreflabel]]
- and [[lastxrefref]].
- @<<@defn@>>=
--if ="@defn " then 	{ writes("\\sublabel{", \lastxreflabel, "}")
-+if ="@defn " then 	{ if \code & \list then writes("\n\007")
-+                          writes("\\sublabel{", \lastxreflabel, "}")
- 			  writes("\\nwmargintag{", label2tag(\lastxreflabel), "}")
-                           writes("\\moddef{", convquotes(thischunk := tab(0)), 
-                                  ("~" || label2tag(\lastxrefref)) | "",
-                                  "}\\", defns[thischunk], "endmoddef")
-+		          if \code & \list then writes("\007")
- 			  useitems := \useitemstab[thischunk]
- 			  pendinguses := 1
- 			  lastdefnlabel := lastxreflabel
-@@@ -135,9 +150,11 @@
- @<<initialization@>>=
- useitemstab := table()
- @<<@use@>>=
--if ="@use " then 	{ writes("\\LA{}", convquotes(name := tab(0)), 
-+if ="@use " then 	{ if \list & \code then writes("\007")
-+                          writes("\\LA{}", convquotes(name := tab(0)), 
-                                  ("~" || label2tag(\lastxrefref)) | "",
-                                  "\\RA{}")
-+		          if \list & \code then writes("\007")
- 			  @<<clear [[lastxref*]]@>>                                } else
- @<<*@>>=
- procedure label2tag(label)
-@@@ -163,7 +180,9 @@
- if ="@trailer tex"   & pos(0) then { write("\\bye")			         } else
- @<<write {\LaTeX} header@>>=
- writes("\\documentclass{article}\\usepackage{noweb}\\pagestyle{noweb}\\noweboptions{", tab(0),
--       "}\\begin{document}")
-+       "}")
-+if \list then writes("\\usepackage{listings}\\lstset{escapechar=^^G}")
-+writes("\\begin{document}")
- @
- \subsection{Cross-reference and index support}
- 
-@@@ -199,9 +218,11 @@
- if ="prevdef "             then { pendingprev := tab(0)                         } else
- @<<show definitions and uses on definition line---once@>>=
- if \pendinguses | \pendingprev | \pendingnext then {
-+  if \code & \list then writes("\007")
-   writes("\\nwstartdeflinemarkup")
-   @<<write out definition-line markup@>>
-   writes("\\nwenddeflinemarkup")
-+  if \code & \list then writes("\007")
-   pendinguses := pendingprev := pendingnext := &null
- }
- @<<write out definition-line markup@>>=
-@@@ -235,9 +256,11 @@
- @
- This first round of stuff just handles the basics: definitions, uses, and newlines.
- Unless it's OK to show the index (by \LA{}SI\RA), we handle nothing but 
--\hbox{[[@index nl]]}.
-+\hbox{[[@index nl]]}.  Note that for listings mode, the nl isn't handled correctly.
-+If anything at all is added, the output will include the next line's code.  Doing
-+nothing is only slightly better in that extra whitespace is displayed.
- @<<@index tests@>>=
--if ="nl" & pos(0)          then        { write(if \code then "\\eatline" else "%")}else
-+if ="nl" & pos(0)          then        { write(if \code & \list then "" else if \code then "\\eatline" else "%")}else
- if =("defn "|"localdefn ") then @<<SI@>> { @<<handle index defn@>>                   } else
- if ="use "                 then @<<SI@>> { @<<handle index use@>>                    } else
- @<<SI@>>=
-@@@ -250,9 +273,11 @@
- (You don't have to know that to understand what happens here, but I thought you
- might like to.)
- @<<handle index defn@>>=
-+if \code & \list then writes("\007")
- writes("\\nosublabel{", \lastxreflabel, "}")
- writes("\\nwindexdefn{\\nwixident{", TeXliteral(name := tab(0)), "}}{", indexlabel(name), "}{",
- 	\lastxrefref, "}")
-+if \code & \list then writes("\007")
- @<<clear [[lastxref*]]@>>
- @
- The {\LaTeX} back end ignores uses in code; they get bundled up by a previous filter
-@@@ -269,17 +294,21 @@
- Here's the local identifier cross-reference that appears at the end of a code chunk.
- We guard everything with \LA{}SI\RA, as before.
- @<<@index tests@>>=
--if ="begindefs" & pos(0) then @<<SI@>> { @<<dump pending cross-reference info@>>
-+if ="begindefs" & pos(0) then @<<SI@>> { if \list & \code then writes("\007")
-+                                       @<<dump pending cross-reference info@>>
-                                        writes("\\nwidentdefs{")                   } else
- if ="isused "            then @<<SI@>> { "handled by latex"                         } else
- if ="defitem "           then @<<SI@>> { i := tab(0); @<<write [[i]] with [[\\]]@>>   } else
--if ="enddefs"   & pos(0) then @<<SI@>> { writes("}")                                } else
--if ="beginuses" & pos(0) then @<<SI@>> { @<<dump pending cross-reference info@>>
-+if ="enddefs"   & pos(0) then @<<SI@>> { writes("}")
-+                                       if \list & \code then writes("\007")            } else
-+if ="beginuses" & pos(0) then @<<SI@>> { if \list & \code then writes("\007")
-+                                       @<<dump pending cross-reference info@>>
-                                        writes("\\nwidentuses{"); ulist := []      } else
- if ="isdefined "         then @<<SI@>> { "latex finds the definitions"              } else
- if ="useitem "           then @<<SI@>> { i := tab(0); @<<write [[i]] with [[\\]]@>> 
-                                         put(ulist, i);                            } else
--if ="enduses"   & pos(0) then @<<SI@>> { writes("}"); @<<write [[ulist]]@>>           } else
-+if ="enduses"   & pos(0) then @<<SI@>> { writes("}"); @<<write [[ulist]]@>>
-+                                       if \list & \code then writes("\007")            } else
- @<<write [[i]] with [[\\]]@>>=
- writes("\\\\{{\\nwixident{", TeXliteral(i), "}}{", indexlabel(i), "}}") 
- @<<write [[ulist]]@>>=
-@
-\fi
-
-Boilerplate header on main-line files:
-
-<<texheader.tex>>=
-\documentclass[twoside,english]{article}
-\usepackage[T1]{fontenc}
-\usepackage[latin1]{inputenc}
-\usepackage[letterpaper,rmargin=1in,bmargin=1in]{geometry}
-% Use standard fonts for PDF output
-\usepackage{ifpdf}
-\ifpdf
-\usepackage{times}
-\usepackage{mathptmx}
-\fi
-\usepackage{noweb}
-\usepackage{babel}
-\usepackage{graphicx}
-\usepackage{listings}
-\usepackage{color}
-%
-% API adds subsubsections - don't add them to toc
-\setcounter{secnumdepth}{3}
-\setcounter{tocdepth}{2}
-%
-\pagestyle{headings}
-%
-% Stuff for the listings package
-\lstloadlanguages{C,sh,make,ada,[LaTeX]TeX} %,sed
-\lstset{defaultdialect=[gnu]make,defaultdialect=[LaTeX]TeX}
-% Use ^G for escape char - not likely in document
-\lstset{escapechar=^^G}
-% make it look more like html
-\definecolor{lightyellow}{rgb}{1,1,.66}
-\lstset{backgroundcolor=\color{lightyellow},framexleftmargin=1.5em,framexrightmargin=1em}
-\lstset{columns=[l]fixed}
-
-% from LyX - apparently necessary for footnotes in TOC
-%% Special footnote code from the package 'stblftnt.sty'
-%% Author: Robin Fairbairns -- Last revised Dec 13 1996
-\makeatletter
-\let\SF@@footnote\footnote
-\def\footnote{\ifx\protect\@typeset@protect
-    \expandafter\SF@@footnote
-  \else
-    \expandafter\SF@gobble@opt
-  \fi
-}
-\expandafter\def\csname SF@gobble@opt \endcsname{\@ifnextchar[%]
-  \SF@gobble@twobracket
-  \@gobble
-}
-\edef\SF@gobble@opt{\noexpand\protect
-  \expandafter\noexpand\csname SF@gobble@opt \endcsname}
-\def\SF@gobble@twobracket[#1]#2{}
-\makeatother
-
-% This is from the noweb FAQ
-% Allow code chunks to span pages
-\def\nwendcode{\endtrivlist \endgroup}
-%\def\nwendcode{\endtrivlist \endgroup \vfil\penalty10\vfilneg}
-% Allow docs to be split from code chunks
-\let\nwdocspar=\smallbreak
-%\let\nwdocspar=\par
-
-% try a little harder to keep code chunks on one page
-\nwcodepenalty=1000
-%
-% Ada is huge, so make it smaller (smallcode, scriptsizecode, footnotesizecode)
-% Make chunk index useful (longchunks)
-% Remove xrefs from chunks themselves (noidentxref)
-\noweboptions{footnotesizecode,longchunks,noidentxref}
-\lstset{basicstyle=\footnotesize}
-% Following is for tex4ht only
-\ifpdf
-\else
-\noweboptions{webnumbering,nomargintag}
-% Minimize mangling by tex4ht:
-\lstset{columns=flexible}
-% make spaces in chunk names into nbsp
-\toks0=\expandafter{\setupmodname}
-\edef\oldsetupmodname{\the\toks0}
-\def\setupmodname{\oldsetupmodname\catcode`\ =13}
-\fi
-%
-% Hyperlink it!
-\usepackage{hyperref}
-
-% break lines after _
-\toks0=\expandafter{\_}
-\edef\oldunderscore{\the\toks0}
-\def\_{\oldunderscore\discretionary{}{}{}}
-
-% Removes dependency on pretzel in favor of dependency on totex patch/listings
-% listings aren't as pretty as pretzel's output, but it's cleaner & works with
-% tex4ht to highlight consistently on pdf & html
-\lstset{language=ada}
-\lstset{emphstyle=\texsf}
-% Note: unlike pretzel, lstlisting is extremely stupid about "literate" mode
-% e.g. it replaces strings in mid-identifier (simple problem) and it doesn't
-% take context into consideration (hard problem - e.g. "in" as parameter
-% mode vs. operator)
-\lstset{literate=
-          {:=}{{$\gets$}}1
-          {<=}{{$\leq$}}1
-	  {>=}{{$\geq$}}1
-	  {/=}{{$\neq$}}1
-	  {=>}{{$\Rightarrow$}}1
-	  {=}{{$\equiv$}}1
-	  {@@<<}{{$\langle\!\langle$}}2
-	  {@@>>}{{$\rangle\!\rangle$}}2
-%	  {and then}{{$\wedge\rightarrow$}}2
-%	  {or else}{{$\\vee\rightarrow$}}2
-%	  {and}{{$\wedge$}}1
-%	  {or}{{$\vee$}}1
-%	  {for}{{$\forall$}}1
-%	  {not in}{{$\ni$}}1
-%	  {not}{{$\neg$}}1
-%	  {in}{{$\in$}}1
-%	  {null}{{$\emptyset$}}1
-%         {**...}{^{...}}  % yeah, like that'll ever happen
-%         <base>#123e<exponent># -> 123 \cdot <base>^<exponent>
-% strip out pretzel controls - leaves whitespace, but [il] comments are broken
-          {--@\#}{}0
-          {--@<}{}0
-          {--@>}{}0
-          {--@*}{}0
-          {--@\}}{}0
-          {--@\{}{}0
-          {--@;}{}0
-          {--@/}{}0
-}
-% Lose pretzel comment formatting, so highlight another way
-\lstset{commentstyle=\color{blue}\em}
-
-% stripping out completely seems broken
-%\lstset{morecomment=[il][]{--@}}
-% meaning that finding too-long pure code using following is impossible
-%\lstset{comment=[il]--}
-% so just read all & make sure it looks OK
-\lstset{breaklines=true,breakatwhitespace=true}
-@
-
 \section{Code Index}
-% This must be last, because l2h always puts it last & ignores the directives
 \nowebchunks
+
+% note: no identifier indexing is done right now
+
+\begin{rawhtml}
+<!-->
+\end{rawhtml}
+%\vspace{1ex}
+%\hrule
+%\vspace{1ex}
+\begin{rawhtml}
+<-->
+\end{rawhtml}
+
+%\nowebindex
 
 \end{document}

@@ -1011,6 +1011,11 @@ the exact same syntax as automatically generated is removed from
 [[cproto.h]].  One which tends to vary from mainline to mainline is
 [[main]], so it is always removed.
 
+Also, local prototypes tend to rely on locally defined data types.  To
+support this, the entire include of the static prototype file can be
+moved down to a location specified by a line containing only the
+comment [[// static_proto]].
+
 This uses the GNU [[-i]] extension, which may not be supported on all
 UNIX systems.  If it doesn't, obtaining and using GNU sed is free and
 relatively painless.  GNU sed also does not have a hidden line length
@@ -1066,7 +1071,13 @@ rm -f cproto.h.new *.c.static_proto{,.new}
 @
 
 <<makefile.vars>>=
-C_POSTPROCESS = | sed '/^\#include "cproto.h"/a \#include "$1.static_proto"'
+C_POSTPROCESS = | (tf="/tmp/.$$$$"; trap "rm $$tf" 0; cat >$$tf; \
+                   if grep '^[ \t]*// static_proto$$' "$$tf" >/dev/null; then \
+		     p='^[ \t]*// static_proto$$'; \
+		   else \
+		     p='^\#include "cproto.h"'; \
+		   fi; \
+		   sed -e "s%$$p%"'&\n\#include "$1.static_proto"%' $$tf)
 @
 
 <<Build Source>>=

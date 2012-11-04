@@ -3763,7 +3763,10 @@ comment; not meant to be extended
 files safe to be included by all C source
 \item [[<<Common C Header>>]]: stuff safe for the top of every C file,
 including the warning, common includes, static version string, and
-automatically generated prototypes.
+automatically generated prototypes.  Prototypes for static functions
+for the file are included as well, unless a comment of the form
+[[// static_proto]] is found on a line by itself; in that case, the
+static prototypes will be included there instead.
 \item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
 executables.
 \item [[<<Version Strings>>]]: A C string containing the version ID of all

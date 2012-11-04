@@ -2361,9 +2361,55 @@ of the build system to pick up the files properly.
 
 One challenge with literate programming is to provide separate user-level
 documentation that keeps track of the source code as well as the design
-documentation.  For this, a few code reinsertion tricks are used.  First,
-plain text chunks can be extracted, highlighted, and reinserted using the
-syntax:
+documentation.  For this, a few code reinsertion tricks are used.
+First, excerpts from the documentation can be reinserted at a chosen
+location.  These excerpts are surrounded with begin and end comments, which
+must be at the beginning of the line:
+
+\begin{quote}{\ttfamily
+\% Begin-doc \emph{chunk-name}\\*
+\ldots\\*
+\% End-doc \emph{chunk-name}
+}\end{quote}
+
+The chunk name should consist only of alphanumeric characters, minus signs,
+and underscores.  Insertion is done using a special input command:
+
+\begin{quote}{\ttfamily
+$\backslash$input\{\emph{chunk-name}.tex\} \%\%\% doc
+}\end{quote}
+
+This is done before weaving so that NoWeb formatting can be done on this, as
+well.  It requires two passes in case the chunks are out of order or in
+different files.  The first pass extracts the chunks, and the second pass
+replaces any remaining unresolved internal references.
+
+<<Prepare for weave>>=
+eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/p'\' $noweb_order | \
+  sort -u | while read c; do
+    printf %s\\n "/^\\\\input{${c}\\.tex} %%% doc\$/{s/.*/%/;a\\%\\"
+    eval sed -n "'/^% Begin-doc $c\$/,/^% End-doc $c\$/{
+                  /^% Begin-doc $c\$/!{/^% End-doc $c\$/!"'{
+                    s/\\/\\\\/g;s/$/\\/;p;};};}'\' $noweb_order | sed '$s/.$//'
+    echo '}'
+  done > /tmp/latexhl.doc.$$
+while grep '^\\\\input{.*\.tex} %%% doc\\$' /tmp/latexhl.doc.$$ >/dev/null; do
+  sed -e '
+     s/\^/^\\\\/;s/doc\$/doc\\\\\$/;s^/%/^/%\\\\/^;h;s/$/\\\\/
+     :a x;s/\\\\//g;/\\$/!{x;s/$/\\/;n;b};x;n;h;s/\\/\\\\/g;s/$/\\/;ba' \
+              < /tmp/latexhl.doc.$$ >/tmp/latexhl.doc2.$$
+  sed -f /tmp/latexhl.doc2.$$ /tmp/latexhl.doc.$$ >/tmp/latexhl.doc3.$$
+  mv /tmp/latexhl.doc3.$$ /tmp/latexhl.doc.$$
+done
+@
+
+<<Pre-process before weave>>=
+sed -f /tmp/latexhl.doc.$$ | \
+@
+
+Second, plain text chunks can be extracted, highlighted, and
+reinserted using a special input command as well.  This has only one
+percent (vs. three) to distinguish it from the directive above:
 
 \begin{quote}{\ttfamily
 $\backslash$input\{\emph{file}.tex\} \% \emph{language}
@@ -2432,53 +2478,6 @@ sed 's/^\\begin{framed}[^%]*/\\begin{quote}\\codemargin=0pt&\\begin{webcode}/;
 
 <<Post-process latex after weave>>=
 sed -f /tmp/latexhl.fmt.$$ | \
-@
-
-
-Second, excerpts from the documentation can be reinserted in a similar
-manner. These excerpts are surrounded with begin and end comments, which
-must be at the beginning of the line:
-
-\begin{quote}{\ttfamily
-\% Begin-doc \emph{chunk-name}\\*
-\ldots\\*
-\% End-doc \emph{chunk-name}
-}\end{quote}
-
-The chunk name should consist only of alphanumeric characters, minus signs,
-and underscores.  Insertion is done using a special input command again,
-which has more percents to distinguish it from the directives above:
-
-\begin{quote}{\ttfamily
-$\backslash$input\{\emph{chunk-name}.tex\} \%\%\% doc
-}\end{quote}
-
-This is done before weaving so that NoWeb formatting can be done on this, as
-well.  It requires two passes in case the chunks are out of order or in
-different files.  The first pass extracts the chunks, and the second pass
-replaces any remaining unresolved internal references.
-
-<<Prepare for weave>>=
-eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/p'\' $noweb_order | \
-  sort -u | while read c; do
-    printf %s\\n "/^\\\\input{${c}\\.tex} %%% doc\$/{s/.*/%/;a\\%\\"
-    eval sed -n "'/^% Begin-doc $c\$/,/^% End-doc $c\$/{
-                  /^% Begin-doc $c\$/!{/^% End-doc $c\$/!"'{
-                    s/\\/\\\\/g;s/$/\\/;p;};};}'\' $noweb_order | sed '$s/.$//'
-    echo '}'
-  done > /tmp/latexhl.doc.$$
-while grep '^\\\\input{.*\.tex} %%% doc\\$' /tmp/latexhl.doc.$$ >/dev/null; do
-  sed -e '
-     s/\^/^\\\\/;s/doc\$/doc\\\\\$/;s^/%/^/%\\\\/^;h;s/$/\\\\/
-     :a x;s/\\\\//g;/\\$/!{x;s/$/\\/;n;b};x;n;h;s/\\/\\\\/g;s/$/\\/;ba' \
-              < /tmp/latexhl.doc.$$ >/tmp/latexhl.doc2.$$
-  sed -f /tmp/latexhl.doc2.$$ /tmp/latexhl.doc.$$ >/tmp/latexhl.doc3.$$
-  mv /tmp/latexhl.doc3.$$ /tmp/latexhl.doc.$$
-done
-@
-
-<<Pre-process before weave>>=
-sed -f /tmp/latexhl.doc.$$ | \
 @
 
 C API documentation requires reinsertion of the function prototype,

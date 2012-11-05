@@ -580,7 +580,9 @@ human intervention, so all root chunks are printed out for review.  The list
 of missing chunks should always be accurate, though.  The terminating [[@]]
 for code chunks isn't required by the NoWeb syntax when writing multiple
 consecutive code chunks, but it is required by some of the document
-converters.
+converters.  The reinsertion code is stupid about unbalanced doc
+reinsertions, but instead of checking correctly there, it's flagged
+here.
 
 <<makefile.rules>>=
 .PHONY: check
@@ -603,6 +605,39 @@ check:
              esac; \
              lno=$$((lno+1)); \
            done < "$$f"; \
+	 done
+	@for f in $(NOWEB); do \
+	   lno=1 std=0; \
+           while IFS= read -r x; do \
+             case "$$x" in \
+	        "% Begin-doc "*) \
+		  std=$$((std+1)); eval bd$$std='"$${x#* * }"' bl$$std=$$lno; \
+		  stp=1; while [ $$stp -lt $$std ]; do \
+		    eval bd='"$$bd'$$stp\" bl=\$$bl$$stp; \
+		    if [ "$${x#* * }" = "$$bd" ]; then \
+		      echo "Recursive Begin-doc $$bd at $$bl/$$lno"; break; \
+		    fi; \
+		    stp=$$((stp+1)); \
+		  done;; \
+		"% End-doc "*) \
+		  if [ $$std -eq 0 ]; then \
+		    echo "$$f: unexpected end-doc at $$lno"; \
+		  else \
+		    eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
+		    if [ "$${x#* * }" != "$$bd" ]; then \
+		      echo "$$f: Begin-doc $$bd at $$bl" \
+		           "ended by $${x#% } at $$lno"; break; \
+	            fi; \
+		    std=$$((std-1)); \
+		  fi;; \
+             esac; \
+             lno=$$((lno+1)); \
+           done < "$$f"; \
+	   while [ $$std -gt 0 ]; do \
+	     eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
+	     echo "$$f: unended Begin-doc $$bd at $$bl"; \
+	     std=$$((std-1)); \
+	   done; \
 	 done
 @
 

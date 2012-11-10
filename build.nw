@@ -13,7 +13,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.12\\Revision \RCSRevision\\\RCSDate}
+\date{Version 3.13\\Revision \RCSRevision\\\RCSDate}
 
 \maketitle
 
@@ -3816,6 +3816,10 @@ executables.
 contributing source files; extend with [["$]][[Id$\n"]].
 \item [[<<Sources>>]]: A simple text chunk containing the version ID of all
 contributing source files; extend with just [[$]][[Id$]].
+\item [[<<Translate listings source type to source-highlight source type>>]],
+[[<<Translate listings source type to highlight-3 source type>>]]: add
+new cases to a shell case switch to convert listings language names to
+highlighter language names.
 \end{itemize}
 
 \section{Code Index}

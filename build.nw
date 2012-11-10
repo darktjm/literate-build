@@ -3124,8 +3124,12 @@ actually there.  This can be very bad, so instead, [[@xref]] is removed
 using a filter after [[-index]], and then [[nodix]] is called directly using
 another filter, but without that [[-docanchor]] option.  If readers want to
 read the documentation for a code chunk, they will need to just scroll up
-manually.   In any case, post processing of the HTML is required.  After the
-document is generated, the source is once again tacked on as an HTML comment.
+manually.   Doing this eliminates the chunk reference without keeping
+a placeholder where the index should go, causing the reference to
+always appear at the end.  To fix this, l2h must emit a different tag,
+which can then be replaced in the post-filter.  In any case, post
+processing of the HTML is required.  After the document is generated,
+the source is once again tacked on as an HTML comment.
 
 <<nw2html>>=
 ( (
@@ -3133,6 +3137,8 @@ document is generated, the source is once again tacked on as an HTML comment.
   head -n $ln "$noweb"
   cat <<"EOF"
 <<preamble.l2h>>
+% l2h substitution nowebchunks </nowebchunks>
+% l2h substitution nowebindex </nowebindex>
 <<preamble.tex>>
 EOF
   <<Further l2h preamble>>
@@ -3168,6 +3174,8 @@ EOF
     /^@index end/b;
     bb;
 };
+s%</nowebindex>%<nowebindex>%;
+s%</nowebchunks>%<nowebchunks>%;
 /^@xref/!p
 @
 
@@ -3194,8 +3202,6 @@ will end up coming from the build document every time.
 % template is {, A=arg, [=optarg, C=optarg/save, ==assign, +=white, (=..)
 % l2h macro hypertxt 2 <a href="###$1">#2</a>
 % l2h macro url 1 <a href="#$1">#$1</a>
-% l2h substitution nowebchunks <nowebchunks>
-% l2h substitution nowebindex <nowebindex>
 % l2h substitution ref * A{
 % l2h envblock centering center
 % l2h ignore discretionary {{{

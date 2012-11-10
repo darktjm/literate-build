@@ -1658,12 +1658,13 @@ case "$HLPROG_TYPE" in
   highlight-[23])
     highlight ${theme:+-s $theme} -S c --out-format=latex -I </dev/null | \
       egrep 'newcommand|definecolor' | \
-        sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty
+        sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty.$$
+    mv latexhl.sty.$$ latexhl.sty
 esac
 @
 
 <<Clean temporary files>>=
-rm -f latexhl.sty
+rm -f latexhl.sty{,.*}
 @
 
 On the other hand, [[source-highlight]] inserts the colors directly.
@@ -1702,7 +1703,8 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 	       s/\[rgb\]/{rgb}/;t
 	       # convert textcolor named to definecolor named
 	       s/{/{named}{/
-	     }' > latexhl.sty
+	     }' > latexhl.sty.$$
+  mv latexhl.sty.$$ latexhl.sty
 fi
 @
 
@@ -1792,13 +1794,16 @@ these data types, so they are properly combined ahead of time.
 
 \lstset{language=sh}
 <<Prepare for weave>>=
+trap "rm -rf /tmp/latexhl.*.$$" 0
+export HLDIR=/tmp/latexhl.hl.$$
+mkdir -p $HLDIR
 case "$HLPROG_TYPE" in
   source-highlight)
     # sed language only supports comments
     # #include supported for HDF
-    echo "comment start '#(?!include\\W)'" > sed.lang
+    echo "comment start '#(?!include\\W)'" > $HLDIR/sed.lang
     # c language needs a lot of help
-    cat <<"EOF" > myc.lang
+    cat <<"EOF" > $HLDIR/myc.lang
       include "c.lang"
       subst number =
 '\<[+-]?((0x[[:xdigit:]]+)|(([[:digit:]]*\.)?
@@ -1806,13 +1811,14 @@ case "$HLPROG_TYPE" in
 type =
 EOF
     printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
-      sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' >>myc.lang
+      sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' \
+           >>$HLDIR/myc.lang
     ;;
   highlight-2)
-    mkdir -p langDefs
+    mkdir -p $HLDIR/langDefs
     # sed language only supports comments
     # #include supported for HDF
-    echo '$SL_COMMENT=regex(^\s*(#(?!include\W)))' > langDefs/sed.lang
+    echo '$SL_COMMENT=regex(^\s*(#(?!include\W)))' > $HLDIR/langDefs/sed.lang
     # c language needs a lot of help
     hl_kw="`printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
             sed -e 's/[[:space:]]//g;s/,/ /g;s/%.*//;\$!s/\$/\\\\/'`"
@@ -1828,7 +1834,7 @@ EOF
       /KEYWORDS(kwb)/a\'"${hl_kw}"'
       # change number RE to include UL, LL, ULL, etc.
       $a\$DIGIT=regex((?:0x|0X)[0-9a-fA-F]+|\\d*[.]?\\d+(?:[eE][\\-+]\\d+)?[lLuU]*)
-      ' > langDefs/c.lang
+      ' > $HLDIR/langDefs/c.lang
     ;;
   highlight-3)
     # sed language only supports comments
@@ -1837,19 +1843,20 @@ EOF
           Keywords={}
           Comments={
             {Block=false, Delimiter={[[^\s*(#(?!include\W))]]}}
-	  }' > sed.lang
+	  }' > $HLDIR/sed.lang
     # c language needs a lot of help
     langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
-    echo "dofile('${langdir}c.lang')" > myc.lang
-    cat @<<"EOF" @>> myc.lang
+    echo "dofile('${langdir}c.lang')" > $HLDIR/myc.lang
+    cat @<<"EOF" @>> $HLDIR/myc.lang
       -- fix preproc expression and remove cont to highlight multi-line macros
       Preprocessor = { Prefix=[[^\\s*(#)]] }
       --add some kws to ID=2 using old listings package moreemph decls
       for i, v in ipairs({
 EOF
     printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
-      sed -e 's/[[:space:]]//g;s/,/","/g;s/%.*//;s/$/"/;s/^/"/;s/""//;' >> myc.lang
-    cat @<<"EOF" @>>myc.lang
+      sed -e 's/[[:space:]]//g;s/,/","/g;s/%.*//;s/$/"/;s/^/"/;s/""//;' \
+         >> $HLDIR/myc.lang
+    cat @<<"EOF" @>>$HLDIR/myc.lang
                          }) do
         table.insert(Keywords[2].List, v)
       end
@@ -1876,12 +1883,16 @@ highlighter should be listed here.
 <<Do generic per-chunk highlighting preparation>>=
 if [ source-highlight = $HLPROG_TYPE ]; then
   case $1 in
-    [cC]) larg="--lang-def=myc.lang" ;;
-    sed) larg="--lang-def=sed.lang" ;;
-    make) larg="-s makefile" ;;
+    <<Translate listings source type to source-highlight source type>>
     *) larg="-s $1"
   esac
 fi
+@
+
+<<Translate listings source type to source-highlight source type>>=
+[cC]) larg="--lang-def=$HLDIR/myc.lang" ;;
+sed) larg="--lang-def=$HLDIR/sed.lang" ;;
+make) larg="-s makefile" ;;
 @
 
 <<[[source-highlight]] options for [[latexhl]]>>=
@@ -1889,17 +1900,21 @@ fi
 @
 
 <<[[highlight]]-2 options for [[latexhl]]>>=
---out-format=latex -f -S $1 -E `pwd`
+--out-format=latex -f -S $1 -E $HLDIR
 @
 
 <<Do generic per-chunk highlighting preparation>>=
 if [ highlight-3 = $HLPROG_TYPE ]; then
   case $1 in
-    [cC]) larg="--config-file=myc.lang" ;;
-    sed) larg="--config-file=sed.lang" ;;
+    <<Translate listings source type to highlight-3 source type>>
     *) larg="-S $1"
   esac
 fi
+@
+
+<<Translate listings source type to highlight-3 source type>>=
+[cC]) larg="--config-file=$HLDIR/myc.lang" ;;
+sed) larg="--config-file=$HLDIR/sed.lang" ;;
 @
 
 <<[[highlight]]-3 options for [[latexhl]]>>=
@@ -1953,11 +1968,6 @@ $s/$/%/
 
 <<Adjust [[highlight]]-3 \LaTeX{}>>=
 <<Adjust [[highlight]]-2 \LaTeX{}>>
-@
-
-\lstset{language=sh}
-<<Clean temporary files>>=
-rm -rf langDefs myc.lang sed.lang
 @
 
 \subsection{Pretty Printing with [[listings]]}
@@ -2237,7 +2247,9 @@ if [ -z "$uselst" -a -n "$HLPROG_TYPE" ]; then
 else
   filt=./addlistings
   postproc='<<Change [[nwcode]] to [[listings]]>>'
-  sed -i -e '<<Change [[highlight]] style to [[listings]] style>>' latexhl.sty
+  sed -e '<<Change [[highlight]] style to [[listings]] style>>' \
+     < latexhl.sty > latexhl.sty.$$
+  mv latexhl.sty.$$ latexhl.sty
 fi
 @
 
@@ -2487,7 +2499,6 @@ sed -n -e 's/^\\input{\(.*\)\.tex} % \([^ ]*\)$/\2 \1/p' $noweb_order | sort -u 
 @
 
 <<Prepare for weave>>=
-trap "rm -f /tmp/latexhl.*.$$" 0
 <<For each reinserted code chunk>>
   test verbatim = $lang || continue
   printf %s\\n "/^\\\\input{${fesc}\\.tex} % $lang\$/{s/.*/%/;a\\%\\"
@@ -2775,11 +2786,12 @@ texi=`sed -n -e 's/^\\\\input{\\(.*\\.tex\\)} % .*/\\1/p' "$tex"`
 set -e
 
 # Done in its own dir to avoid stomping on .pdf aux files
-dir=html.$$
+dir=/tmp/html.$$
 rm -rf $dir
-mkdir $dir
-trap "rm -rf `pwd`/$dir" 0
-for x in $noweb $tex $figs $texi *.sty; do ln -s ../$x $dir; done
+trap "rm -rf $dir" 0
+mkdir -p $dir
+for x in $noweb $tex $figs $texi *.sty; do ln -s "$tdir/$x" $dir; done
+tdir="`pwd`"
 cd $dir
 
 if [ y = "$HTML_SPLIT" ]; then
@@ -2794,18 +2806,18 @@ EOF
 # runs latex 3x, regardless
 htlatex $1 myhtml >&2
 
-mv *.png .. 2>/dev/null || :
+mv *.png "$tdir" 2>/dev/null || :
 for x in *.html; do
   case "$x" in
     "$outf") is_outf=y ;;
     *) is_outf=n ;;
   esac
-  perl -e '<<Post-process TeX4ht output using perl>>' "$base" $is_outf <"$x" >"../$x"
+  perl -e '<<Post-process TeX4ht output using perl>>' "$base" $is_outf <"$x" >"$tdir/$x"
 done
 
 (
   <<Print attachments as HTML comment>>
-) >>"../$outf"
+) >>"$tdir/$outf"
 @
 
 <<Print attachments as HTML comment>>=
@@ -2817,10 +2829,6 @@ echo begin 644 ${noweb%.*}.tar.gz
 eval tar chf - $noweb_order $at | gzip | \
   uuencode "${noweb%.*}".tar.gz | tail -n +2 | tr '<>-' '|~m'
 echo "-->"
-@
-
-<<Clean temporary files>>=
-rm -rf html.[1-9]*
 @
 
 The HTML cleanup is done using a perl script, once again because awk and sed
@@ -2986,7 +2994,7 @@ esac
 <<Do generic per-chunk highlighting preparation>>
 case $HLPROG_TYPE in
   highlight-2)
-    highlight -l --ordered-list -f -S $1 -E `pwd` | \
+    highlight -l --ordered-list -f -S $1 -E $HLDIR | \
       <<Filter [[highlight]] HTML output>> ;;
   highlight-3)
     highlight -l --ordered-list -f $larg | \

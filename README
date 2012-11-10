@@ -6,20 +6,21 @@ ways.  At the minimum, it requires GNU make.
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
-NoWeb source find out those prerequisites, I have provided the PDF and
-HTML output as well.  One of these is all you need, since they have
+NoWeb source to find out those prerequisites, I have provided the PDF
+and HTML output as well.  One of these is all you need, since they have
 the source attached (and have instructions for detaching).
 
 For details, I have an older version up at
-http://darkalpha.homelinux.org/literate/ with versions 1 and 2 (this
-is version 3+).  That page has a complete summary of the history of
-this project.  The "latest code" mentioned there is the last code I
+http://darkalpha.homelinux.org/literate/ with versions 1 and 2 as well
+(this is version 3+).  That page has a complete summary of the history
+of this project.  The "latest code" mentioned there is the last code I
 uploaded to that server, over a year ago.  Right now, that server is
 1000 miles away and without remote shell access, so it will be a while
-before I updated it again.  The version here on GitHub is the most
+before I update it again.  The version here on GitHub is the most
 recent.
 
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,
 but is mostly a non-functional repository for my old version 1 and 2
-clode.
+clode.  The only reason it's here is that this is a mirror of my SVN
+build directory, where that happens to reside.

@@ -3216,6 +3216,7 @@ will end up coming from the build document every time.
 % l2h ignore break
 % l2h substitution textbar |
 % l2h substitution textasciitilde ~
+% l2h substitution textasciicircum ^
 % l2h substitution sim ~
 % l2h substitution textbackslash \
 % l2h substitution backslash \
@@ -3277,8 +3278,14 @@ sed -n -e '<<Filter noweave output with removal>>' | \
   }
   #strip out the first top-level TOC - always title + abstract
   /^<tableofcontents>/{
+   a\<h1>Table of Contents</h1>
    :c p;n;/^ *<li>/!bc
-   :d n;/^ *<li>/!bd; n
+   :d n
+     # allow one level of ul .. /ul
+     /^ *<ul[ >]/{
+       :e n;/^ *<\/ul>/!be
+     }
+     /^ *<li>/!bd
   }
   p
 }

@@ -1064,20 +1064,20 @@ $(COFILES): $(HEADERS) cproto.h
 cproto.h: $(CFILES) $(HEADERS)
 	echo >$@
 	test -z "$(CFILES)" || ( \
-	   cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
-	             $(CFILES) >$@ 2>/dev/null || \
-	   ( rm -f $@; false ) )
-	# main is never called, so no need for a prototype
-	# this way main args are optional
-	sed -i -e '/^int main(/d' $@
-	# now filter
-	grep -vn '^/\*' $@ | $(TACCMD) | \
-	   sed -e '/(/{:a s/([^)]*);/(/;t;s/\(.*\)([^)]*)/\1/;ta;}' | \
-	     while IFS=: read -r l p; do \
-	  test -z "$$p" && continue; \
-	  fgrep "$$p" $(HEADERS) | fgrep ":$$p" >/dev/null && \
-	     sed -i -e "$${l}d" $@; \
-	done; :
+	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
+	               $(CFILES) >$@.$$$$.h 2>/dev/null; then \
+	    sed -i -e '/^int main(/d' $@.$$$$.h; \
+	    grep -vn '^/\*' $@.$$$$.h | $(TACCMD) | \
+	      sed -e '<<Strip down C prototype>>' | \
+	        while IFS=: read -r l p; do \
+		  test -z "$$p" && continue; \
+		  fgrep "$$p" $(HEADERS) | fgrep ":$$p" >/dev/null && \
+		    sed -i -e "$${l}d" $@.$$$$.h; \
+		done; \
+	    mv $@.$$$$.h $@; \
+	  else \
+	    rm -f $@ $@.$$$$.h; false; \
+	  fi )
 
 ifeq ($(MAKEPP_VERSION),)
 static_proto_rule=$1: $(1:%.o=%.c.static_proto)
@@ -1120,6 +1120,18 @@ C_POSTPROCESS = | (tf="/tmp/.$$$$"; trap "rm $$tf" 0; cat >$$tf; \
 
 <<Build Source>>=
 $(CFILES:%=%.static_proto) \
+@
+
+Stripping down the C prototype requires proper handling of nested
+parentheses in the prameter list.  This is done by repeatedly trying
+to strip the parameter list as if there were no nested parentheses,
+and if that fails, find the last pair of parentheses with no nested
+parentheses and remove them. The loop should eventually clear the
+parameter list of any nested parentheses, allowing the first
+substitution to succeed.
+
+<<Strip down C prototype>>=
+/(/{:a s/([^)]*);/(/;t;s/\(.*\)([^)]*)/\1/;ta;}
 @
 
 \subsection{Support Chunks}
@@ -2594,10 +2606,9 @@ sed -n 's/^% \([_a-zA-Z0-9]*\) prototype$/\1/p' "$noweb" | while read f; do
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-notangle -R"C Prototypes" 2>/dev/null "$noweb" | \
-  sed -n "/[^_[:alnum:]]$f(/{"'
-            <<Format a prototype from [[cproto.h]]>>
-          }' - cproto.h
+notangle -R"C Prototypes" 2>/dev/null "$noweb" | cat - cproto.h | \
+  egrep "[^_[:alnum:]]$f\\(" | head -n 1 | \
+     sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
 <<Prepare for weave>>=

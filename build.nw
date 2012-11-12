@@ -1042,9 +1042,9 @@ Of course there are times when blind prototype creation is
 undesirable.  For example, libraries tend to place prototypes in
 headers.  Some of them may use datatypes which are not defined in
 every C file.  To allow this, any prototypes detected in a header with
-the exact same syntax as automatically generated is removed from
-[[cproto.h]].  One which tends to vary from mainline to mainline is
-[[main]], so it is always removed.
+the exact same syntax as automatically generated, up to the arguments'
+opening parenthesis, is removed from [[cproto.h]].  One which tends to
+vary from mainline to mainline is [[main]], so it is always removed.
 
 Also, local prototypes tend to rely on locally defined data types.  To
 support this, the entire include of the static prototype file can be
@@ -1071,10 +1071,13 @@ cproto.h: $(CFILES) $(HEADERS)
 	# this way main args are optional
 	sed -i -e '/^int main(/d' $@
 	# now filter
-	-grep -vn '^/\*' $@ | $(TACCMD) | while IFS=: read -r l p; do \
+	grep -vn '^/\*' $@ | $(TACCMD) | \
+	   sed -e '/(/{:a s/([^)]*);/(/;t;s/\(.*\)([^)]*)/\1/;ta;}' | \
+	     while IFS=: read -r l p; do \
 	  test -z "$$p" && continue; \
-	  fgrep "$$p" $(HEADERS) >/dev/null && sed -i -e "$${l}d" $@; \
-	done
+	  fgrep "$$p" $(HEADERS) | fgrep ":$$p" >/dev/null && \
+	     sed -i -e "$${l}d" $@; \
+	done; :
 
 ifeq ($(MAKEPP_VERSION),)
 static_proto_rule=$1: $(1:%.o=%.c.static_proto)

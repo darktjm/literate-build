@@ -667,9 +667,21 @@ SCRIPT_EXEC=<<Script Executables>>
 
 C_EXEC=<<C Executables>>
 
-CFILES:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.c>>/{s/@<<//;s/@>>//;p;}')
-HEADERS:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.h>>/{s/@<<//;s/@>>//;p;}')
-COFILES:=$(patsubst %.c, %.o, $(CFILES))
+NOWEB_CFILES:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.c>>/{s/@<<//;s/@>>//;p;}')
+CFILES=<<C Files>>
+
+NOWEB_HEADERS:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.h>>/{s/@<<//;s/@>>//;p;}')
+HEADERS=<<C Headers>>
+
+COFILES=$(patsubst %.c, %.o, $(CFILES))
+@
+
+<<C Files>>=
+$(NOWEB_CFILES) \
+@
+
+<<C Headers>>=
+$(NOWEB_HEADERS) \
 @
 
 <<Build Source>>=
@@ -687,10 +699,10 @@ $(SCRIPT_EXEC): $(NOWEB)
 	chmod +x $@
 
 # C_POSTPROCESS can be used to add boilerplate code
-$(HEADERS): $(NOWEB)
+$(NOWEB_HEADERS): $(NOWEB)
 	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
 
-$(CFILES): $(NOWEB)
+$(NOWEB_CFILES): $(NOWEB)
 	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
 
 # disable gmake built-in .c->exe rule
@@ -3777,6 +3789,9 @@ meant to be distributed.
 but only for the [[test]] and [[test-bin]] targets.  The [[test]] target
 will execute these scripts without any interpretation other than
 return code checks.
+\item [[<<C Files>>]], [[<<C Headers>>]]: C files which are NoWeb
+roots are automatically found, but generated files are not.  Add these
+with these chunks, terminated by a backslash.
 \item [[<<C Executables>>]]: C files are either the name of an executable
 with the \texttt{.c} extension, or the name of a library member, with
 \texttt{.o} replaced by \texttt{.c}.  The executables are listed here,

@@ -13,7 +13,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.13\\Revision \RCSRevision\\\RCSDate}
+\date{Version 3.13.\RCSRevision\\\RCSDate}
 
 \maketitle
 
@@ -2308,7 +2308,14 @@ once again is to reduce the number of pages a bit.
 \usepackage{ifxetex}
 \ifxetex
 % Use Latin Modern; selecting standard PDF fonts does not work
+% Latin Modern doesn't look that great, though (it's apparently not an
+% exact duplicate of Computer Modern), but it's easy to set fonts after
+% the standard preamble.
 \usepackage{fontspec}
+% \documentclass[twoside,english]{..} doesn't seem to work right with
+% xetex.  Using polyglossia seems to help, with a language setting
+% after the standard preamble instead (using \setdefaultlanguage)
+\usepackage{polyglossia}
 \else
 \usepackage[latin1]{inputenc}
 \usepackage{babel}

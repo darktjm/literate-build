@@ -59,7 +59,7 @@ For the latter, version 2 or version 3 is supported.
 You may have been provided with a source tarball, in which case that
 should eliminate the need for NoWeb, Perl, awk, GNU sed, and others.
 You simply need to view and edit \texttt{makefile.config}, and then
-type \texttt{make}.
+type \texttt{make} or \texttt{make~install}.
 
 \input{build-doc.tex} %%% doc
 

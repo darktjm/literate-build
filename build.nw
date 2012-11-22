@@ -2684,11 +2684,14 @@ prototype, reference it using a specially formatted comment:
 This is done by gently extracting the prototype from [[cproto.h]] using sed.
 For prototypes which do not appear in [[cproto.h]], the chunk
 [[<<C Prototypes>>]] may be expanded as well, but only out of the same source
-file. The sed script separates arguments by comma and terminates by close
-parenthesis (which means that callbacks require typedefs).  The code is
-reinserted with each argument on a separate line, aligned by the first
-argument, i.e. after the left parenthesis.  This is done by converting the
-text before the parenthesis into spaces, and stripping off the text not to
+file.  Since the C preprocessor might transform functions before they
+become prototypes, the [[<<For each reinserted C prototype>>]] chunk
+may be extended, transforming [[$mf]] as needed.  The sed script
+separates arguments by comma and terminates by close parenthesis
+(which means that callbacks require typedefs).  The code is reinserted
+with each argument on a separate line, aligned by the first argument,
+i.e. after the left parenthesis.  This is done by converting the text
+before the parenthesis into spaces, and stripping off the text not to
 be printed every pass until there is nothing left to print.
 
 \lstset{language=sed}
@@ -2720,12 +2723,13 @@ endif
 
 \lstset{language=sh}
 <<For each reinserted C prototype>>=
-sed -n 's/^% \([_a-zA-Z0-9]*\) prototype$/\1/p' "$noweb" | while read f; do
+sed -n 's/^% \(..*\) prototype$/\1/p' "$noweb" | while read f; do
+  mf="$f"
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
 notangle -R"C Prototypes" 2>/dev/null "$noweb" | cat - cproto.h | \
-  egrep "[^_[:alnum:]]$f\\(" | head -n 1 | \
+  egrep "[^_[:alnum:]]$mf\\(" | head -n 1 | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
@@ -2742,6 +2746,9 @@ notangle -R"C Prototypes" 2>/dev/null "$noweb" | cat - cproto.h | \
     fi | sed 's/\\/\\\\/g;s/$/\\/' | sed '$s/.$//'
   echo '}'
 done >> /tmp/latexhl.fmt.$$
+@
+
+<<C Prototypes>>=
 @
 
 \subsection{Include Directive Processing}
@@ -3872,12 +3879,50 @@ are not broken at the end of a page with a [[\break]] directive.  Naturally,
 any edits to the document will require rechecking all [[\break]] directives
 to see if they are still necessary, and possibly to add more.
 
+Since I write a lot of C, a few special tricks are available for C
+programs.  In addition to the C-specific chunks described below, a
+special header is generated, [[cproto.h]], which contains all exported
+prototypes, except for prototypes already explicitly included in
+headers.  This is always included after [[<<Common C Includes>>]] in
+the [[<<Common C Header>>]].  In order to facilitate writing static
+functions out of order, a static prototype file is generated for each
+C file as well.  This is included right after [[cproto.h]], unless the
+comment \texttt{//~static\_proto} is found on a line by itself, in
+which case it is placed after that comment.  That way, the static
+prototypes can be placed after any private data type declarations.  As
+mentioned above, [[cproto.h]] is used for API documentation as well.
+
+Several internal variables are meant to be set or expanded in
+extensions to [[<<makefile.vars>>]]:
+
+\begin{itemize}
+\item [[C_POSTPROCESS]] is a pipeline to apply to all automatically
+extracted C files.  This is a function taking the file name as an
+argument (which can be ignored if there are no file-specific
+transformations).  The return value (or value of the plain variable,
+since there is no difference between functions which ignore their
+arguments and variables) should be a pipeline element, starting with
+the pipe symbol.  For example:
+\begin{quote}
+[[<<makefile.vars>>]]=\\
+[[C_POSTPROCESS+=|sed '1i\copyright blurb']]\\
+[[@]]
+\end{quote}
+\item The [[EXTRA_CFLAGS]] variable should be extended with required
+options; that way, the user can replace [[CFLAGS]] with just
+optimization and debugging flags.
+\item The [[EXTRA_LDFLAGS]] variable should be extended with required
+options; that way, the user can replace [[LDFLAGS]] with just
+optimization and debugging flags.
+\end{itemize}
+
 Finally, extensions to the build system can be made by adding code chunks;
 they will be appended to existing values in the order of the tree, from the
 most depended on file to the least depended on file (i.e., anything
 depending on \texttt{build.nw} will append values \emph{after} the values set
 in \texttt{build.nw}):
 
+\paragraph{Basic build rules:}
 \begin{itemize}
 \item [[<<makefile.config>>]]: add user-configurable variables to the
 makefile.
@@ -3914,6 +3959,23 @@ meant to be distributed.
 but only for the [[test]] and [[test-bin]] targets.  The [[test]] target
 will execute these scripts without any interpretation other than
 return code checks.
+\item [[<<Test Support Scripts>>]]:  names of executable scripts to
+build for the [[test-bin]] target.  These scripts are not run, but are
+guaranteed to be built before running any tests.
+\item [[<<Additional Tests>>]]: tests that are more complicated to run
+than simple scripts.  These are makefile actions.
+\item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
+always add a backslash to the end of each added line.  In particular, any
+specially processed plain files with their own rules should be added to this
+list.
+\item [[<<Files to Count>>]]: files to count as part of the \texttt{count}
+target; always add a backslash to the end of each added line.  Anything
+added to the [[<<Build Source>>]] should probably be added here, as well.
+\item [[<<Executables>>]]: additional specially-built execuatables, other
+than scripts and C executables.
+\end{itemize}
+\paragraph{C-Specific rules}
+\begin{itemize}
 \item [[<<C Files>>]], [[<<C Headers>>]]: C files which are NoWeb
 roots are automatically found, but generated files are not.  Add these
 with these chunks, terminated by a backslash.
@@ -3921,52 +3983,43 @@ with these chunks, terminated by a backslash.
 with the \texttt{.c} extension, or the name of a library member, with
 \texttt{.o} replaced by \texttt{.c}.  The executables are listed here,
 without the \texttt{.c} extension, but with a trailing backslash on every
-line.  Preprocessing for these and all other C files is done by setting
-[[C_POSTPROCESS]] in [[<<makefile.vars>>]] to a function taking the file
-name as an argument (or just a variable if no per-file differences exist),
-which returns (or whose value is) the pipe symbol, followed by the command
-to use for post-processing.  For example:
-\begin{quote}
-[[<<makefile.vars>>]]=\\
-[[C_POSTPROCESS+=|sed '1i\copyright blurb']]\\
-[[@]]
-\end{quote}
-Build flags can also be augmented using the [[EXTRA_CFLAGS]] and
-[[EXTRA_LDFLAGS]] variables, in addition to the standard [[CFLAGS]] and
-[[LDFLAGS]].
+line.  Technically, this could be considered a list of generated
+executables instead, since there is no rule requiring that these be C.
 \item [[<<C Test Executables>>]]:  names of executables to build for the
-[[test]] and [[test-bin]] targets, as explained in the above two items.
-\item [[<<Test Support Scripts>>]]:  names of executable scripts to
-build for the [[test-bin]] target.  These scripts are not run, but are
-guaranteed to be built before running any tests.
+[[test]] and [[test-bin]] targets.  See [[<<C Executables>>]] and
+[[<<Test Scripts>>]] for details.
 \item [[<<C Test Support Executables>>]]:  names of executables to
-build for the [[test-bin]] target, as explained by [[<<C Executables>>]].
-These programs are not run, but are guaranteed to be built before
-running any tests.
-\item [[<<Additional Tests>>]]: tests that are more complicated to run
-than simple scripts
+build for the [[test-bin]] target, as explained by [[<<C Executables>>]]
+and [[<<Test Support Scripts>>]] for details.
 \item [[<<C Build Executables>>]]:  names of executables to build when
-required by other dependencies, as explained by [[<<C Executables>>]].
-This is intended for build support binaries only, such as programs to
-generate precomputed data.
-\item [[<<Library [[name]] Members>>]]: A library named [[name]] will be
+required by other dependencies.  See [[<<C Executables>>]] and
+[[<<Build Script Executables>>]] for details.
+\item [[<<Library [[name]] Members>>]]:  A library named [[name]] will be
 built using objects listed in these chunks.  [[name]] can of course be
 anything appropriate.  Unlike the chunks which expand into specific [[make]]
 variables, no backslashes are required or allowed at the end of each line.
-\item [[<<Known Data Types>>]]: comma-separated list of data types to
-emphasize; end each line (including the last) with a comma and a
-percent-sign.
-\item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
-always add a backslash to the end of each added line.  In particular, any
-specially processed plain files with their own rules should be added to this
-list.  See [[<<C Executables>>]] above for more details on C compilation.
-\item [[<<Files to Count>>]]: files to count as part of the \texttt{count}
-target; always add a backslash to the end of each added line.  Anything
-added to the [[<<Build Source>>]] should probably be added here, as well.
-\item [[<<Executables>>]]: additional specially-built execuatables, other
-than scripts and C executables.
+\item [[<<For each reinserted C prototype>>]]:  add a transformation
+for the modified function name ([[$mf]]).  Typically, this will
+involve invoking the C preprocessor with a few standard include files,
+followed by the function name.  For example:
+\begin{quote}
+[[<<makefile.vars>>=]]\\
+[[export MY_CPP=$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E]]\\
+[[@]]\\\\
+[[<<For each reinserted C prototype>>=]]\\
+\hspace*{0pt}[[  mf="`printf '<<Common C Includes>>\\n%s' \"\$mf\" |]]\\
+\hspace*{0pt}[[         eval \"\$MY_CPP -\" | tail -n 1`"]]\\
+[[@]]\\
+\end{quote}
+\end{itemize}
+\paragraph{Boilerplate}
+\begin{itemize}
 \item [[<<Common NoWeb Warning>>]]: a boilerplate comment for the top of
 script files; extend with [[# $]][[Id$]].
+\item [[<<Version Strings>>]]: A C string containing the version ID of all
+contributing source files; extend with [["$]][[Id$\n"]].
+\item [[<<Sources>>]]: A simple text chunk containing the version ID of all
+contributing source files; extend with just [[$]][[Id$]].
 \item [[<<Common C Warning>>]]: the same comment enclosed in a C
 comment; not meant to be extended
 \item [[<<Common C Includes>>]]: a list of [[#include]] directives for
@@ -3978,11 +4031,14 @@ for the file are included as well, unless a comment of the form
 [[// static_proto]] is found on a line by itself; in that case, the
 static prototypes will be included there instead.
 \item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
-executables.
-\item [[<<Version Strings>>]]: A C string containing the version ID of all
-contributing source files; extend with [["$]][[Id$\n"]].
-\item [[<<Sources>>]]: A simple text chunk containing the version ID of all
-contributing source files; extend with just [[$]][[Id$]].
+executables.  This includes the NoWeb warning, a portable hash-bang
+prefix, and [[use strict]].
+\end{itemize}
+\paragraph{Highlighting Assistance}
+\begin{itemize}
+\item [[<<Known Data Types>>]]: comma-separated list of data types to
+emphasize; end each line (including the last) with a comma and a
+percent-sign.
 \item [[<<Translate listings source type to source-highlight source type>>]],
 [[<<Translate listings source type to highlight-3 source type>>]]: add
 new cases to a shell case switch to convert listings language names to
@@ -4142,7 +4198,7 @@ ModDate and CreationDate are both static, multiple runs will still
 always produce different results.  It is apparently impossible to
 stabilize the output or filter out just the time-sensitive parts.
 
-\verb|\hypersetup{pdfinfo={CreationDate=D:\svnpdfdate}}|
+\verb|\hypersetup{pdfinfo={CreationDate=D:\svnpdfdate}}|\\
 \verb|\hypersetup{pdfinfo={CreationDate=D:YYYYMMDDHHMMSS-hh'mm')}|
 \end{itemize}
 

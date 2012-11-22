@@ -1,8 +1,11 @@
 This is my literate programming support package.  Its main purpose is
 to provide syntax highlighting in multiple source languages using
-NoWeb.  It can be configured to use one of several different
-highlighting packages, and can produce PDF and HTML output in several
-different ways.  At the minimum, it requires GNU make.
+NoWeb, GNU make, and a number of other freely available packages.  It
+can be configured to use one of several different highlighting
+packages (listings, GNU source-highlight, André Simon's highlight),
+and can produce PDF and HTML output in several different ways
+(pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to make
+literate C code easier.
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
@@ -27,5 +30,5 @@ recent.
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,
 but is mostly a non-functional repository for my old version 1 and 2
-clode.  The only reason it's here is that this is a mirror of my SVN
+code.  The only reason it's here is that this is a mirror of my SVN
 build directory, where that happens to reside.

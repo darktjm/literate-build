@@ -1,0 +1,80 @@
+% -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
+\documentclass[twoside,english]{article}
+\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
+%%% latex preamble
+\RCS $Id$
+\RCS $Revision$
+\RCS $Date$
+% Override with build.nw's RCS info
+\input{build-rcs.tex} %%% doc
+
+%%% requires build
+%%% no-ext-ref
+
+\begin{document}
+
+\title{Syntax Highlighting Modular Build System for NoWeb (Users' Guide)}
+\author{Thomas J. Moore}
+\date{Version 3.13.\RCSRevision\\\RCSDate}
+\maketitle
+
+\section*{Building packages based on \texttt{build.nw}}
+
+Building from scratch has a number of system dependencies:
+
+\begin{itemize}
+\item GNU (\url{http://www.gnu.org}) make, or a clone.  In particular,
+Daniel Pfeiffer's makepp (\url{http://makepp.sourceforge.net}) works
+as well.
+\item Some standard UNIX tools:  GNU sed, POSIX awk, grep, cat, and
+others.  The only non-standard tool is tac, which can be replaced (see
+makefile.config).
+\item Perl.  Any version will probably do.
+\item Norman Ramsey's NoWeb
+(\url{http://www.eecs.harvard.edu/~nr/noweb/}).  If you wish to develop
+code using this system, you will need to understand NoWeb as well
+(it's not difficult).  If you don't want to generate documentation,
+you can replace the noroots command using makefile.config; a
+replacement for notangle is given below.
+\item For PDF output, you will need good, working \LaTeX{}
+installation.  There are a number of bundles which include almost
+everything you'll ever need.  In particular, the framed package must
+be up-to-date.  Note that XeTeX is supported as well.  For PDF
+syntax highlighting, the listings package may be used.
+\item For HTML output, you can either use the simple \LaTeX{}-to-HTML
+converter included with NoWeb, or you can use tex4ht
+(\url{http://www.cse.ohio-state.edu/~gurari/TeX4ht/}).
+\item For syntax highlighting in HTML using NoWeb's \LaTeX{}-to-HTML
+converter, or if you are dissatisfied with the listings package, you
+will need a separate highlighter command.  Currently, GNU
+source-highlight (\url{http://www.gnu.org/software/src-highlite/})
+and André Simon's highlight program (\url{http://www.andre-simon.de})
+are supported.  For the former, only recent versions have been tested.
+For the latter, version 2 or version 3 is supported.
+\end{itemize}
+
+You may have been provided with a source tarball, in which case that
+should eliminate the need for NoWeb, Perl, awk, GNU sed, and others.
+You simply need to view and edit \texttt{makefile.config}, and then
+type \texttt{make}.
+
+\input{build-doc.tex} %%% doc
+
+The following are the build parameters for \texttt{build.nw} itself:
+
+\input{makefile.config.tex} % make
+
+\section*{Creating packages based on \texttt{build.nw}}
+
+\input{build-usage.tex} %%% doc
+
+See the beginning of this document for prerequisites; the same applies
+to development as well.  Better yet, read the original source for
+comments on what is needed, and why.
+
+\end{document}
+
+

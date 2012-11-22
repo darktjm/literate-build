@@ -5,16 +5,17 @@
 \documentclass[twoside,english]{article}
 \usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
 %%% latex preamble
+% Begin-doc build-rcs
 \RCS $Id$
 \RCS $Revision$
 \RCS $Date$
+% End-doc build-rcs
 
 \begin{document}
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
 \date{Version 3.13.\RCSRevision\\\RCSDate}
-
 \maketitle
 
 \begin{abstract}
@@ -1142,6 +1143,7 @@ parentheses and remove them. The loop should eventually clear the
 parameter list of any nested parentheses, allowing the first
 substitution to succeed.
 
+\lstset{language=sed}
 <<Strip down C prototype>>=
 /(/{:a s/([^)]*);/(/;t;s/\(.*\)([^)]*)/\1/;ta;}
 @
@@ -2006,7 +2008,6 @@ all commands within the code are escaped using ctrl-G, a character not
 likely in text and easily specified within sed.  The escape character must
 be activated using [[\lstset{escapechar=^^G}]] in the preamble.
 
-\lstset{language=sed}
 <<Change [[nwcode]] to [[listings]]>>=
 s/^\(.*\)\(\\nwbegincode{[0-9]*}\)\(.*\)$/\1\\begin{lstlisting}\n\a\3\a/
 /\\def\\nwend/!s/^\(.*\)\(\\nwendcode\)\(.*\)$/\\end{lstlisting}\1\3/
@@ -2148,38 +2149,49 @@ index entry to the top of the list.  The printed source file is the
 top-most file which includes this definition; in other words, if a
 file is included by another, its definitions are owned by the
 includer.
+% Begin-doc extref-dis
+This can be disabled for user-level documentation by adding
+the commment:
 
-\lstset{language=perl}
+\begin{quote}
+\verb|%%% no-ext-ref|
+\end{quote}
+% End-doc extref-dis
+
 <<Initialize [[nwweavefilt]]>>=
 my %ch;
 # final args are $noweb_order
 my %feqv;
+my $disext;
 # find included files
 for my $a (@ARGV) {
   open(A, $a);
   while(<A>) {
-    /^\\\\input/ && print STDERR $_;
+    $disext = /^%%% no-ext-ref$/;
+    last if $disext;
     /^\\input{(.*\.nw)}$/ or next;
     $feqv{$1} = $a;
   }
 }
-my $myf = pop @ARGV; # my name is always last; skip it
-# now loop over files, making included files look like includer
-for my $a (@ARGV) {
-  my $f = $a;
-  while($feqv{$f}) { $f = $feqv{$f}; }
-  next if($f eq $myf);
-  open(A, $a);
-  while(<A>) {
-    if(/^@<<(.*)@>>=$/) {
-      $ch{$1} = $f unless $ch{$1};
+unless($disext) {
+  my $myf = pop @ARGV; # my name is always last; skip it
+  # now loop over files, making included files look like includer
+  for my $a (@ARGV) {
+    my $f = $a;
+    while($feqv{$f}) { $f = $feqv{$f}; }
+    next if($f eq $myf);
+    open(A, $a);
+    while(<A>) {
+      if(/^@<<(.*)@>>=$/) {
+        $ch{$1} = $f unless $ch{$1};
+      }
     }
   }
 }
 @
 
 <<Filter lines from NoWeb token stream>>=
-if((/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
+if(!$disext and (/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
   $_ = "$1($ch{$2}) $2\n";
 }
 @
@@ -2187,6 +2199,7 @@ if((/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
 There is little point in separating consecutive code chunks with a lot of
 white space, so the excess whitespace added by NoWeb needs to be removed.
 
+\lstset{language=sed}
 <<Reduce interchunk whitespace>>=
 /\\nwendcode{}\\nwbegindocs/{
   N;N
@@ -2352,6 +2365,12 @@ once again is to reduce the number of pages a bit.
 % Hyperlink it!
 \definecolor{darkblue}{rgb}{0,0,0.3}
 \usepackage[colorlinks=true,linkcolor=darkblue,urlcolor=darkblue]{hyperref}
+% And set the title/author properly (taken from hyperref slides.pdf)
+\makeatletter
+\newcommand{\org@maketitle}{}% ensure not defined
+\let\org@maketitle\maketitle
+\def\maketitle{\hypersetup{pdftitle={\@title}, pdfauthor={\@author}}%
+\org@maketitle}
 %
 % Multi-column table of contents
 \usepackage[toc,lof]{multitoc}
@@ -2443,6 +2462,7 @@ of the build system to pick up the files properly.
 \fi
 @
 
+\lstset{language=sh}
 <<Pre-process before weave>>=
 (att_nwo="`echo $noweb_order | \
                  sed -e 's/\\([-_a-zA-Z.]*\\) */\\\\\\\\embedfile{\\1}%\\\\n/g'`"
@@ -2497,6 +2517,79 @@ done
 
 <<Pre-process before weave>>=
 sed -f /tmp/latexhl.doc.$$ | \
+@
+
+One problem with reinsertion is that labels are duplicated.  While
+leaving the labels out manually works, it is cumbersome and may not be
+what is wanted.  For example, one way to split the user documentation
+into a separate file is to reinsert it into an otherwise empty NoWeb
+source file.  Stripping the labels out manually means that the labels
+will be undefined in the fresh document.  A better way is to have them
+automatically filtered out.
+
+One problem with filtering them out is deciding which one to filter
+out.  Ideally, both would be kept, and the reinserted one would be
+given a new, unique name, and all references to that label within
+reinserted text would be updated as well.  This is a task for a future
+revision, though.  In fact, even deciding that the main text or the
+reinserted text should be preferred is too complex of a question for
+now.  Instead, the first label after all reinsertions are complete is
+kept, and all others are removed.  As an additional level of
+stupidity, label commands may not span lines or contain curly braces.
+They may also not appear after a percent-sign character on the same
+line, even if that percent sign is escaped for \LaTeX{}.
+
+<<Pre-process before weave>>=
+awk '<<Remove duplicate labels from \LaTeX{} source>>
+     { print }' | \
+@
+
+\lstset{language=awk}
+<<Remove duplicate labels from \LaTeX{} source>>=
+/(^|[^\\])\\label{/ {
+  s = $0
+  os = ""
+  while(match(s, "\\\\label\\{[^}]*\\}")) {
+    os = os substr(s, 1, RSTART - 1)
+    l = substr(s, RSTART, RLENGTH)
+    s = substr(s, RSTART + RLENGTH)
+    if(l in gotit)
+      continue;
+    os = os l
+    gotit[l] = 1
+  }
+  print(os s)
+  next
+}
+@
+
+Another problem is that there is more than one way to create a label.
+For example, the sectioning commands may be redefined to automatically
+create a label based on the section name.  This document defines no
+such things%
+\footnote{Actually, the hyperref package, the NoWeb HTML filter, and
+NoWeb code chunks all create automatic labels, but they are based on
+file location rather than the text at the label location, so they will
+never conflict.}%
+, but as implemented above, more awk code can be added to
+[[<<Remove duplicate labels from \LaTeX{} source>>]].
+
+One other problem peculiar to NoWeb text is that chunk references are
+reformatted in a way that assumes the chunk is defined in the same
+document.  When documenting chunk names themselves, like this document
+does, this will clutter up the text with useless undefined chunk
+reference labels.  Setting the undefined reference text to empty helps
+a little, but it leaves a blank space between the chunk name and the
+terminating bracket.  Since this is a feature of [[noweave]], it can't
+really be filtered out for all files.  As a kludge, if no chunks are
+defined in a document at all, the reference markers are filtered out.
+Nothing is done for HTML output, since this only results in links that
+go nowhere.
+
+\lstset{language=sh}
+<<Post-process latex after weave>>=
+(if grep '^@<<.*@>>=$' "$noweb" >/dev/null; then cat; else \
+ sed 's/~{\\nwtagstyle{}[^}]*}}//g'; fi) | \
 @
 
 Second, plain text chunks can be extracted, highlighted, and
@@ -2656,7 +2749,12 @@ syntax is very specifically defined in order to avoid conflicts with other
 file name must end in \texttt{.nw}.
 
 <<Insert included NoWeb files>>=
-awk 'function readfile(f) {
+awk '<<Insert included NoWeb files with [[awk]]>>'
+@
+
+\lstset{language=awk}
+<<Insert included NoWeb files with [[awk]]>>=
+function readfile(f) {
   while(getline < f) {
     if($0 ~ /^\\input{[^}]*\.nw}$/) {
       sub(".*{", ""); sub("}", "");
@@ -2672,9 +2770,10 @@ awk 'function readfile(f) {
       print;
   }
 }
-BEGIN { readfile("-") }'
+BEGIN { readfile("-") }
 @
 
+\lstset{language=sh}
 <<Pre-process before weave>>=
 <<Insert included NoWeb files>> | \
 @
@@ -3450,7 +3549,7 @@ NF > 1 || odd {
 }
 # dump all footnotes at the end
 $0 ~ "</body>" {
-  print "<hr/><h3>Footnotes</h3>" ft
+  if(fn > 0) print "<hr/><h3>Footnotes</h3>" ft
   print
 }
 # print everything that is not a footnote
@@ -3562,6 +3661,8 @@ endif
 
 \section{Usage}
 
+% Begin-doc build-usage
+
 Users of this document fall into at least two categories: ones who wish to
 create documents that use this build system, and ones who wish to build
 packages which were created using this build system.  This section is for
@@ -3619,11 +3720,19 @@ you will need to depend on this file:
 
 Chunks defined in a document extend chunks defined in documents on which it
 depends.  Chunks defined in other documents can be used, as well.  In both
-cases, they will not be weaved correctly.  Extensions will not indicate that
-they are extending anything, and external references will always be shown as
-undefined chunks.  To alleviate this, the chunk can be defined as an empty
-value, or as a comment in the source language indicating that the chunk
-comes from an external file.
+cases, they will not be weaved correctly.  Chunks which are extended
+will be indicated with the original source file in parentheses at the
+start of the chunk name; this format is used mainly to move external
+referneces to the top of the chunk index and sort them by source name.
+However, the first extension will have no ``previous chunk'' link,
+rather than pointing to the source document's definition.  Uses are
+also indicated with the original file name, but they always claim to
+be undefined.  This is somewhat alleviated by the fact that undefined
+references are labeled with the word imported rather than undefined,
+but the only way to remove that indicator is to define the chunk
+elsewhere for extension (e.g. in an appendix) as neutral as possible
+(blank or a comment in the source language).
+\input{extref-dis.tex} %%% doc
 
 Within the document, several extensions can be used:
 
@@ -3667,8 +3776,11 @@ repeated in e.g. a users' guide appendix, fully extracted and syntax
 highlighted, by using a special [[\input]] directive:
 \verb!\input{!\emph{chunk-name}\verb!.tex} % !\emph{language}.  This
 directive will be replaced by the contents of the named chunk.  For example,
-the configurable variables are included here using
-\verb!\input{makefile.config} % make!:
+the configurable variables are included here using:
+
+\begin{quote}
+\verb!\input{makefile.config.tex} % make!
+\end{quote}
 
 \input{makefile.config.tex} % make
 
@@ -3871,6 +3983,8 @@ new cases to a shell case switch to convert listings language names to
 highlighter language names.
 \end{itemize}
 
+% End-doc build-usage
+
 \section{Code Index}
 \nowebchunks
 
@@ -4011,6 +4125,14 @@ sometimes dependencies are just ignored, especially in parallel builds
 where they are most important.  Makepp is a little better in some
 respects, but is only stopgap.  Something like Odin would be best, but
 Odin needs a lot of work.
+\item Automatically set CreationDate and ModDate for PDF to RCSDate.
+Need to actually find all dates of all relevant files and use most
+recent.  Probably not that useful, since even if ModDate and
+CreationDate are both static, multiple runs will still always produce
+different results.  It is apparently impossible to stabilize the
+output or filter out just the time-sensitive parts.
+
+\verb|\pdfinfo{/CreationDate (D:YYYYMMMMHHMMSS-01'00')}|
 \end{itemize}
 
 \end{document}

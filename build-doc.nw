@@ -51,7 +51,7 @@ converter included with NoWeb, or you can use tex4ht
 converter, or if you are dissatisfied with the listings package, you
 will need a separate highlighter command.  Currently, GNU
 source-highlight (\url{http://www.gnu.org/software/src-highlite/})
-and André Simon's highlight program (\url{http://www.andre-simon.de})
+and Andr\'e Simon's highlight program (\url{http://www.andre-simon.de})
 are supported.  For the former, only recent versions have been tested.
 For the latter, version 2 or version 3 is supported.
 \end{itemize}

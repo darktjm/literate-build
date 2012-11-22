@@ -1,14 +1,19 @@
 This is my literate programming support package.  Its main purpose is
-to provide syntax highlighting in multiple languages using NoWeb.  It
-can be configured to use one of several different highlighting
-packages, and can produce PDF and HTML output in several different
-ways.  At the minimum, it requires GNU make.
+to provide syntax highlighting in multiple source languages using
+NoWeb.  It can be configured to use one of several different
+highlighting packages, and can produce PDF and HTML output in several
+different ways.  At the minimum, it requires GNU make.
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
 NoWeb source to find out those prerequisites, I have provided the PDF
 and HTML output as well.  One of these is all you need, since they have
 the source attached (and have instructions for detaching).
+
+I have split out the basic user documentation into its own file,
+build-doc.{nw,pdf,html}.  You can just download that instead.  The PDF
+and HTML versions have both their own source and build.nw attached, so
+no further downloads are required.
 
 For details, I have an older version up at
 http://darkalpha.homelinux.org/literate/ with versions 1 and 2 as well

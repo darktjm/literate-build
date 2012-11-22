@@ -1264,7 +1264,10 @@ LMSCMD = /xparse\/.*define-command/b; \
 
 %.pdf: %.tex
 	while $(LATEXCMD) -interaction batchmode $< >/dev/null; do \
-          fgrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+          egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+	  test -f $*.idx && makeindex $(INDEX_FLAGS) -q $*; \
+	  fgrep '\citation' $*.aux || continue; \
+	  fgrep '\bibdata' $*.aux && bibtex $*; \
         done
 	@sed -n -e '$(call LMSCMD,info)' $*.log
 	@fgrep -i overfull $*.log || :
@@ -1282,7 +1285,7 @@ LMSCMD = /xparse\/.*define-command/b; \
 
 <<makefile.vars>>=
 # picks up changes in references or long tables
-LATEX_REDO_MSG:=" have changed. Rerun "
+LATEX_REDO_MSG:=" ha(s|ve) changed. Rerun[ .]"
 
 FIGS:=$(shell sed -n -e 's/^\\includegraphics.*{\(.*\)}$$/\1/p' $(NOWEB))
 FIGS_EPS:=$(patsubst %, %.eps, $(FIGS))
@@ -2362,6 +2365,8 @@ once again is to reduce the number of pages a bit.
 \usepackage{latexhl}
 %
 \pagestyle{headings}
+% new since 2009: rerunfilecheck (automatic include by hyperref)
+\usepackage[aux]{rerunfilecheck}
 %
 % Hyperlink it!
 \definecolor{darkblue}{rgb}{0,0,0.3}
@@ -4039,7 +4044,9 @@ look some day.
 \subsection{Missing}
 
 \begin{itemize}
-\item bibtex, makeindex
+\item bibtex, makeindex for l2h.  bibtex requires running latex and
+bibtex once, and makeindex requires running latex and makeindex and
+also providing support for reading the .ind and formatting it correctly.
 \item optional automatic symbol index (requires a lot of work; the
 symbol extractor for NoWeb is way too simplistic and in fact anything
 short of a compiler can't deal with name spaces and other issues).

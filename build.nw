@@ -1882,7 +1882,7 @@ EOF
     echo "dofile('${langdir}c.lang')" > $HLDIR/myc.lang
     cat @<<"EOF" @>> $HLDIR/myc.lang
       -- fix preproc expression and remove cont to highlight multi-line macros
-      Preprocessor = { Prefix=[[^\\s*(#)]] }
+      PreProcessor = { Prefix=[[^\s*(#)]] }
       --add some kws to ID=2 using old listings package moreemph decls
       for i, v in ipairs({
 EOF

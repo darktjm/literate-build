@@ -2723,13 +2723,14 @@ endif
 
 \lstset{language=sh}
 <<For each reinserted C prototype>>=
-sed -n 's/^% \(..*\) prototype$/\1/p' "$noweb" | while read f; do
+sed -f /tmp/latexhl.doc.$$ "$noweb" | sed -n -e 's/^% \(..*\) prototype$/\1/p' | \
+ while read f; do
   mf="$f"
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-notangle -R"C Prototypes" 2>/dev/null "$noweb" | cat - cproto.h | \
-  egrep "[^_[:alnum:]]$mf\\(" | head -n 1 | \
+sed -f /tmp/latexhl.doc.$$ "$noweb" | notangle -R"C Prototypes" 2>/dev/null | \
+  cat - cproto.h | egrep "[^_[:alnum:]]$mf\\(" | head -n 1 | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
@@ -3389,7 +3390,7 @@ will end up coming from the build document every time.
 
 \lstset{language=sh}
 <<Further l2h preamble>>=
-grep '^\\RCS \$' "$noweb" | while IFS= read -r l; do
+sed -f /tmp/latexhl.doc.$$ "$noweb" | grep '^\\RCS \$' | while IFS= read -r l; do
   l="${l#*\$}"
   l="${l%\$*}"
   echo "% l2h macro RCS${l%%:*} 0 ${l#*:}"
@@ -4007,8 +4008,8 @@ followed by the function name.  For example:
 [[export MY_CPP=$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E]]\\
 [[@]]\\\\
 [[<<For each reinserted C prototype>>=]]\\
-\hspace*{0pt}[[  mf="`printf '<<Common C Includes>>\\n%s' \"\$mf\" |]]\\
-\hspace*{0pt}[[         eval \"\$MY_CPP -\" | tail -n 1`"]]\\
+\hspace*{0pt}[[    mf="`printf '<<Common C Includes>>\\n%s' \"\$mf\" |]]\\
+\hspace*{0pt}[[           eval \"\$MY_CPP -\" | tail -n 1`"]]\\
 [[@]]\\
 \end{quote}
 \end{itemize}

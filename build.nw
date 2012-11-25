@@ -306,6 +306,10 @@ MISC_FILES = <<Plain Files>>
 \
 @
 
+<<Clean built files>>=
+rm -f $(DOC_FILES)
+@
+
 The makefile can make itself, as well.  This is dependent only on its source
 file; there is little point in making this dependent on the included files,
 as they will be automatically rebuilt as needed, anyway.  A quick check
@@ -724,7 +728,9 @@ $(CFILES) \
 @
 
 <<Clean temporary files>>=
-rm -f *.[choa]
+rm -f ${CFILES}
+rm -f $(HEADERS)
+rm -f $(COFILES)
 @
 
 <<Clean built files>>=
@@ -750,6 +756,7 @@ process, for example to create machine-generated code.
 BUILD_SCRIPT_EXEC=<<Build Script Executables>>
 
 BUILD_C_EXEC=<<C Build Executables>>
+
 @
 
 <<Build Source>>=
@@ -807,6 +814,10 @@ LOCAL_LIB_FILES:=$(LOCAL_LIBS_BASE:%=lib%.a)
 $(C_EXEC): $(LOCAL_LIB_FILES)
 @
 
+<<Clean temporary files>>=
+rm -f $(LOCAL_LIB_FILES)
+@
+
 While it would be nice to not have to generate yet another support file for
 this, notangle is required for this to work.  One of the goals of this
 system is to be able to generate a source tarball that does not depend on
@@ -818,6 +829,7 @@ notangle.
 #	rm -f $$@
 #	ar cr $$@ $$^
 #	ranlib $$@
+#LIB_OBJ += $(filter-out $(COFILES),$(2))
 #endef
 #
 #$(foreach l,$(LOCAL_LIBS_BASE),$(eval $(call build-lib,$l, \
@@ -835,12 +847,15 @@ makefile.libs: makefile.rules
 	   printf '\n\trm -f $$@\n'; \
 	   printf '\tar cr $$@ $$^\n'; \
 	   printf '\tranlib $$@\n'; \
+	   printf 'LIB_OBJ += $(filter-out $(COFILES),'; \
+	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
+	   printf ')\n'; \
 	done > $@
 -include makefile.libs
 @
 
 <<Clean temporary files>>=
-rm -f makefile.libs
+rm -f makefile.libs $(LIB_OBJ)
 @
 
 Of course it might be useful to also provide installation rules for selected
@@ -1077,7 +1092,7 @@ $(COFILES): $(HEADERS) cproto.h
 
 cproto.h: $(CFILES) $(HEADERS)
 	echo >$@
-	test -z "$(CFILES)" || ( \
+	test -z "$(strip $(CFILES))" || ( \
 	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
 	               $(CFILES) >$@.$$$$.h 2>/dev/null; then \
 	    sed -i -e '/^int main(/d' $@.$$$$.h; \
@@ -1119,7 +1134,7 @@ cproto.h \
 @
 
 <<Clean temporary files>>=
-rm -f cproto.h.new *.c.static_proto{,.new}
+rm -f cproto.h{,.*.h} $(CFILES:%=%.static_proto)
 @
 
 <<makefile.vars>>=
@@ -1263,11 +1278,12 @@ LMSCMD = /xparse\/.*define-command/b; \
 	 p;g;ba;
 
 %.pdf: %.tex
+	set -x; \
 	while $(LATEXCMD) -interaction batchmode $< >/dev/null; do \
+	  rerun=; \
+	  <<Mangle aux files>>
+	  test -n "$$rerun" && continue; \
           egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
-	  test -f $*.idx && makeindex $(INDEX_FLAGS) -q $*; \
-	  fgrep '\citation' $*.aux || continue; \
-	  fgrep '\bibdata' $*.aux && bibtex $*; \
         done
 	@sed -n -e '$(call LMSCMD,info)' $*.log
 	@fgrep -i overfull $*.log || :
@@ -1318,11 +1334,31 @@ $(FIGS_XFIG): $(NOWEB)
 @
 
 <<Clean temporary files>>=
-rm -f *.{log,aux,out,toc,lof,tex,dia,eps} $(FIGS_PDF)
+rm -f $(NOWEB:%.nw=%.{log,aux,out,toc,lof,tex,idx,ind,ilg,bbl})
+rm -f $(FIGS_XFIG) $(FIGS_DIA) $(FIGS_EPS_RAW) $(FIGS_PDF)
 @
 
-<<Clean built files>>=
-rm -f *.pdf
+During the \LaTeX{} processing loop, steps may need to be taken to
+update auxiliary files for the next run.  Since they are common,
+[[bibtex]] and [[makeindex]] are run automatically if needed.  In
+addition, a variable can be set to run things before these, and the
+code chunk can be extended to run things afterwards.  Setting
+[[$rerun]] to non-empty will cause a delayed rerun, and [[continue]]
+will cause an immediate re-run.
+
+<<Mangle aux files>>=
+<<Mangle aux files before bbl and ind>>
+fgrep '\citation' $*.aux && fgrep '\bibdata' $*.aux && bibtex $*; \
+if [ -f $*.idx ]; then \
+  makeindex $(INDEX_FLAGS) -i < $*.idx > $*.ind.$$$$; \
+  cmp $*.ind $*.ind.$$$$ >/dev/null 2>&1; res=$$?; \
+  mv $*.ind.$$$$ $*.ind; \
+  test $$res -eq 0 || rerun=y; \
+fi; \
+@
+
+<<Mangle aux files before bbl and ind>>=
+\
 @
 
 \subsection{Pretty Printing Wrapper}
@@ -1878,11 +1914,13 @@ EOF
             {Block=false, Delimiter={[[^\s*(#(?!include\W))]]}}
 	  }' > $HLDIR/sed.lang
     # c language needs a lot of help
+    # note that hl_lang_dir (actually HL_LANG_DIR) just points
+    # to the dir the config file is in (useless)
     langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
     echo "dofile('${langdir}c.lang')" > $HLDIR/myc.lang
     cat @<<"EOF" @>> $HLDIR/myc.lang
       -- fix preproc expression and remove cont to highlight multi-line macros
-      Preprocessor = { Prefix=[[^\\s*(#)]] }
+      PreProcessor = { Prefix=[[^\s*(#)]] }
       --add some kws to ID=2 using old listings package moreemph decls
       for i, v in ipairs({
 EOF
@@ -2379,7 +2417,10 @@ once again is to reduce the number of pages a bit.
 \org@maketitle}
 %
 % Multi-column table of contents
-\usepackage[toc,lof]{multitoc}
+% due to bug, individual tocs cannot actually be disabled (they'll be
+% completely cleared)
+% must disable all by \let\@starttoc\@multitoc@starttoc
+\usepackage[toc,lof,lot]{multitoc}
 @
 
 % there were some issues on older TeX; not sure any more:
@@ -2471,7 +2512,7 @@ of the build system to pick up the files properly.
 \lstset{language=sh}
 <<Pre-process before weave>>=
 (att_nwo="`echo $noweb_order | \
-                 sed -e 's/\\([-_a-zA-Z.]*\\) */\\\\\\\\embedfile{\\1}%\\\\n/g'`"
+                 sed -e 's/\\([-_a-zA-Z0-9.]*\\) */\\\\\\\\embedfile{\\1}%\\\\n/g'`"
  sed -e 's/^\\begin{document}/'"$att_nwo&/") | \
 @
 
@@ -2818,10 +2859,6 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
 	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
-@
-
-<<Clean built files>>=
-rm -f *.html
 @
 
 A configuration file is needed to set extended options.  In particular, the
@@ -3173,7 +3210,7 @@ nw2html:  htmlhl nwweavefilt latexhl
 @
 
 <<Clean built files>>=
-rm -f *.png
+rm -f $(FIGS_PNG)
 @
 
 The wrapper script tacks on a similar header to what the TeX4ht script
@@ -3636,6 +3673,10 @@ trimming empty
 EOF
 @
 
+<<Clean temporary files>>=
+rm -f tidy.log
+@
+
 Generation of the figures depends on
 ImageMagick%
 \footnote{\url{http://www.imagemagick.org}}
@@ -3778,6 +3819,30 @@ its own line at the end.  This is intended to be used as follows:
 \verb!\end{rawhtml}!\\*
 
 \end{quote}
+These are also provided as reinsertable documentation chunks, so the
+following is equivalent:
+\begin{quote}
+\verb!\input{begin-hidden.tex} %%% doc!\\*
+
+\ldots{} hidden material \ldots{}\\
+
+\verb!\input{end-hidden.tex} %%% doc!\\*
+\end{quote}
+% Begin-doc begin-hidden
+% hidden section - notangle chunks that shouldn't appear in printed output
+% mainly for diagrams, which are extracted and included in visual form.
+\begin{rawhtml}
+<!-->
+\end{rawhtml}
+\iffalse
+% End-doc begin-hidden
+% Begin-doc end-hidden
+\fi
+\begin{rawhtml}
+<-->
+\end{rawhtml}
+% End-doc end-hidden
+
 NoWeb doesn't actually strip these out --- iffalse does that.  Because
 NoWeb generates cross-reference information and the chunk index after
 the last chunk, the last chunk may not be commented out in this way.
@@ -4044,6 +4109,15 @@ percent-sign.
 [[<<Translate listings source type to highlight-3 source type>>]]: add
 new cases to a shell case switch to convert listings language names to
 highlighter language names.
+\item [[<<Mangle aux files>>]] can be extended to further process the
+output from the previous \LaTeX{} run.  It is makefile action text for
+a single command, so semicolons and backslashes need to be after every
+line, and dollar signs need to be doubled.  The make variable [[$*]]
+is the base name of the file being processed.  Setting the shell
+variable [[$rerun]] to non-empty will force \LaTeX{} to be rerun
+without checking the log file.  These actions are run after the index
+and bibliography have been generated. To run something before that,
+extend [[<<Mangle aux files before bbl and ind>>]] instead.
 \end{itemize}
 
 % End-doc build-usage

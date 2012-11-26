@@ -1125,7 +1125,8 @@ cproto.h: $(CFILES:%=%.static_proto)
 %.c.static_proto: %.c
 	( \
 	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
-	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" $< 2>/dev/null \
+	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
+	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Icp.$$$$ -E" $< 2>/dev/null; \
 	) >$@ || (rm -f $@; false)
 @
 
@@ -3467,14 +3468,16 @@ sed -n -e '<<Filter noweave output with removal>>' | \
   }
   #strip out the first top-level TOC - always title + abstract
   /^<tableofcontents>/{
-   a\<h1>Table of Contents</h1>
+   a\<h2>Table of Contents</h2>
+   # find the document title
    :c p;n;/^ *<li>/!bc
-   :d n
-     # allow one level of ul .. /ul
-     /^ *<ul[ >]/{
-       :e n;/^ *<\/ul>/!be
-     }
-     /^ *<li>/!bd
+   # skip to first actual TOC item
+   :d n;/^ *<li>/!bd
+   # there is no way to detect at this point whether or not an abstract
+   # is there so hard-code the word "Abstract", which is very unsafe,
+   # since it is trivial to rename the abstract and chpater one could
+   # very well contain that word.
+   /Abstract/bd
   }
   p
 }

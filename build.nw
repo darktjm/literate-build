@@ -1121,6 +1121,7 @@ sub f_adddep {
 }
 $(foreach f,$(COFILES),$(adddep $f,$(f:%.o=%.c.static_proto)))
 endif
+$(COFILES:%.o=%.c.static_proto): $(HEADERS)
 cproto.h: $(CFILES:%=%.static_proto)
 %.c.static_proto: %.c
 	( \

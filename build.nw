@@ -1890,6 +1890,8 @@ EOF
     printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
       sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' \
            >>$HLDIR/myc.lang
+    # I want decls highlighted properly.
+    touch $HLDIR/clike_vardeclaration.lang
     ;;
   highlight-2)
     mkdir -p $HLDIR/langDefs

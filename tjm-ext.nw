@@ -1,0 +1,340 @@
+% -*- mode: Noweb; noweb-code-mode: c-mode; -*-
+% Build with noweb:
+%  notangle -t8 build.nw > makefile
+%  make
+\documentclass[twoside,english]{article}
+\usepackage[letterpaper,rmargin=1.5in,bmargin=1in]{geometry}
+%%% latex preamble
+\RCS $Id$
+\RCS $Revision$
+\RCS $Date$
+
+%%% requires build
+
+\begin{document}
+
+\title{Miscellaneous Programming Support for Literate Programs}
+\author{Thomas J. Moore}
+\date{Version \RCSRevision\\\RCSDate}
+\maketitle
+
+\begin{abstract}
+Since I am pretty set in my ways, I may as well write some of them
+down so that I don't have to repeat myself with every project.  This
+document describes and implements a number of simple support blobs for
+my literate programs.
+
+This document, and its contents, are in the public domain.  While some
+pieces may appear to be copied from other freely licensed documents I
+have written, no pieces included here were not developed independently
+before copying them into those documents, making them the actual copies.
+
+This document was generated from the following sources, all of which
+are attached to the original electronic forms of this document:
+
+\input{Sources.tex} % txt
+\end{abstract}
+
+\tableofcontents
+
+\lstset{language=sed}
+<<Common NoWeb Warning>>=
+# $Id$
+@
+
+\lstset{language=txt}
+<<Sources>>=
+$Id$
+@
+
+\lstset{language=C}
+<<Version Strings>>=
+"$Id$\n"
+@
+
+\section{Memory}
+
+I do a lot of simple memory allocations, and it's easy to forget to
+include the sizeof(element) scale factor.  To make this easier, here
+are a few macros.
+
+<<mallocdef.h>>=
+<<Common C Warning>>
+#ifndef MALLOCDEF_H
+#define MALLCDEF_H
+#define resize(buf, len) do { \
+    buf = realloc(buf, (len) * sizeof(*(buf))); \
+    if(!(buf)) { \
+        perror(#buf); \
+        exit(1); \
+    } \
+} while(0)
+#define inisize(buf, len) do { \
+    buf = malloc((len) * sizeof(*(buf))); \
+    if(!(buf)) { \
+        perror(#buf); \
+        exit(1); \
+    } \
+} while(0)
+#define clearbuf(buf, len) memset(buf, 0, (len) * sizeof(*(buf)))
+#endif
+@
+
+<<Common C Includes>>=
+#include "mallocdef.h"
+@
+
+\section{Warnings}
+
+I also prefer a little bit higher warning level than the default.
+
+\lstset{language=make}
+<<makefile.vars>>=
+CC=gcc
+CFLAGS=-O2
+EXTRA_CFLAGS += -Wall -Wmissing-prototypes -Wno-unused-result -Wshadow \
+                -Wmissing-prototypes
+EXTRA_CXXFLAGS += -Wall -Wmissing-prototypes -Wno-unused-result -Wshadow
+@
+
+\section{Types}
+
+These days, I try to use the standard C types that have specific sizes.
+
+\lstset{language=C}
+<<Common C Includes>>=
+#include <stdint.h>
+@
+
+<<Known Data Types>>=
+% stdint.h
+int8_t,uint8_t,int16_t,uint16_t,int32_t,uint32_t,int64_t,uint64_t,%
+@
+
+\section{GLib}
+
+I use GLib a lot in recent C projects, to avoid having to reimplement
+some common dynamic data structures (even though I'm not entirely
+happy with how GLib implements things).
+
+\lstset{language=make}
+<<makefile.vars>>=
+ifneq ($(USES_GLIB),)
+GLIB_CFLAGS:=$(shell pkg-config --silence-errors gthread-2.0 --cflags || \
+                     pkg-config glib-2.0 "--cflags")
+GLIB_LDFLAGS:=$(shell pkg-config --silence-errors gthread-2.0 --libs || \
+                      pkg-config glib-2.0 --libs)
+EXTRA_CFLAGS += $(GLIB_CFLAGS) -DUSES_GLIB
+EXTRA_LDFLAGS += $(GLIB_LDFLAGS)
+endif
+@
+
+\lstset{language=C}
+<<Common C Includes>>=
+#ifdef USES_GLIB
+#include <glib.h>
+#endif
+@
+
+<<Known Data Types>>=
+% GLib
+gboolean,gint8,guint8,gint16,guint16,gint32,guint32,gint64,guint64,%
+gchar,guchar,gint,guint,glong,gulong,GString,GStringChunk,GArray,GByteArray,%
+GPtrArray,gconstpointer,gpointer,GMemChunk,GDir,GError,%
+@
+
+One thing that is missing that I have always found useful is a version
+of [[fgets]](3) which supports dynamic strings.  Such a function is
+easy enough to implement, so here it is, both a GLib version which
+returns a [[GString]], and a simpler version that just returns an
+allocated buffer.  A generic version is provided as well for cases
+where [[fgets]]-equivalent functions are available.
+
+When reading binary data that may contain NUL characters, the buffer length
+must be updated based not on [[strlen]], but on the number of characters
+read.  This can be obtained from [[ftell]] only for seekable streams, so the
+only option with [[fgets]] is to fill the memory with non-NUL characters and
+search for the last added NUL.  Another option would be to use a different
+reader function.  The CPU overhead for using [[getc]] for every character is
+pretty high, though, and [[fscanf]] has issues with NUL characters as well.
+Implementing a wrapper around [[fread]] would require that all reads from
+the file be done using this function in order to take care of backlog.
+
+In order to avoid the processing overhead for NULs for most reads, the
+wrapper has two names, and the generic function takes a parameter to enable
+this.
+
+<<Library [[supt]] Members>>=
+g_string_fgets.o
+mfgets.o
+@
+
+<<mfgets.h>>=
+/*
+  <<Common NoWeb Warning>>
+*/
+#ifndef _MFGETS_H
+#define _MFGETS_H
+
+<<[[mfgets]] prototypes>>
+
+#endif /* _MFGETS_H */
+@
+
+<<Common C Includes>>=
+#include "mfgets.h"
+@
+
+<<[[mfgets]] prototypes>>=
+typedef char *(*gets_fp)(char *buf, int len, void *f);
+@
+
+<<Known Data Types>>=
+gets_fp,%
+@
+
+<<[[mfgets]] prototypes>>=
+#ifdef USES_GLIB
+char *g_string_fgets(GString **_buf, guint offset, FILE *f);
+char *g_string_fgets_bin(GString **_buf, guint offset, FILE *f);
+char *g_string_fgets_generic(GString **_buf, guint offset, gets_fp my_gets,
+                             void *f, gboolean allow_zero);
+#endif
+@
+
+<<g_string_fgets.c>>=
+<<Common C Header>>
+
+#ifdef USES_GLIB
+char *g_string_fgets(GString **_buf, guint offset, FILE *f)
+{
+  return g_string_gets_generic(_buf, offset, (gets_fp)fgets, f, FALSE);
+}
+
+char *g_string_fgets_bin(GString **_buf, guint offset, FILE *f)
+{
+  return g_string_gets_generic(_buf, offset, (gets_fp)fgets, f, TRUE);
+}
+
+char *g_string_gets_generic(GString **_buf, guint offset, gets_fp my_gets,
+                            void *f, gboolean allow_zero)
+{
+  guint left, len;
+  GString *buf = *_buf;
+  gboolean read_some = FALSE;
+  const char *ep;
+
+  if(!buf)
+    buf = *_buf = g_string_sized_new(offset + 80);
+  else if(buf->allocated_len <= offset + 1)
+    g_string_set_size(buf, offset + 80);
+  while(1) {
+    left = buf->allocated_len - offset;
+    if(allow_zero)
+      memset(buf->str + offset, 255, left);
+    else /* still need to detect end of line */
+      buf->str[offset + left - 1] = 255;
+    if(!(*my_gets)(buf->str + offset, left, f)) {
+      buf->str[offset] = 0;
+      break;
+    }
+    read_some = TRUE;
+    if(allow_zero) {
+      /* memrchr is GNU extension, so this is done manually */
+      /* guaranteed to terminate */
+      for(ep = buf->str + buf->allocated_len - 1; *ep; ep--);
+      len = (int)(ep - buf->str) - offset;
+    } else
+      len = strlen(buf->str + offset);
+    left -= len;
+    offset += len;
+    if((left > 1 && buf->str[offset + left - 1]) ||
+       buf->str[offset - 1] == '\n')
+      break;
+    g_string_set_size(buf, buf->allocated_len * 2 - 1);
+  }
+  buf->len = offset;
+  return read_some ? buf->str : NULL;
+}
+#endif
+@
+
+<<[[mfgets]] prototypes>>=
+char *mfgets(char **buf, unsigned int *buflen, unsigned int *retlen,
+             unsigned int offset, FILE *f);
+char *mfgets_bin(char **buf, unsigned int *buflen, unsigned int *retlen,
+                 unsigned int offset, FILE *f);
+char *mfgets_generic(char **buf, unsigned int *buflen,
+		     unsigned int *retlen, unsigned int offset,
+		     gets_fp my_gets, void *f, int allow_zero);
+@
+
+<<mfgets.c>>=
+<<Common C Header>>
+
+char *mfgets(char **buf, unsigned int *buflen, unsigned int *retlen,
+             unsigned int offset, FILE *f)
+{
+  return mfgets_generic(buf, buflen, retlen, offset, (gets_fp)fgets, f, 0);
+}
+
+char *mfgets_bin(char **buf, unsigned int *buflen, unsigned int *retlen,
+                 unsigned int offset, FILE *f)
+{
+  return mfgets_generic(buf, buflen, retlen, offset, (gets_fp)fgets, f, 1);
+}
+
+char *mfgets_generic(char **buf, unsigned int *_buflen,
+		     unsigned int *retlen, unsigned int offset,
+		     gets_fp my_gets, void *f, int allow_zero)
+{
+  int left, len;
+  int read_some = 0;
+  int buflen = _buflen ? *_buflen : buf ? strlen(*buf) : 0;
+  const char *ep;
+
+  if(!*buf) {
+    buflen = offset + 80;
+    inisize(*buf, buflen);
+  } else if(buflen <= offset + 1) {
+    buflen = offset + 80;
+    resize(*buf, buflen);
+  }
+  while(1) {
+    left = buflen - offset;
+    if(allow_zero)
+      memset(*buf + offset, 255, left);
+    else /* still need to detect end of line */
+      (*buf)[offset + left - 1] = 255;
+    if(!(*my_gets)(*buf + offset, left, f)) {
+      (*buf)[offset] = 0;
+      break;
+    }
+    read_some = 1;
+    if(allow_zero) {
+      /* memrchr is GNU extension, so this is done manually */
+      /* guaranteed to terminate */
+      for(ep = *buf + buflen - 1; *ep; ep--);
+      len = (int)(ep - *buf) - offset;
+    } else
+      len = strlen(*buf + offset);
+    left -= len;
+    offset += len;
+    if((left > 1 && (*buf)[offset + left - 1]) ||
+       (*buf)[offset - 1] == '\n')
+      break;
+    buflen *= 2;
+    resize(*buf, buflen);
+  }
+  if(_buflen)
+    *_buflen = buflen;
+  if(retlen)
+    *retlen = offset;
+  return read_some ? *buf : NULL;
+}
+@
+
+\section{Code Index}
+\nowebchunks
+
+\end{document}

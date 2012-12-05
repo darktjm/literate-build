@@ -5041,6 +5041,7 @@ around.  Since trailing dots are not eliminated if
 # empty, pure packages in the current directory.  These means that placement
 # in a non-empty package requires compiling in a separate directory.
 PACKAGE_LOCATION=No_Web_Code
+
 @
 
 <<build: apply package prefix>>=

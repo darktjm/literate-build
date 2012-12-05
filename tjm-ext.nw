@@ -334,6 +334,53 @@ char *mfgets_generic(char **buf, unsigned int *_buflen,
 }
 @
 
+Similarly, a version of [[getcwd]] that never overflows and does not
+require a static maximum path length is useful.  GLib already provides
+such a function ([[g_get_current_directory]]), so this is only needed
+for non-GLib use.  Actually, GNU libc also provides several such
+functions, but their existence cannot be relied on.  It doesn't hurt to
+combine this with the routines above into the same header and library.
+
+<<[[mfgets]] prototypes>>=
+#ifdef __GNUC__
+#include <unistd.h>
+#define getcwd_full() getcwd(NULL, 0)
+#else
+char *getcwd_full(void);
+#endif
+@
+
+<<mfgets.c>>=
+#ifndef __GNUC__
+#include <errno.h>
+char *getcwd_full(void)
+{
+  unsigned int maxlen = 20;
+  char *buf = malloc(maxlen), *ret;
+  if(!buf)
+    return NULL;
+  while(1) {
+    ret = getcwd(buf, maxlen);
+    if(ret)
+      return ret;
+    if(errno != ERANGE) {
+      int eno = errno;
+      free(buf);
+      errno = eno;
+      return NULL;
+    }
+    maxlen *= 2;
+    ret = realloc(buf, maxlen);
+    if(!ret) {
+      free(buf);
+      return NULL;
+    }
+    buf = ret;
+  }
+}
+#endif
+@
+
 \section{Binary Tricks}
 
 % l2h substitution lceil &lceil;

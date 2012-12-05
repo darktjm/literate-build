@@ -280,10 +280,19 @@ distclean: clean
 @
 
 <<makefile.config>>=
+# Configuration parameters
+# Change here only if:
+#  - you do not use makepp (makepp will overwrite on every make)
+#  - you do not modify the NoWeb sources (otherwise even GNU make overwrites)
+# Better to copy to makefile.config.local and make changes there.
+# You can, of course, also specify overrides on the command line
+
 # Installation prefix to apply to all install locations
 DESTDIR:=
+
 # Installation directory for binaries
 BIN_DIR:=/usr/local/bin
+
 @
 
 <<makefile.vars>>=
@@ -324,6 +333,7 @@ verification of the makefile, so this step is skipped.
 # Note: due to Makepp restrictions, this can only be set on the command line
 # or in makefile.config.local
 #BUILD_NOWEB:=build.nw
+
 @
 
 <<Defaults for [[makefile.config]]>>=
@@ -333,8 +343,10 @@ BUILD_NOWEB=build.nw
 <<Build rules for makefile includes>>=
 makefile: $(BUILD_NOWEB)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
-	@#notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \ #
-	@#    env -i $(MAKE) -n -f- /dev/null >/dev/null
+ifeq ($(MAKEPP_VERSION),)
+	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
+	    env -i $(MAKE) -n -f- /dev/null >/dev/null
+endif
 	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
 @
 
@@ -354,6 +366,7 @@ from all the other NoWeb files.
 # Note: due to Makepp restrictions, this can only be set on the command line
 # or in makefile.config.local
 #NOWEB:=$(wildcard *.nw)
+
 @
 
 <<Defaults for [[makefile.config]]>>=
@@ -452,6 +465,7 @@ endif
 <<makefile.config>>=
 #Set to override the automatically determined project name
 #PROJECT_NAME=
+
 @
 
 <<makefile.rules>>=
@@ -472,20 +486,26 @@ makefile.
 <<Build rules for makefile includes>>=
 makefile.config: $(NOWEB_ORDER)
 	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
-	@#notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+ifeq ($(MAKEPP_VERSION),)
+	notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+endif
 	-notangle -t8 -R$@ $^ > $@
 
 makefile.vars: makefile.config
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
-	@#notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \ #
-	@#        env -i $(MAKE) -n -f- /dev/null >/dev/null
+ifeq ($(MAKEPP_VERSION),)
+	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
+	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 
 makefile.rules: makefile.vars
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
-	@#notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \ #
-	@#                                     $(NOWEB_ORDER) 2>/dev/null | \ #
-	@#        env -i $(MAKE) -n -f- /dev/null >/dev/null #
+ifeq ($(MAKEPP_VERSION),)
+	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
+	                                     $(NOWEB_ORDER) 2>/dev/null | \
+	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 @
 
@@ -695,8 +715,9 @@ $(SCRIPT_EXEC) \
 @
 
 <<makefile.config>>=
-# Set to -L for #line, but lose code indentation
+# Set to -L for #line in C files, but lose code indentation
 USE_LINE:=-L
+
 @
 
 <<makefile.rules>>=
@@ -800,6 +821,7 @@ TACCMD=tac
 # Note: due to Makepp restrictions, this can only be set on the command line
 # or in makefile.config.local
 #TACCMD:=sed -n -e '1!G;h;$$p'
+
 @
 
 <<Build variables for makefile includes>>=
@@ -847,7 +869,7 @@ makefile.libs: makefile.rules
 	   printf '\n\trm -f $$@\n'; \
 	   printf '\tar cr $$@ $$^\n'; \
 	   printf '\tranlib $$@\n'; \
-	   printf 'LIB_OBJ += $(filter-out $(COFILES),'; \
+	   printf 'LIB_OBJ += $$(filter-out $$(COFILES),'; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf ')\n'; \
 	done > $@
@@ -960,6 +982,7 @@ NOROOTS=noroots
 #NOROOTS=sh -c "sed -n '/^@<<.*@>>=\$$/{s/=\$$//;p;}' \$$* \
 #		                 | sort -u" /dev/null
 NOROOTS=noroots
+
 @
 
 In fact, when building just the code, it is likely that the only part
@@ -1235,9 +1258,10 @@ feature, as well).
 
 <<makefile.config>>=
 # The PDF command to use: must be pdflatex or xelatex.
-LATEXCMD=pdflatex
 # note: to use attachments with xetex, the following may be necessary:
 #LATEXCMD=env DVIPDFMXINPUTS=.:\$$TEXMF/dvipdfmx/ xelatex
+LATEXCMD=pdflatex
+
 @
 
 <<makefile.vars>>=
@@ -1575,6 +1599,7 @@ will be plenty of error messages while this runs.
 #  source-highlight named source-highlight (probably 3.x)
 # if blank, autodetect
 HLPROG_TYPE=
+
 @
 
 \lstset{language=sh}
@@ -2283,6 +2308,7 @@ done by prefixing the highlight theme name with [[list:]].
 # Highlight theme for PDF/HTML formatted source code
 # Blank uses default highlight style; prefix w/ list: to use listings package
 HL_THEME:=
+
 @
 
 <<makefile.rules>>=
@@ -3727,6 +3753,7 @@ tables and footnotes.  For now, I prefer the speed and accuracy of l2h.
 # Program to use for generating HTML formatted source code
 # Set to tex4ht or l2h
 HTML_CONV:=l2h
+
 @
 
 <<makefile.rules>>=

@@ -1117,7 +1117,7 @@ cproto.h: $(CFILES) $(HEADERS)
 	echo >$@
 	test -z "$(strip $(CFILES))" || ( \
 	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
-	               $(CFILES) >$@.$$$$.h 2>/dev/null; then \
+	               $(CFILES) >$@.$$$$.h; then \
 	    sed -i -e '/^int main(/d' $@.$$$$.h; \
 	    grep -vn '^/\*' $@.$$$$.h | $(TACCMD) | \
 	      sed -e '<<Strip down C prototype>>' | \
@@ -1150,7 +1150,7 @@ cproto.h: $(CFILES:%=%.static_proto)
 	( \
 	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
 	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
-	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Icp.$$$$ -E" $< 2>/dev/null; \
+	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Icp.$$$$ -E" $<; \
 	) >$@ || (rm -f $@; false)
 @
 

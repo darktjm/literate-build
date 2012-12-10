@@ -271,7 +271,7 @@ install: misc bin
 
 clean:
 	<<Clean temporary files>>
-	rm -f makefile.{config,vars,rules}
+	rm -f $(filter-out makefile, $(MAKEFILES))
 
 distclean: clean
 	<<Clean built files>>
@@ -297,7 +297,7 @@ BIN_DIR:=/usr/local/bin
 
 <<makefile.vars>>=
 <<Common NoWeb Warning>>
-MAKEFILES:=makefile makefile.config makefile.vars makefile.rules
+MAKEFILES = makefile makefile.config makefile.vars makefile.rules
 EXEC_FILES = <<Executables>>
 
 LIB_FILES = <<Libraries>>
@@ -845,12 +845,30 @@ this, notangle is required for this to work.  One of the goals of this
 system is to be able to generate a source tarball that does not depend on
 notangle.
 
+<<Defaults for [[makefile.config]]>>=
+AR=ar
+AR_EXTRA=
+RANLIB=ranlib
+@
+
+<<makefile.config>>=
+# The ar program
+AR=ar
+
+# Extra $(AR) options (e.g. s to perform ranlib automatically)
+AR_EXTRA=
+
+# The ranlib program
+RANLIB=ranlib
+
+@
+
 <<makefile.rules>>=
 #define build-lib
 #lib$(1).a: $(2)
 #	rm -f $$@
-#	ar cr $$@ $$^
-#	ranlib $$@
+#	$$(AR) cr$$(AR_EXTRA) $$@ $$^
+#	$$(RANLIB) $$@
 #LIB_OBJ += $(filter-out $(COFILES),$(2))
 #endef
 #
@@ -867,8 +885,8 @@ makefile.libs: makefile.rules
 	   printf %s lib$$x.a:; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf '\n\trm -f $$@\n'; \
-	   printf '\tar cr $$@ $$^\n'; \
-	   printf '\tranlib $$@\n'; \
+	   printf '\t$$(AR) cr$$(AR_EXTRA) $$@ $$^\n'; \
+	   printf '\t$$(RANLIB) $$@\n'; \
 	   printf 'LIB_OBJ += $$(filter-out $$(COFILES),'; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf ')\n'; \
@@ -877,7 +895,7 @@ makefile.libs: makefile.rules
 @
 
 <<Clean temporary files>>=
-rm -f makefile.libs $(LIB_OBJ)
+rm -f $(LIB_OBJ)
 @
 
 Of course it might be useful to also provide installation rules for selected

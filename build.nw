@@ -745,7 +745,7 @@ endif
 @
 
 <<Files to Count>>=
-$(CFILES) \
+$(CFILES) $(HEADERS) \
 @
 
 <<Clean temporary files>>=

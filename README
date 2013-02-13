@@ -18,9 +18,9 @@ build-doc.{nw,pdf,html}.  You can just download that instead.  The PDF
 and HTML versions have both their own source and build.nw attached, so
 no further downloads are required.
 
-For details, see http://darkalpha.homelinux.org/literate/.  That site
-has some older versions as well.  That page has a complete summary of
-the history of this project.
+For details, see http://darkalpha.homelinux.org/literate/.  That page
+has a complete summary of the history of this project, including some
+much older versions of the build system.
 
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,

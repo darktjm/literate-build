@@ -1767,7 +1767,7 @@ little different.
 <<Prepare for [[latexhl]]>>=
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight ${theme:+-s $theme} -S c --out-format=latex -I </dev/null | \
+    highlight ${HL_THEME:+-s $HL_THEME} -S c --out-format=latex -I </dev/null | \
       egrep 'newcommand|definecolor' | \
         sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty.$$
     mv latexhl.sty.$$ latexhl.sty
@@ -1801,7 +1801,7 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 	end' > $HLDIR/mybg.outlang
   (
     cd $HLDIR
-    source-highlight ${theme:+--style-css-file=$theme.css} -f latexcolor \
+    source-highlight ${HL_THEME:+--style-css-file=$HL_THEME.css} -f latexcolor \
                      --lang-def=source-hl-elts.lang < source-hl-elts | \
       sed -n -e '/^\\mbox{}/{
                    s/\\mbox{}//;s/ \\\\//;s/\$\\_\$//g;
@@ -1809,7 +1809,7 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 		   s/^[^\\].*/\\newcommand{\\hl&}[1]{#1}/p;}'
     # fa is ff * .98
     source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
-                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+                     ${HL_THEME:+--style-css-file=$HL_THEME.css} </dev/null | \
       sed 's/#ffffff/#fafafa/i;s/white/#fafafa/i'
   ) | <<Convert HTML color codes to \LaTeX{}>> | \
      sed -e '/^\\definecolor/{
@@ -2330,8 +2330,9 @@ HL_THEME:=
 @
 
 <<makefile.rules>>=
+export HL_THEME HLPROG_TYPE HEADERS
 %.tex: %.nw nw2latex $(call tree,%.nw)
-	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
+	./nw2latex $< $@ "$(call tree,$<)"
 @
 
 <<Build Script Executables>>=
@@ -2350,13 +2351,11 @@ nw2latex: latexhl nwweavefilt addlistings
 noweb="$1"
 outf="$2"
 noweb_order="$3"
-theme="$4"
-export HLPROG_TYPE="$5"
 
 # prefix theme with "list:" to enable lstlistings
-uselst="${theme%%:*}"
+uselst="${HL_THEME%%:*}"
 if [ "list" = "$uselst" ]; then
-  theme="${theme#list:}"
+  HL_THEME="${HL_THEME#list:}"
 else
   uselst=
 fi
@@ -2784,12 +2783,14 @@ prototype, reference it using a specially formatted comment:
 \% \emph{function} prototype
 }\end{quote}
 
-This is done by gently extracting the prototype from [[cproto.h]] using sed.
-For prototypes which do not appear in [[cproto.h]], the chunk
-[[<<C Prototypes>>]] may be expanded as well, but only out of the same source
-file.  Since the C preprocessor might transform functions before they
-become prototypes, the [[<<For each reinserted C prototype>>]] chunk
-may be extended, transforming [[$mf]] as needed.  The sed script
+This is done by gently extracting the prototype from [[cproto.h]]
+using sed.  Since prototypes which appear in [[$(HEADERS)]] are
+removed from [[cproto.h]], they are allowed here as well. For
+prototypes which do not appear in either place, the chunk
+[[<<C Prototypes>>]] may be expanded as well, but only out of the same
+source file.  Since the C preprocessor might transform functions
+before they become prototypes, the [[<<For each reinserted C prototype>>]]
+chunk may be extended, transforming [[$mf]] as needed.  The sed script
 separates arguments by comma and terminates by close parenthesis
 (which means that callbacks require typedefs).  The code is reinserted
 with each argument on a separate line, aligned by the first argument,
@@ -2799,8 +2800,9 @@ be printed every pass until there is nothing left to print.
 
 \lstset{language=sed}
 <<Format a prototype from [[cproto.h]]>>=
-# strip trailing semicolon to make pattern simpler (never gets readded)
-s/;//;
+# strip trailing semicolon to make pattern simpler (never gets re-added)
+# also strip any trailing comment(s)
+s/;.*//;
 # create spaces out of all text up to first paren and append full proto
 h;s/[^(]/ /g;s/(.*/ /;G;
 # remove up to first paren plus up to end of first parameter
@@ -2820,7 +2822,7 @@ ba;
 \lstset{language=make}
 <<makefile.rules>>=
 ifneq ($(CFILES),)
-nw2latex: cproto.h
+nw2latex: cproto.h $(HEADERS)
 endif
 @
 
@@ -2831,9 +2833,20 @@ sed -f /tmp/latexhl.doc.$$ "$noweb" | sed -n -e 's/^% \(..*\) prototype$/\1/p' |
   mf="$f"
 @
 
+Note that to extract the full prototype, the first encountered string
+which looks like a prototype, up to its terminating semicolon is
+extracted, using an exteded regular expression.  This requires GNU
+sed.  I suppose I could have just used [[[A-Za-z0-9]]] instead of
+[[[[:alnum:]]]] and not needed GNU sed, but this way makes more sense.
+The improved use of sed rather than egrep allows for multi-line
+prototypes and comments after prototypes, but still does not allow
+comments within prototypes, and picks up prototype-looking code that
+isn't really prototypes.
+
 <<Extract and format a C prototype from [[cproto.h]]>>=
 sed -f /tmp/latexhl.doc.$$ "$noweb" | notangle -R"C Prototypes" 2>/dev/null | \
-  cat - cproto.h | egrep "[^_[:alnum:]]$mf\\(" | head -n 1 | \
+  eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
+     sed -n -r -e "/[^_[:alnum:]]$mf\\(/{:a N;/;/!ba; s/[\n\t]/ /g;s/  */ /g;p;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
@@ -2920,7 +2933,7 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
+	./nwtex2html $< $@ "$(call tree,$<)"
 @
 
 A configuration file is needed to set extended options.  In particular, the
@@ -2959,7 +2972,7 @@ doing some other fine tuning for TeX4ht is done in the preamble.
 <<Extract HTML CSS for current theme's background>>=
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight -S c ${theme:+-s $theme} -I </dev/null | \
+    highlight -S c ${HL_THEME:+-s $HL_THEME} -I </dev/null | \
       sed -n -e '/pre.hl/{s/.*{//;s/}.*//;
                  s/\(background-color:#\)ffffff/\1fafafa/;
                  s/#/\\#/g;
@@ -2971,7 +2984,7 @@ case "$HLPROG_TYPE" in
           "background-color:$docbgcolor; font-size: smaller;"
 	  end' > mybg.outlang
     source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
-                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+                     ${HL_THEME:+--style-css-file=$HL_THEME.css} </dev/null | \
       sed 's/#ffffff/#fafafa/i;s/white/#f6f6f6/i'
     ;;
   *) echo "background-color:#fafafa; font-size: smaller;" ;;
@@ -3019,8 +3032,7 @@ base="${1%.tex}"
 noweb="$base.nw"
 outf="$2"
 noweb_order="$3"
-theme="${4#*:}"
-export HLPROG_TYPE="$5"
+HL_THEME="${HL_THEME#*:}"
 
 <<Check highlighter>>
 
@@ -3289,11 +3301,9 @@ PDF.
 noweb="$1"
 outf="$2"
 noweb_order="$3"
-theme="$4"
-export HLPROG_TYPE="$5"
 
 # tex version allows list: prefix - ignore if there
-theme="${theme#list:}"
+HL_THEME="${HL_THEME#list:}"
 
 # place to stash highlighter temporaries
 trap "rm -rf /tmp/latexhl.*.$$" 0
@@ -3315,7 +3325,7 @@ Extract with uudecode, or, if uudecode chokes, use:
   <!--"
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
+    highlight ${HL_THEME:+-s $HL_THEME} -S c -I </dev/null | sed -n -e '
       # replace white bg with very light gray to distinguish from text
       s/\(background-color:#\)ffffff/\1fafafa/g
       # remove extra junk from block style
@@ -3337,7 +3347,7 @@ case "$HLPROG_TYPE" in
   source-highlight)
     <<Get all [[source-highlight]] color names>>
     cd $HLDIR
-    source-highlight ${theme:+--style-css-file=$theme.css} --doc -f xhtml \
+    source-highlight ${HL_THEME:+--style-css-file=$HL_THEME.css} --doc -f xhtml \
                      --lang-def=source-hl-elts.lang < source-hl-elts | \
       sed -n -e '
         # replace white bg with very light gray to distinguish from text
@@ -3707,7 +3717,7 @@ sed -i -f /tmp/latexhl.fmt.$$ "$outf"  # -i is GNU sed only
 
 \lstset{language=make}
 <<makefile.rules>>=
-nw2html: cproto.h
+nw2html: cproto.h $(HEADERS)
 @
 
 Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be

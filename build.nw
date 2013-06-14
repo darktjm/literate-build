@@ -271,7 +271,7 @@ install: misc bin
 
 clean:
 	<<Clean temporary files>>
-	rm -f makefile.{config,vars,rules}
+	rm -f $(filter-out makefile, $(MAKEFILES))
 
 distclean: clean
 	<<Clean built files>>
@@ -297,7 +297,7 @@ BIN_DIR:=/usr/local/bin
 
 <<makefile.vars>>=
 <<Common NoWeb Warning>>
-MAKEFILES:=makefile makefile.config makefile.vars makefile.rules
+MAKEFILES = makefile makefile.config makefile.vars makefile.rules
 EXEC_FILES = <<Executables>>
 
 LIB_FILES = <<Libraries>>
@@ -319,11 +319,17 @@ MISC_FILES = <<Plain Files>>
 rm -f $(DOC_FILES)
 @
 
-The makefile can make itself, as well.  This is dependent only on its source
-file; there is little point in making this dependent on the included files,
-as they will be automatically rebuilt as needed, anyway.  A quick check
-before writing out the file ensures that a blank or otherwise seriously
-invalid makefile will never be created due to errors in the source file.
+The makefile can make itself, as well.  This is dependent only on its
+source file; there is little point in making this dependent on the
+included files, as they will be automatically rebuilt as needed,
+anyway.  A quick check before writing out the file ensures that a
+blank or otherwise seriously invalid makefile will never be created
+due to errors in the source file.  However, [[-include]] statements
+are filtered out, so that GNU make doesn't try to automatically build
+the include files.  This was never a perfect check, and this filtering
+makes it less perfect:  each file must be independently error-free, and
+errors introduced from other files (such as variable definitions)
+which may affect the file being tested will not be checked.
 
 Note that Makepp has issues with recursive make invocation for the
 verification of the makefile, so this step is skipped.
@@ -345,7 +351,7 @@ makefile: $(BUILD_NOWEB)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
-	    env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
 @
@@ -487,7 +493,8 @@ makefile.
 makefile.config: $(NOWEB_ORDER)
 	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
-	notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	notangle -t8 -R$@ $^ 2>/dev/null | \
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $^ > $@
 
@@ -495,7 +502,7 @@ makefile.vars: makefile.config
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 
@@ -504,7 +511,7 @@ makefile.rules: makefile.vars
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
 	                                     $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 @
@@ -745,7 +752,7 @@ endif
 @
 
 <<Files to Count>>=
-$(CFILES) \
+$(CFILES) $(HEADERS) \
 @
 
 <<Clean temporary files>>=
@@ -845,12 +852,30 @@ this, notangle is required for this to work.  One of the goals of this
 system is to be able to generate a source tarball that does not depend on
 notangle.
 
+<<Defaults for [[makefile.config]]>>=
+AR=ar
+AR_EXTRA=
+RANLIB=ranlib
+@
+
+<<makefile.config>>=
+# The ar program
+AR=ar
+
+# Extra $(AR) options (e.g. s to perform ranlib automatically)
+AR_EXTRA=
+
+# The ranlib program
+RANLIB=ranlib
+
+@
+
 <<makefile.rules>>=
 #define build-lib
 #lib$(1).a: $(2)
 #	rm -f $$@
-#	ar cr $$@ $$^
-#	ranlib $$@
+#	$$(AR) cr$$(AR_EXTRA) $$@ $$^
+#	$$(RANLIB) $$@
 #LIB_OBJ += $(filter-out $(COFILES),$(2))
 #endef
 #
@@ -867,8 +892,8 @@ makefile.libs: makefile.rules
 	   printf %s lib$$x.a:; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf '\n\trm -f $$@\n'; \
-	   printf '\tar cr $$@ $$^\n'; \
-	   printf '\tranlib $$@\n'; \
+	   printf '\t$$(AR) cr$$(AR_EXTRA) $$@ $$^\n'; \
+	   printf '\t$$(RANLIB) $$@\n'; \
 	   printf 'LIB_OBJ += $$(filter-out $$(COFILES),'; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf ')\n'; \
@@ -877,7 +902,7 @@ makefile.libs: makefile.rules
 @
 
 <<Clean temporary files>>=
-rm -f makefile.libs $(LIB_OBJ)
+rm -f $(LIB_OBJ)
 @
 
 Of course it might be useful to also provide installation rules for selected
@@ -1749,7 +1774,7 @@ little different.
 <<Prepare for [[latexhl]]>>=
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight ${theme:+-s $theme} -S c --out-format=latex -I </dev/null | \
+    highlight ${HL_THEME:+-s $HL_THEME} -S c --out-format=latex -I </dev/null | \
       egrep 'newcommand|definecolor' | \
         sed '/bgcolor/s/{1,1,1}/{.98,.98,.98}/' > latexhl.sty.$$
     mv latexhl.sty.$$ latexhl.sty
@@ -1783,7 +1808,7 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 	end' > $HLDIR/mybg.outlang
   (
     cd $HLDIR
-    source-highlight ${theme:+--style-css-file=$theme.css} -f latexcolor \
+    source-highlight ${HL_THEME:+--style-css-file=$HL_THEME.css} -f latexcolor \
                      --lang-def=source-hl-elts.lang < source-hl-elts | \
       sed -n -e '/^\\mbox{}/{
                    s/\\mbox{}//;s/ \\\\//;s/\$\\_\$//g;
@@ -1791,7 +1816,7 @@ if [ $HLPROG_TYPE = source-highlight ]; then
 		   s/^[^\\].*/\\newcommand{\\hl&}[1]{#1}/p;}'
     # fa is ff * .98
     source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
-                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+                     ${HL_THEME:+--style-css-file=$HL_THEME.css} </dev/null | \
       sed 's/#ffffff/#fafafa/i;s/white/#fafafa/i'
   ) | <<Convert HTML color codes to \LaTeX{}>> | \
      sed -e '/^\\definecolor/{
@@ -2312,8 +2337,9 @@ HL_THEME:=
 @
 
 <<makefile.rules>>=
+export HL_THEME HLPROG_TYPE HEADERS
 %.tex: %.nw nw2latex $(call tree,%.nw)
-	./nw2latex $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
+	./nw2latex $< $@ "$(call tree,$<)"
 @
 
 <<Build Script Executables>>=
@@ -2332,13 +2358,11 @@ nw2latex: latexhl nwweavefilt addlistings
 noweb="$1"
 outf="$2"
 noweb_order="$3"
-theme="$4"
-export HLPROG_TYPE="$5"
 
 # prefix theme with "list:" to enable lstlistings
-uselst="${theme%%:*}"
+uselst="${HL_THEME%%:*}"
 if [ "list" = "$uselst" ]; then
-  theme="${theme#list:}"
+  HL_THEME="${HL_THEME#list:}"
 else
   uselst=
 fi
@@ -2766,12 +2790,14 @@ prototype, reference it using a specially formatted comment:
 \% \emph{function} prototype
 }\end{quote}
 
-This is done by gently extracting the prototype from [[cproto.h]] using sed.
-For prototypes which do not appear in [[cproto.h]], the chunk
-[[<<C Prototypes>>]] may be expanded as well, but only out of the same source
-file.  Since the C preprocessor might transform functions before they
-become prototypes, the [[<<For each reinserted C prototype>>]] chunk
-may be extended, transforming [[$mf]] as needed.  The sed script
+This is done by gently extracting the prototype from [[cproto.h]]
+using sed.  Since prototypes which appear in [[$(HEADERS)]] are
+removed from [[cproto.h]], they are allowed here as well. For
+prototypes which do not appear in either place, the chunk
+[[<<C Prototypes>>]] may be expanded as well, but only out of the same
+source file.  Since the C preprocessor might transform functions
+before they become prototypes, the [[<<For each reinserted C prototype>>]]
+chunk may be extended, transforming [[$mf]] as needed.  The sed script
 separates arguments by comma and terminates by close parenthesis
 (which means that callbacks require typedefs).  The code is reinserted
 with each argument on a separate line, aligned by the first argument,
@@ -2781,8 +2807,9 @@ be printed every pass until there is nothing left to print.
 
 \lstset{language=sed}
 <<Format a prototype from [[cproto.h]]>>=
-# strip trailing semicolon to make pattern simpler (never gets readded)
-s/;//;
+# strip trailing semicolon to make pattern simpler (never gets re-added)
+# also strip any trailing comment(s)
+s/;.*//;
 # create spaces out of all text up to first paren and append full proto
 h;s/[^(]/ /g;s/(.*/ /;G;
 # remove up to first paren plus up to end of first parameter
@@ -2802,7 +2829,7 @@ ba;
 \lstset{language=make}
 <<makefile.rules>>=
 ifneq ($(CFILES),)
-nw2latex: cproto.h
+nw2latex: cproto.h $(HEADERS)
 endif
 @
 
@@ -2813,12 +2840,37 @@ sed -f /tmp/latexhl.doc.$$ "$noweb" | sed -n -e 's/^% \(..*\) prototype$/\1/p' |
   mf="$f"
 @
 
+Note that to extract the full prototype, the first encountered string
+which looks like a prototype, up to its terminating semicolon is
+extracted, using an exteded regular expression.  This requires GNU
+sed.  I suppose I could have just used [[[A-Za-z0-9]]] instead of
+[[[[:alnum:]]]] and not needed GNU sed, but this way makes more sense.
+The improved use of sed rather than egrep allows for multi-line
+prototypes and comments after prototypes, but still does not allow
+comments within prototypes, and picks up prototype-looking code that
+isn't really prototypes.  In order to at least avoid function calls
+from being picked up, only type definition-type characters must appear
+before the function name, and the first character on the line must be
+such a character.  Of course [[(void)]] may still look like a type
+definition for this, but this at least filters out most calls.
+
 <<Extract and format a C prototype from [[cproto.h]]>>=
 sed -f /tmp/latexhl.doc.$$ "$noweb" | notangle -R"C Prototypes" 2>/dev/null | \
-  cat - cproto.h | egrep "[^_[:alnum:]]$mf\\(" | head -n 1 | \
+  eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
+     sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
+\lstset{language=sed}
+<<C Prototype Pattern>>=
+^[_[:alnum:]][_[:alnum:][:space:]()*&]*[^_[:alnum:]]$mf\\(
+@
+
+<<Extract multi-line prototype>>=
+:a N;/;/!ba; s/[\n\t]/ /g;s/  */ /g;p
+@
+
+\lstset{language=sh}
 <<Prepare for [[latexhl]]>>=
 <<For each reinserted C prototype>>
   printf %s\\n "/^% $f prototype\$/{a\\%\\"
@@ -2902,7 +2954,7 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
+	./nwtex2html $< $@ "$(call tree,$<)"
 @
 
 A configuration file is needed to set extended options.  In particular, the
@@ -2941,7 +2993,7 @@ doing some other fine tuning for TeX4ht is done in the preamble.
 <<Extract HTML CSS for current theme's background>>=
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight -S c ${theme:+-s $theme} -I </dev/null | \
+    highlight -S c ${HL_THEME:+-s $HL_THEME} -I </dev/null | \
       sed -n -e '/pre.hl/{s/.*{//;s/}.*//;
                  s/\(background-color:#\)ffffff/\1fafafa/;
                  s/#/\\#/g;
@@ -2953,7 +3005,7 @@ case "$HLPROG_TYPE" in
           "background-color:$docbgcolor; font-size: smaller;"
 	  end' > mybg.outlang
     source-highlight --lang-def=/dev/null --outlang-def=mybg.outlang \
-                     ${theme:+--style-css-file=$theme.css} </dev/null | \
+                     ${HL_THEME:+--style-css-file=$HL_THEME.css} </dev/null | \
       sed 's/#ffffff/#fafafa/i;s/white/#f6f6f6/i'
     ;;
   *) echo "background-color:#fafafa; font-size: smaller;" ;;
@@ -3001,8 +3053,7 @@ base="${1%.tex}"
 noweb="$base.nw"
 outf="$2"
 noweb_order="$3"
-theme="${4#*:}"
-export HLPROG_TYPE="$5"
+HL_THEME="${HL_THEME#*:}"
 
 <<Check highlighter>>
 
@@ -3271,11 +3322,9 @@ PDF.
 noweb="$1"
 outf="$2"
 noweb_order="$3"
-theme="$4"
-export HLPROG_TYPE="$5"
 
 # tex version allows list: prefix - ignore if there
-theme="${theme#list:}"
+HL_THEME="${HL_THEME#list:}"
 
 # place to stash highlighter temporaries
 trap "rm -rf /tmp/latexhl.*.$$" 0
@@ -3297,7 +3346,7 @@ Extract with uudecode, or, if uudecode chokes, use:
   <!--"
 case "$HLPROG_TYPE" in
   highlight-[23])
-    highlight ${theme:+-s $theme} -S c -I </dev/null | sed -n -e '
+    highlight ${HL_THEME:+-s $HL_THEME} -S c -I </dev/null | sed -n -e '
       # replace white bg with very light gray to distinguish from text
       s/\(background-color:#\)ffffff/\1fafafa/g
       # remove extra junk from block style
@@ -3319,7 +3368,7 @@ case "$HLPROG_TYPE" in
   source-highlight)
     <<Get all [[source-highlight]] color names>>
     cd $HLDIR
-    source-highlight ${theme:+--style-css-file=$theme.css} --doc -f xhtml \
+    source-highlight ${HL_THEME:+--style-css-file=$HL_THEME.css} --doc -f xhtml \
                      --lang-def=source-hl-elts.lang < source-hl-elts | \
       sed -n -e '
         # replace white bg with very light gray to distinguish from text
@@ -3689,7 +3738,7 @@ sed -i -f /tmp/latexhl.fmt.$$ "$outf"  # -i is GNU sed only
 
 \lstset{language=make}
 <<makefile.rules>>=
-nw2html: cproto.h
+nw2html: cproto.h $(HEADERS)
 @
 
 Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be
@@ -4234,26 +4283,99 @@ bibtex once, and makeindex requires running latex and makeindex and
 also providing support for reading the .ind and formatting it correctly.
 \item optional automatic symbol index (requires a lot of work; the
 symbol extractor for NoWeb is way too simplistic and in fact anything
-short of a compiler can't deal with name spaces and other issues).
+short of a compiler can't deal with scoping, name spaces, preprocessor
+name mangling and other issues).
+\item highlighting of in-line code.  In addition to just intercepting
+text between @quote and @endquote, the system would need to handle
+line wrapping somehow.  Currently, quoted code may wrap, and that's
+usually a good thing.  Placing the quoted code in a box in order to
+set its background color will likely screw everything up.
 \end{itemize}
 
 \subsection{Needs testing}
 
 \begin{itemize}
 \item tex4ht is an undocumented piece of crap (well, I guess the
-original author being dead may have something to do with that, but I
-doubt the situation would be any different were that not the case)
-that is flaky and in fact the last release does not work any more and
-I don't have the energy to try and fix it.
+original author being dead may have something to do with that, but it
+has always been that way, so I doubt the situation would be any
+different were that not the case) that is flaky and in fact the last
+release I tested does not work any more and I don't have the energy to
+try and fix it.
 \item I don't have access to commercial UNIX any more, so I don't know
 what does or does not work.  In particular, I use GNU sed's [[-i]]
-option too much now.  I should probably just convert all that to perl
-or something like that that people regularly install on systems.
+option too much now.  I should probably just convert all that to C or
+perl or something like that that people regularly install on systems.
 \end{itemize}
 
 \subsection{Improvements}
 
 \begin{itemize}
+\item Replace hodge-podge of sed, awk, grep, and perl with C.  The
+only non-portable dependency would be POSIX regex and GNU make
+(maybe).  I'd probably leave the perl notangle, though, since it's
+nice to be able to copy and paste a notangle replacement out of the
+document.  On the other hand, having the variety of languages is a
+great demonstration of the multi-language syntax highlighting feature.
+
+\item Switch to something other than GNU make.  GNU make shows bugs:
+sometimes dependencies are just ignored, especially in parallel builds
+where they are most important.  Makepp is a little better in some
+respects, but is only stopgap.  Something like Odin would be best, but
+Odin needs a lot of work (and in particular making a simple bootstrap
+like this system uses may be impossible).  On the other hand, this
+document could just implement its own simple build system (aka the old
+v1.x shell script method, but with parallel build and dependency
+support).
+
+\item While I'm at it, replace noweb as well.  The main deficiency of
+noweb is the lack of macro support.  Other deficiencies include no
+method of having chunks which do not end in a newline, and no method
+to have indented code with [[#line]] directives.  Of course this could
+be added using a filter, but too many filters just makes everything
+slow and awkward.
+
+How:
+
+\begin{itemize}
+\item In a macro definition, separate the name from argument names
+using a special syntax.  For example, using double-percents:
+\begin{verbatim}
+ @<<mymacro%%arg1%%arg2%%arg3>>=
+\end{verbatim}
+\item Macro continuations would not need to continue listing the
+arguments.
+\item Within the macro definition, chunk references named after
+arguments are replaced with the argument's value at the call point.
+\begin{verbatim}
+  doit(@<<arg1>>, @<<arg2>>, @<<arg3>>);
+\end{verbatim}
+\item At the macro call point, the chunk reference contains the actual
+argument values in the same format.
+\begin{verbatim}
+ @<<mymacro%%x%%y%%z@>>
+\end{verbatim}
+becomes
+\begin{verbatim}
+  doit(x, y, z);
+\end{verbatim}
+\item A way to escape double-percents must be provided.  Since noweb
+uses @ to escape other things, it can be used to escape @ characters
+preceeding double-percents as well as double-percents themselves.
+\item If implemented as a filter, the filter would have to do all
+expansion manually, since the expander would need to be hooked to do
+the correct parameter expansions.  The weaver would also need to be
+hooked to present macro definitions and calls in an appropriate
+manner, which may also need rewriting of some of the \LaTeX{} macros.
+In short, it would be better to just rewrite it.
+\item For the lack of no-newline support, a special no-newline end
+directive could be provided (e.g. instead of just @, use @\%).
+\item For the lack of properly indented [[#line]] directives, there is
+little that can be done.  That deficiency might need to stay.  One
+possible minor remedy would be to add a \%-directive such as \%t to
+add the current indentation level after this and before each
+subsequent line.  That would in fact cure most of the problem.
+\end{itemize}
+
 \item Go back to explicit import/export: maybe just require a prefix
 like @ for all globals.
 
@@ -4278,7 +4400,7 @@ would be included, and presumably that file then links to the previous
 file in the chain anyway.  On the other hand, documentation for the
 symbol is likely only in the first.
 \item Would need backend work to support hyperlinking to other
-documents, although adding a label in front of the first definition of
+documents, adding a label in front of the first definition of
 an exported symbol and then modifying the chunk index and the first
 chunk's previous reference somehow.  That would be nearly impossible
 with split HTML, though, unless the split HTML were generated first.
@@ -4313,11 +4435,6 @@ refuses to tangle/weave.
 \item in tangle, replace all @-references with top-level source file's
 version
 \end{itemize}
-\item Switch to something other than GNU make.  GNU make shows bugs:
-sometimes dependencies are just ignored, especially in parallel builds
-where they are most important.  Makepp is a little better in some
-respects, but is only stopgap.  Something like Odin would be best, but
-Odin needs a lot of work.
 \item Automatically set CreationDate and ModDate for PDF to RCSDate.
 Need to actually find all dates of all relevant files and use most
 recent.  svn-multi will do that automatically in \LaTeX{}, but I need to

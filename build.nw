@@ -1143,7 +1143,8 @@ cproto.h: $(CFILES) $(HEADERS)
 	test -z "$(strip $(CFILES))" || ( \
 	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
 	               $(CFILES) >$@.$$$$.h; then \
-	    sed -i -e '/^int main(/d' $@.$$$$.h; \
+	    sed -i <<Remove protos from cproto.h>>
+	              $@.$$$$.h; \
 	    grep -vn '^/\*' $@.$$$$.h | $(TACCMD) | \
 	      sed -e '<<Strip down C prototype>>' | \
 	        while IFS=: read -r l p; do \
@@ -1177,6 +1178,10 @@ cproto.h: $(CFILES:%=%.static_proto)
 	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
 	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Icp.$$$$ -E" $<; \
 	) >$@ || (rm -f $@; false)
+@
+
+<<Remove protos from cproto.h>>=
+-e '/^int main(/d' \
 @
 
 <<Build Source>>=
@@ -1385,7 +1390,7 @@ $(FIGS_XFIG): $(NOWEB)
 @
 
 <<Clean temporary files>>=
-rm -f $(NOWEB:%.nw=%.{log,aux,out,toc,lof,tex,idx,ind,ilg,bbl})
+rm -f $(NOWEB:%.nw=%.{log,aux,out,toc,lot,lof,tex,idx,ind,ilg,bbl})
 rm -f $(FIGS_XFIG) $(FIGS_DIA) $(FIGS_EPS_RAW) $(FIGS_PDF)
 @
 
@@ -4167,6 +4172,14 @@ required by other dependencies.  See [[<<C Executables>>]] and
 built using objects listed in these chunks.  [[name]] can of course be
 anything appropriate.  Unlike the chunks which expand into specific [[make]]
 variables, no backslashes are required or allowed at the end of each line.
+\item [[<<Remove protos from cproto.h>>]]: sed command-line options to
+strip prototypes from cproto.h.  End each line with a backslash.
+For example:
+\begin{quote}
+[[<<Remove protos from cproto.h>>=]]\\
+[[-e '/generated_functions/d' \]]\\
+[[@]]
+\end{quote}
 \item [[<<For each reinserted C prototype>>]]:  add a transformation
 for the modified function name ([[$mf]]).  Typically, this will
 involve invoking the C preprocessor with a few standard include files,

@@ -176,6 +176,8 @@ mfgets.o
 #ifndef _MFGETS_H
 #define _MFGETS_H
 
+#include <stdio.h>
+
 <<[[mfgets]] prototypes>>
 
 #endif /* _MFGETS_H */

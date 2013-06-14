@@ -319,11 +319,17 @@ MISC_FILES = <<Plain Files>>
 rm -f $(DOC_FILES)
 @
 
-The makefile can make itself, as well.  This is dependent only on its source
-file; there is little point in making this dependent on the included files,
-as they will be automatically rebuilt as needed, anyway.  A quick check
-before writing out the file ensures that a blank or otherwise seriously
-invalid makefile will never be created due to errors in the source file.
+The makefile can make itself, as well.  This is dependent only on its
+source file; there is little point in making this dependent on the
+included files, as they will be automatically rebuilt as needed,
+anyway.  A quick check before writing out the file ensures that a
+blank or otherwise seriously invalid makefile will never be created
+due to errors in the source file.  However, [[-include]] statements
+are filtered out, so that GNU make doesn't try to automatically build
+the include files.  This was never a perfect check, and this filtering
+makes it less perfect:  each file must be independently error-free, and
+errors introduced from other files (such as variable definitions)
+which may affect the file being tested will not be checked.
 
 Note that Makepp has issues with recursive make invocation for the
 verification of the makefile, so this step is skipped.
@@ -345,7 +351,7 @@ makefile: $(BUILD_NOWEB)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
-	    env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
 @
@@ -487,7 +493,8 @@ makefile.
 makefile.config: $(NOWEB_ORDER)
 	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
-	notangle -t8 -R$@ $^ 2>/dev/null | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	notangle -t8 -R$@ $^ 2>/dev/null | \
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $^ > $@
 
@@ -495,7 +502,7 @@ makefile.vars: makefile.config
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 
@@ -504,7 +511,7 @@ makefile.rules: makefile.vars
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
 	                                     $(NOWEB_ORDER) 2>/dev/null | \
-	        env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 @
@@ -2841,15 +2848,29 @@ sed.  I suppose I could have just used [[[A-Za-z0-9]]] instead of
 The improved use of sed rather than egrep allows for multi-line
 prototypes and comments after prototypes, but still does not allow
 comments within prototypes, and picks up prototype-looking code that
-isn't really prototypes.
+isn't really prototypes.  In order to at least avoid function calls
+from being picked up, only type definition-type characters must appear
+before the function name, and the first character on the line must be
+such a character.  Of course [[(void)]] may still look like a type
+definition for this, but this at least filters out most calls.
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
 sed -f /tmp/latexhl.doc.$$ "$noweb" | notangle -R"C Prototypes" 2>/dev/null | \
   eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
-     sed -n -r -e "/[^_[:alnum:]]$mf\\(/{:a N;/;/!ba; s/[\n\t]/ /g;s/  */ /g;p;q;}" | \
+     sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
 @
 
+\lstset{language=sed}
+<<C Prototype Pattern>>=
+^[_[:alnum:]][_[:alnum:][:space:]()*&]*[^_[:alnum:]]$mf\\(
+@
+
+<<Extract multi-line prototype>>=
+:a N;/;/!ba; s/[\n\t]/ /g;s/  */ /g;p
+@
+
+\lstset{language=sh}
 <<Prepare for [[latexhl]]>>=
 <<For each reinserted C prototype>>
   printf %s\\n "/^% $f prototype\$/{a\\%\\"
@@ -4262,26 +4283,99 @@ bibtex once, and makeindex requires running latex and makeindex and
 also providing support for reading the .ind and formatting it correctly.
 \item optional automatic symbol index (requires a lot of work; the
 symbol extractor for NoWeb is way too simplistic and in fact anything
-short of a compiler can't deal with name spaces and other issues).
+short of a compiler can't deal with scoping, name spaces, preprocessor
+name mangling and other issues).
+\item highlighting of in-line code.  In addition to just intercepting
+text between @quote and @endquote, the system would need to handle
+line wrapping somehow.  Currently, quoted code may wrap, and that's
+usually a good thing.  Placing the quoted code in a box in order to
+set its background color will likely screw everything up.
 \end{itemize}
 
 \subsection{Needs testing}
 
 \begin{itemize}
 \item tex4ht is an undocumented piece of crap (well, I guess the
-original author being dead may have something to do with that, but I
-doubt the situation would be any different were that not the case)
-that is flaky and in fact the last release does not work any more and
-I don't have the energy to try and fix it.
+original author being dead may have something to do with that, but it
+has always been that way, so I doubt the situation would be any
+different were that not the case) that is flaky and in fact the last
+release I tested does not work any more and I don't have the energy to
+try and fix it.
 \item I don't have access to commercial UNIX any more, so I don't know
 what does or does not work.  In particular, I use GNU sed's [[-i]]
-option too much now.  I should probably just convert all that to perl
-or something like that that people regularly install on systems.
+option too much now.  I should probably just convert all that to C or
+perl or something like that that people regularly install on systems.
 \end{itemize}
 
 \subsection{Improvements}
 
 \begin{itemize}
+\item Replace hodge-podge of sed, awk, grep, and perl with C.  The
+only non-portable dependency would be POSIX regex and GNU make
+(maybe).  I'd probably leave the perl notangle, though, since it's
+nice to be able to copy and paste a notangle replacement out of the
+document.  On the other hand, having the variety of languages is a
+great demonstration of the multi-language syntax highlighting feature.
+
+\item Switch to something other than GNU make.  GNU make shows bugs:
+sometimes dependencies are just ignored, especially in parallel builds
+where they are most important.  Makepp is a little better in some
+respects, but is only stopgap.  Something like Odin would be best, but
+Odin needs a lot of work (and in particular making a simple bootstrap
+like this system uses may be impossible).  On the other hand, this
+document could just implement its own simple build system (aka the old
+v1.x shell script method, but with parallel build and dependency
+support).
+
+\item While I'm at it, replace noweb as well.  The main deficiency of
+noweb is the lack of macro support.  Other deficiencies include no
+method of having chunks which do not end in a newline, and no method
+to have indented code with [[#line]] directives.  Of course this could
+be added using a filter, but too many filters just makes everything
+slow and awkward.
+
+How:
+
+\begin{itemize}
+\item In a macro definition, separate the name from argument names
+using a special syntax.  For example, using double-percents:
+\begin{verbatim}
+ @<<mymacro%%arg1%%arg2%%arg3>>=
+\end{verbatim}
+\item Macro continuations would not need to continue listing the
+arguments.
+\item Within the macro definition, chunk references named after
+arguments are replaced with the argument's value at the call point.
+\begin{verbatim}
+  doit(@<<arg1>>, @<<arg2>>, @<<arg3>>);
+\end{verbatim}
+\item At the macro call point, the chunk reference contains the actual
+argument values in the same format.
+\begin{verbatim}
+ @<<mymacro%%x%%y%%z@>>
+\end{verbatim}
+becomes
+\begin{verbatim}
+  doit(x, y, z);
+\end{verbatim}
+\item A way to escape double-percents must be provided.  Since noweb
+uses @ to escape other things, it can be used to escape @ characters
+preceeding double-percents as well as double-percents themselves.
+\item If implemented as a filter, the filter would have to do all
+expansion manually, since the expander would need to be hooked to do
+the correct parameter expansions.  The weaver would also need to be
+hooked to present macro definitions and calls in an appropriate
+manner, which may also need rewriting of some of the \LaTeX{} macros.
+In short, it would be better to just rewrite it.
+\item For the lack of no-newline support, a special no-newline end
+directive could be provided (e.g. instead of just @, use @\%).
+\item For the lack of properly indented [[#line]] directives, there is
+little that can be done.  That deficiency might need to stay.  One
+possible minor remedy would be to add a \%-directive such as \%t to
+add the current indentation level after this and before each
+subsequent line.  That would in fact cure most of the problem.
+\end{itemize}
+
 \item Go back to explicit import/export: maybe just require a prefix
 like @ for all globals.
 
@@ -4306,7 +4400,7 @@ would be included, and presumably that file then links to the previous
 file in the chain anyway.  On the other hand, documentation for the
 symbol is likely only in the first.
 \item Would need backend work to support hyperlinking to other
-documents, although adding a label in front of the first definition of
+documents, adding a label in front of the first definition of
 an exported symbol and then modifying the chunk index and the first
 chunk's previous reference somehow.  That would be nearly impossible
 with split HTML, though, unless the split HTML were generated first.
@@ -4341,11 +4435,6 @@ refuses to tangle/weave.
 \item in tangle, replace all @-references with top-level source file's
 version
 \end{itemize}
-\item Switch to something other than GNU make.  GNU make shows bugs:
-sometimes dependencies are just ignored, especially in parallel builds
-where they are most important.  Makepp is a little better in some
-respects, but is only stopgap.  Something like Odin would be best, but
-Odin needs a lot of work.
 \item Automatically set CreationDate and ModDate for PDF to RCSDate.
 Need to actually find all dates of all relevant files and use most
 recent.  svn-multi will do that automatically in \LaTeX{}, but I need to

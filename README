@@ -1,29 +1,3 @@
-This is my literate programming support package.  Its main purpose is
-to provide syntax highlighting in multiple source languages using
-NoWeb, GNU make, and a number of other freely available packages.  It
-can be configured to use one of several different highlighting
-packages (listings, GNU source-highlight, André Simon's highlight),
-and can produce PDF and HTML output in several different ways
-(pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to make
-literate C code easier.
-
-Producing the PDF and HTML output from scratch is trivial if all of
-the prerequisites are met, but rather than forcing you to read the
-NoWeb source to find out those prerequisites, I have provided the PDF
-and HTML output as well.  One of these is all you need, since they have
-the source attached (and have instructions for detaching).
-
-I have split out the basic user documentation into its own file,
-build-doc.{nw,pdf,html}.  You can just download that instead.  The PDF
-and HTML versions have both their own source and build.nw attached, so
-no further downloads are required.
-
-For details, see http://darkalpha.homelinux.org/literate/.  That page
-has a complete summary of the history of this project, including some
-much older versions of the build system.
-
-Don't bother with ada-build.nw, since it is a work in progress
-abandoned years ago.  It does work with some of my old Ada sources,
-but is mostly a non-functional repository for my old version 1 and 2
-code.  The only reason it's here is that this is a mirror of my SVN
-build directory, where that happens to reside.
+Since github no longer supports uploads (even though I didn't use them
+as much as I wanted to), I have moved this project to bitbucket:
+  https://bitbucket.org/darktjm/literate-build/overview

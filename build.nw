@@ -2799,16 +2799,16 @@ This is done by gently extracting the prototype from [[cproto.h]]
 using sed.  Since prototypes which appear in [[$(HEADERS)]] are
 removed from [[cproto.h]], they are allowed here as well. For
 prototypes which do not appear in either place, the chunk
-[[<<C Prototypes>>]] may be expanded as well, but only out of the same
-source file.  Since the C preprocessor might transform functions
-before they become prototypes, the [[<<For each reinserted C prototype>>]]
-chunk may be extended, transforming [[$mf]] as needed.  The sed script
-separates arguments by comma and terminates by close parenthesis
-(which means that callbacks require typedefs).  The code is reinserted
-with each argument on a separate line, aligned by the first argument,
-i.e. after the left parenthesis.  This is done by converting the text
-before the parenthesis into spaces, and stripping off the text not to
-be printed every pass until there is nothing left to print.
+[[<<C Prototypes>>]] may be expanded as well.  Since the C preprocessor
+might transform functions before they become prototypes, the
+[[<<For each reinserted C prototype>>]] chunk may be extended,
+transforming [[$mf]] as needed.  The sed script separates arguments by
+comma and terminates by close parenthesis (which means that callbacks
+require typedefs).  The code is reinserted with each argument on a
+separate line, aligned by the first argument, i.e. after the left
+parenthesis.  This is done by converting the text before the
+parenthesis into spaces, and stripping off the text not to be printed
+every pass until there is nothing left to print.
 
 \lstset{language=sed}
 <<Format a prototype from [[cproto.h]]>>=
@@ -2860,7 +2860,7 @@ such a character.  Of course [[(void)]] may still look like a type
 definition for this, but this at least filters out most calls.
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-sed -f /tmp/latexhl.doc.$$ "$noweb" | notangle -R"C Prototypes" 2>/dev/null | \
+notangle -R"C Prototypes" $noweb_order 2>/dev/null | \
   eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
      sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'

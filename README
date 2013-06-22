@@ -7,20 +7,46 @@ and can produce PDF and HTML output in several different ways
 (pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to make
 literate C code easier.
 
+For details, see http://darkalpha.homelinux.org/literate/.  That page
+has a complete summary of the history of this project, including some
+much older versions of the build system.
+
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
 NoWeb source to find out those prerequisites, I have provided the PDF
 and HTML output as well.  One of these is all you need, since they have
-the source attached (and have instructions for detaching).
+the source attached (and have instructions for detaching).  These are
+available in the downloads section:
+
+   https://bitbucket.org/darktjm/literate-build/downloads/build.pdf
+   https://bitbucket.org/darktjm/literate-build/downloads/build.html
 
 I have split out the basic user documentation into its own file,
 build-doc.{nw,pdf,html}.  You can just download that instead.  The PDF
 and HTML versions have both their own source and build.nw attached, so
 no further downloads are required.
 
-For details, see http://darkalpha.homelinux.org/literate/.  That page
-has a complete summary of the history of this project, including some
-much older versions of the build system.
+   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.pdf
+   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.html
+
+There are a few extra C utilities that I use in a lot of my other code
+as well.  It's pretty poorly designed (at least namespace-wise), but
+very convenient for me.
+
+   https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.pdf
+   https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.html
+
+In addition, the build system has a mechanism to create a tarball of
+the extracted sources, which should no longer depend on the presence
+of NoWeb.  This tarball is most useful if you actually want to compile
+the tjm-ext library without using the build system from scratch:
+
+   https://bitbucket.org/darktjm/literate-build/downloads/build-src.tar.gz
+
+For all of the downloads listed above, I may upload less frequently
+than I update the git.  Updating the git from my personal sources is
+scriptable, but as far as I can tell, uploads are not.  It's too much
+trouble to keep 6 files up-to-date all the time.
 
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,

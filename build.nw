@@ -3490,7 +3490,6 @@ will end up coming from the build document every time.
 % template is {, A=arg, [=optarg, C=optarg/save, ==assign, +=white, (=..)
 % l2h macro hypertxt 2 <a href="###$1">#2</a>
 % l2h macro url 1 <a href="#$1">#$1</a>
-% l2h substitution ref * A{
 % l2h envblock centering center
 % l2h ignore discretionary {{{
 % l2h ignore nwcodepenalty =

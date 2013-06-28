@@ -39,7 +39,7 @@ code using this system, you will need to understand NoWeb as well
 (it's not difficult).  If you don't want to generate documentation,
 you can replace the noroots command using makefile.config; a
 replacement for notangle is given below.
-\item For PDF output, you will need good, working \LaTeX{}
+\item For PDF output, you will need a good, working \LaTeX{}
 installation.  There are a number of bundles which include almost
 everything you'll ever need.  In particular, the framed package must
 be up-to-date.  Note that XeTeX is supported as well.  For PDF

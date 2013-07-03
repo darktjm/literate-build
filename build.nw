@@ -4500,7 +4500,7 @@ possible minor remedy would be to add a \%-directive such as \%t to
 add the current indentation level after this and before each
 subsequent line.  That would in fact cure most of the problem.
 
-\item The fangle (\url{www.nongnu.org/fangle) tool only supports
+\item The fangle (\url{www.nongnu.org/fangle}) tool only supports
 TeXmacs and LyX file formats, but supports macros and automatic
 escaping.  The automatic escaping bit in particular would be useful.
 For example, shell code inserted into make code has dollar signs

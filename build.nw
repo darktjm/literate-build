@@ -637,6 +637,7 @@ check:
                    test "$$gotat" || echo "$$f: $$prev not terminated by @"; \
                    gotat=; \
                    prev="$${lno}: $$x";; \
+		"@@<<"*|"@@>>"*|"@[["|"@]]") ;; \
                 @|@[^@]*) \
 		   test "$$gotat" && echo "$$f: $${lno}: extra @"; \
                    gotat=y; \
@@ -1041,10 +1042,9 @@ parameters are file names, and are left in [[ARGV]].
 <<perl-notangle>>=
 my $chunk = '*';  my $tab = 0;
 
-while($#ARGV > 0 && $ARGV[0] =~ /^-.*/) {
-  if($ARGV[0] =~ /^-R/) {
-    $chunk = $ARGV[0];
-    $chunk =~ s/-R//;
+while($#ARGV >= 0 && $ARGV[0] =~ /^-.*/) {
+  if($ARGV[0] =~ /^-R(.*)/) {
+    $chunk = $1;
   } elsif($ARGV[0] =~ /^-t(.*)/) {
     $tab = $1;
   }
@@ -1281,6 +1281,752 @@ EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
                 -D_XOPEN_SOURCE_EXTENDED=1
 @
 
+\section{NoWeb Enhancements}
+
+NoWeb's tangler has a simple syntax and usage, but suffers from the
+lack of a few features.  Sometimes, files should not end in a newline,
+but notangle always adds one.  Also, sometimes, consecutive chunks
+should not be separated by newlines, but again, notangle always adds
+one.  Fixing this is not difficult; a filter could be created to do
+this.
+
+I like to consolidate code as much as possible.  I do this in C using
+either subroutines or preprocessor macros.  The macros are more useful
+when the number of inputs and/or outputs are large, or using a macro
+is significantly faster.  The subroutines cannot even be used when
+doing something like defining a large number of similar symbols, or
+providing a more convenient way to define data tables.  The
+preprocessor can usually accomplish what I need, but the price is that
+the debugger cannot debug code defined by the preprocessor.  In
+addition, there are some languages which lack a preprocessor.  As
+such, the original Web system had macros with arguments, and I would
+like something similar.  Fixing this will require much more than just
+a filter.
+
+I propose the following syntax changes:
+
+\begin{itemize}
+
+\item A star (*) at the start of the name used in a chunk definition
+line indicates trailing newline suppression, if the chunk name is not
+identical to star (i.e., the default chunk).  This star is removed to
+obtain the real chunk name being defined.
+
+\item A chunk name used in a chunk definition line may be followed by
+a parameter list in parentheses.  All parameters are prefixed with an
+at-sign (@).  The only characters forbidden in parameter names are
+at-signs and invalid NoWeb syntax.  Since at-signs preceed every
+parameter name, no separator is required (or allowed) between
+parameter names.  The actual chunk name is the text preceeding the
+opening parenthesis and optional whitespace.  Any further definitions
+using this chunk name must either specify no parameters or the same
+list of parameter names.
+
+\item No chunk name may begin with an at-sign (@).  That is, the names
+starting with an at-sign are reserved for parameter names.
+
+\item Chunk references beginning with an at-sign (@) expand to the
+parameter with the name following the at-sign defined by the closest
+parent taking a parameter of that name.
+
+\item A chunk reference consisting of the name of a chunk taking
+parameters, followed by optional whitespace, followed by as many
+in-line code segments as there are parameters, represents an expansion
+of the reference with the parameters taking the value of the code
+within the in-line code segments in their respective positions.  No
+expansion is done within the code segments except for parameter
+references; these may be used to pass parameters on to another macro.
+
+\end{itemize}
+
+For example:
+
+\lstset{language=txt}
+<<nt-enh-tst>>=
+@<<*blah@>>=
+No trailing newline.
+@@
+
+@<<blah(@x@y)@>>=
+blah now takes parameters @x and @y.
+@@
+
+@<<blah@>>=
+x=@<<@x@>>; y=@<<@y@>>;
+@@
+
+@<<bar@>>=
+This expands blah with @x=15 and @y=a + b.
+@<<blah[[15]][[a + b]]@>>
+This expands blah with @x and @y undefined/blank
+@<<blah@>>
+This refers to an undefined parameter @z
+@<<@z@>>
+@@
+ 
+@<<boo(@a)@>>=
+This expands blah with @x=@a and @y=@a
+@<<blah [[@<<@a@>>]][[@<<@a@>>]]@>>
+@@
+ 
+@<<zoo(@x)>>=
+Both of the following expand to the same thing, setting
+@@x and @y of blah without affecting @x of zoo.
+@<<blah[[x@<<@x@>>x]][[y@<<@x@>>y]]@>>
+@<<blah[[x@<<@x@>>x]][[y@<<@x@>>y]]@>>
+@@
+ 
+@<<bar@>>=
+@<<boo[[yup]]@>>
+@<<zoo[[gup]]@>>
+@@
+@
+
+Running the above text through the tangler to produce bar should
+result in the following text:
+
+<<nt-enh-tst-out>>=
+This expands blah with @x=15 and @y=a + b.
+No trailing newline.blah now takes parameters @x and @y.
+x=15; y=a + b;
+This expands blah with @x and @y undefined/blank
+No trailing newline.blah now takes parameters @x and @y.
+x=; y=;
+This refers to an undefined parameter @z
+
+This expands blah with @x=@a and @y=@a
+No trailing newline.blah now takes parameters @x and @y.
+x=yup; y=yup;
+Both of the following expand to the same thing, setting
+@@x and @y of blah without affecting @x of zoo.
+No trailing newline.blah now takes parameters @x and @y.
+x=xgupx; y=ygupy;
+No trailing newline.blah now takes parameters @x and @y.
+x=xgupx; y=ygupy;
+@
+
+and the following warnings:
+
+<<nt-enh-tst-warn>>=
+nt-enh-tst: 17: too few arguments for @<<blah@>>
+nt-enh-tst: 10: undefined parameter: @x
+nt-enh-tst: 10: undefined parameter: @y
+nt-enh-tst: 19: undefined parameter: @z
+@
+
+Tangling these enhancements is the easy part.  Rather than create a
+new tangler, the NoWeb pipeline is used.  Also, rather than modifying
+the NoWeb tangler, a new one is developed from scratch.   If Ramsey
+had made the parsing and collection portions of the tangler a library,
+maybe that library could be used here, but instead everything is
+rewritten, slightly differently.  The as-yet-unreleased NoWeb 3 is
+better in that regard, but this is for NoWeb 2.
+
+While I would prefer to write this in C, there are valid arguments for
+writing this in perl instead.  If I use C, I will either have to
+develop some string processing and hash table routines, or I will have
+to use an existing library, such as GLib.  While I am not too
+concerned about non-POSIX systems, regular expression support is not
+necessarily present on non-POSIX systems, either, unless something
+like GLib is used.  The problem with GLib is that it is not as
+commonly available as perl, and is also not consistently easy to find
+(e.g. [[pkg-config]] is not universally available, and the token for
+[[GLib]] is inconsistent), and requires work to ensure that the
+correct versions are available.  In contrast, as long as I do not use any
+esoteric libraries or advanced features, perl should word with most
+installations without too much trouble.  A simple tangler was already
+developed in a previous section, but that tangler did not support any
+of the extensions, or the [[-L]] option.  It also parsed the file
+directly, rather than using the NoWeb pipeline format.
+
+On the other hand, C++ provides most of the needed functionality in
+the standard template library, so perhaps one day I will rewrite this
+in C++.
+
+\lstset{language=perl}
+<<Build Script Executables>>=
+nt-adv \
+@
+
+<<Common Perl Prefix>>=
+#!/bin/sh
+#!perl
+<<Common NoWeb Warning>>
+eval 'exec perl -x -f "$0" "$@"'
+  if 0;
+
+use strict;
+@
+
+<<nt-adv>>=
+<<Common Perl Prefix>>
+
+<<Parse [[nt-adv]] options>>
+
+<<Gather code chunks from NoWeb pipeline>>
+
+<<Expand and output requested chunk with extensions>>
+@
+
+The only possible arguments are the option flags.  These are [[-R]]
+(the chunk to extract), [[-t]] (tab expansion), and [[-L]] (line
+directive insertion).
+
+<<Parse [[nt-adv]] options>>=
+my $chunk = '*'; my $tab = 0; my $line;
+
+while($#ARGV >= 0) {
+  if($ARGV[0] =~ /^-R(.*)/) {
+    $chunk = $1;
+  } elsif($ARGV[0] =~ /^-t(.*)/) {
+    $tab = $1;
+    $tab = 0 if $tab = "";
+  } elsif($ARGV[0] =~ /^-L(.*)/) {
+    $line = $1 eq '' ? '#line %L "%F"%N' : $1;
+  } else {
+    print STDERR "Unknown option $ARGV[0]\n";
+    exit 1;
+  }
+  shift @ARGV;
+}
+@
+
+Gathering code chunks is completely different from the raw
+[[notangle]] replacement.  Basically, it is a duplication of the
+original notangle code, converted to perl.  The only change (other
+than the internal representation) is that arguments are stripped and
+collected separately, and that the initial star is stripped and stored
+separately as well.
+
+The internal representation is as follows:  [[%chunks]] is a hash
+whose index is the chunk name (without arguments).  [[%args]] and
+[[%argdef]] are indexed on the chunk name as well; the former is the
+argument list, with parentheses and initial at-sign stripped, and the
+latter is the file name and line number on which it was first defined.
+
+Each entry in [[%chunks]] is an array.  Each array element is corresponds
+to (possibly empty) text followed by a (possibly empty) chunk
+reference.  The file and line number are stored as well, along with
+the no-newline flag.  These are stored in a hash, whose index name is
+[[text]], [[ref]], [[file]], [[line]], and [[nonl]], respectively.
+Since the reference, if present, is at the end of the text, the end
+position is saved as well ([[refline]]).
+
+<<Gather code chunks from NoWeb pipeline>>=
+my $lineno = 1; my $file = '<stdin>';
+<<Other code chunk gathering globals>>
+while(<>) {
+  OUT: {
+    do {
+      <<Skip over non-code, counting lines>>
+    } while(<>);
+  }
+  last if eof;
+  <<Read chunk into hash table>>
+}
+@
+
+<<Skip over non-code, counting lines>>=
+if(/^\@fatal( |$)/) {
+  exit 1;
+} elsif(/^\@(index |)nl( |$)/) {
+  $lineno++;
+<<Adjust code chunk line/file based on directives>>
+} elsif(/^\@begin code( |$)/) {
+  last OUT;
+}
+@
+
+<<Adjust code chunk line/file based on directives>>=
+} elsif(/^\@file (.*)$/) {
+  $file = $1;
+  $lineno = 1;
+} elsif(/^\@line (.*)$/) {
+  $lineno = $1 - 1;
+@
+
+<<Other code chunk gathering globals>>=
+my (%chunks, %args, %argdef);
+@
+
+<<Read chunk into hash table>>=
+while(<>) {
+  if(/^\@text( |$)/) {
+    print STDERR "Invalid pipeline (defn) $_\n";
+    exit 1;
+  }
+  last if(/^\@defn /)
+}
+last if eof;
+m/^\@defn (\*)?(.*?)(?:\s*\(\@(.*)\))?$/;
+my $chunkname = $2; my $hasstar = $1;
+if($hasstar and $chunkname eq '') {
+  $hasstar = undef;
+  $chunkname = '*';
+}
+if($3) {
+  if($args{$chunkname} and $args{$chunkname} ne $3) {
+    print STDERR "$file: $lineno: argument mismatch ($args{$chunkname} " .
+                 "originally defined at $argdef{$chunkname}\n";
+    exit 1;
+  }
+  $args{$chunkname} = $3;
+  $argdef{$chunkname} = "$file: $lineno";
+}
+if(/^\@defn (\*)?\@/) {
+  print STDERR "$file: $lineno: chunk names may not begin with \@\n";
+  exit 1;
+}
+if(<> !~ /^\@nl( |$)/) {
+  print STDERR "Invalid pipeline (defn nl) $_\n";
+  exit 1;
+}
+++$lineno;
+my %curchunk;
+<<Clear [[%curchunk]]>>
+while(<>) {
+  last if(/^\@end code( |$)/);
+  if(/^\@nl( |$)/) {
+    $curchunk{'text'} .= "\n";
+    $lineno++;
+  } elsif(/^\@index nl( |$)/) {
+    $lineno++;
+  } elsif(/^\@text ?(.*)$/) {
+    $curchunk{'text'} .= $1;
+  } elsif(/^\@use (.*)$/) {
+    $curchunk{'ref'} = $1;
+    $curchunk{'refline'} = $lineno;
+    $chunks{$chunkname} = [] unless(@chunks{$chunkname});      
+    push @{$chunks{$chunkname}}, {%curchunk};
+    <<Clear [[%curchunk]]>>
+  <<Adjust code chunk line/file based on directives>>
+  } elsif(!/^\@index( |$)/) {
+    print STDERR "$file: $lineno:  Invalid code chunk\n";
+    exit 1;
+  }
+}
+$chunks{$chunkname} = [] unless(@chunks{$chunkname});      
+push @{$chunks{$chunkname}}, {%curchunk};
+@
+
+<<Clear [[%curchunk]]>>=
+%curchunk = undef;
+$curchunk{'text'} = "";
+$curchunk{'file'} = $file;
+$curchunk{'line'} = $lineno;
+$curchunk{'nonl'} = $hasstar;
+@
+
+The expansion of a chunk simply outputs the text portions, and
+recursively expands the reference portions.  It would be possible to
+do this all in one loop, like was done with the simpler notangle
+replacement, but there is little advantage:  the stack required for
+recursion would simply be emulated by the array of text and
+references.  In order to prevent infinite recursion, a hash of
+in-progress expansions is kept; an attempt to expand something already
+in the array raises an error.
+
+The final newline of every expansion but the last is suppressed.  I
+believe notangle actually strips out every last newline, but then
+forcibly adds one to the root node.  This is not a bad policy; the
+only modification is to retain the starred flag of the last chunk of
+the root node, so the final newline can be suppressed as well.
+
+The expansion routine only needs to know what chunk reference to
+expand, and how much to indent it.  The chunk reference may or may not
+include actual parameters for a parameterized chunk.  It needs to
+return the last no-newline flag in case it's the root node.
+
+<<Expand and output requested chunk with extensions>>=
+$file='cmdline';
+$lineno = 0;
+expand_chunk($chunk, '') or print "\n";
+@
+
+<<Expand and output requested chunk with extensions>>=
+my %in_progress;
+sub expand_chunk($$) {
+  my ($name, $indent) = @_;
+  my $nonl;
+  <<Expand chunk [[$name]] and indent it by [[$indent]]>>
+  return $nonl;
+}
+@
+
+The name of the chunk to expand may include actual parameters.
+Regardless of whether or not the chunk being called actually takes
+parameters, the chunk reference has potential actual parameters
+stripped from the end until either there are no more or the remaining
+portion of the reference names an existing chunk.  As they are being
+stripped off, their text is saved in [[@argv]].  Since parameters are
+stripped off the tail end, they are added to this array in reverse
+order.  The chunk name with parameters stripped off is retained in
+[[$basename]].
+
+<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
+my @argv;
+my $basename = $name;
+my $chunk = $chunks{$basename};
+# If not found, it may be a parameterized expansion
+unless($chunk) {
+  # parameters cannot have parameters, so error out immediately
+  if($name =~ /^\@/) {
+    print STDERR "$file: $lineno: undefined parameter: $name\n";
+    return 1; # nothin generated; suppress newline
+  }
+  <<Strip actual parameters until no more or valid chunk name>>
+}
+unless($chunk) {
+  print STDERR "$file: $lineno: undefined chunk name: @<<$name@>>\n";
+  return 1; # nothing generated; suppress newline
+}
+if($in_progress{$basename}) {
+  print STDERR "$file: $lineno: cyclic expansion $basename\n";
+    exit 1;
+}
+@
+
+The actual parameters claim to support any valid NoWeb syntax, but
+really the only supported syntax is nested balanced square braces, and
+parameter references in the form of normal chunk references.  At-signs
+may be used to escape the parameter references.  While I would
+normally use a simple loop with brace tracking to determine the
+boundaries and whether or not the braces are correct, a single
+recursive regular expression is used instead.
+
+Parameter references are expanded immediately, to avoid conflict with
+setting the parameter values for the chunk to be expanded.
+
+<<Strip actual parameters until no more or valid chunk name>>=
+while($basename =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|(\[(?2)\]))*)\]\]$/) {
+  my $arg = ''; my $argtxt = $2;
+  $basename = $1;
+  <<Expand any parameter references in [[$argtxt]] into [[$arg]]>>
+  # add to parameter array
+  push @argv, $arg;
+  $chunk = $chunks{$basename};
+  last if($chunk);
+}
+@
+
+A recursive call would be the most consistent way to expand the
+parameter reference, but actually parameters are never anything but a
+single block of pure text, so a direct lookup is sufficient.
+Otherwise, the entire routine would have to be rewritten to return a
+string rather than print it.
+
+<<Expand any parameter references in [[$argtxt]] into [[$arg]]>>=
+while($argtxt =~ /(.*?)(?<!@)@<<(@[^@]+)@>>(.*)/) {
+  my $parm = $chunks{$2};
+  print STDERR "$file: $lineno: undefined parameter: $2\n" unless($parm);
+  $arg .= $1 . ${$$parm[0]}{'text'};
+  $argtxt = $3;
+}
+$arg .= $argtxt;
+@
+
+Now that there is a valid chunk name and parameter list, formal
+parameters can be assigned values.  Any formal parameters for which an
+actual parameter was not provided is explicitly unassigned, so that
+higher level assignments don't interfere.  Passing variable values
+down must be done explicitly.  Since the values need to be restored
+after this chunk has been expanded, the old values are retained in
+[[%revert]].
+
+<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
+my %revert;
+my $too_few;
+my $chunkargs = $args{$basename} or "";
+while($chunkargs ne "") {
+  $chunkargs =~ /([^@]+)(?:\@(.*))?/;
+  $chunkargs = $2;
+  my $v = '@' . $1;
+  $revert{$v} = $chunks{$v};
+  my %newent;
+  $newent{'file'} = $file;
+  $newent{'line'} = $lineno;
+  if($#argv >= 0) {
+    $newent{'text'} = pop @argv;
+    $chunks{$v} = [{%newent}];
+  } else {
+    $too_few = 1;
+    $chunks{$v} = undef;
+  }
+}
+# Warn of mismatch between # of expected and actual args
+if($#argv >= 0) {
+  print STDERR "$file: $lineno: too many arguments for @<<$basename@>>\n";
+} elsif($too_few) {
+  print STDERR "$file: $lineno: too few arguments for @<<$basename@>>\n";
+}
+<<Perform chunk reference expansion using new parameter values>>
+my ($v, $old);
+$chunks{$v} = $old while(($v, $old) = each %revert);
+@
+
+Next, the text is written to the output, and any references are
+recursively expanded.  Before printing any non-blannk text, a line
+directive is printed, if enabled.  The end of any chunk piece is
+indicated by the lack of a reference (there is always at least a
+trailing newline, even if the last text in the piece was a reference).
+These ends are the places to honor the no-newline flag.  The very last
+one must be detected using an index loop (there doesn't appear to be a
+way to detect the last array element when using a [[foreach]]-style
+iterator); this last piece of text always has its trailing newline
+stripped.
+
+Indentation is performed by finding the current column at expansion:
+take the text of the line to date and convert non-space characters to
+spaces.  This is suppressed when line directives are generated, just
+like notangle.  Ramsey states that when line directives are generated,
+column numbers match the original code.  In order for the first line
+after a reference expansion to meet this requirement, it has to be
+indented to the column after the chunk reference text.  This
+indentation is built into [[$tindent]], which is always reset to
+empty after indenting.
+
+<<Perform chunk reference expansion using new parameter values>>=
+$in_progress{$basename} = 1;
+my $tindent = '';
+for(my $i = 0; $i <= $#$chunk; $i++) {
+  my $piece = $$chunk[$i];
+  my $text = $$piece{'text'};
+  if($line and $text ne '') {
+    <<Print notangle line directive>>
+  }
+  my $ref = $$piece{'ref'};
+  if($ref) {
+    my $rindent = $indent;
+    unless($line) {
+      my $lastnl = rindex($text, "\n");
+      if($lastnl >= 0) {
+        $rindent .= substr($text, $lastnl + 1);
+      } else {
+        $rindent .= $text;
+      }
+      $rindent =~ s/\S/ /g;
+    }
+    <<Adjust chunk indentation and print [[$text]]>>
+    print "\n" if($line and $text ne "" and substr($text, 1) ne "\n");
+    $file = $$piece{'file'};
+    $lineno = $$piece{'refline'};
+    expand_chunk($ref, $rindent);
+    if($line) {
+      $tindent .= ' ' x (length($ref) + 4);
+      print "\n";
+    }
+  } else {
+    $nonl = $$piece{'nonl'};
+    # last chunk always has trailing NL suppressed
+    $text =~ s/\n\Z// if($nonl or $i == $#$chunk);
+    <<Adjust chunk indentation and print [[$text]]>>
+    $tindent = '';
+  }
+}
+$in_progress{$basename} = undef;
+@
+
+<<Adjust chunk indentation and print [[$text]]>>=
+$text =~ s/\n/\n$indent/gm;
+$text = $tindent . $text;
+if($tab > 0) {
+  while($text =~ s/^(\t*) {$tab}/$1\t/gm) {}
+}
+print $text;
+@
+
+Ramsey puts a lot more effort into managing whitespace and line
+directives, but really, this is generated code, not meant to be read
+or used directly by anyone.  As long as the line numbers are correct,
+who cares?
+
+<<Print notangle line directive>>=
+my $lp; my $lt = $line;
+while($lt =~ /(.*?)%(([+-])([0-9]+)L|[%FLN])(.*)/) {
+  $lp .= $1;
+  $lt = $5;
+  if($2 eq '%') {
+    $lp .= '%';
+  } elsif($2 eq 'N') {
+    $lp .= "\n";
+  } elsif($2 eq 'F') {
+    $lp .= $$piece{'file'};
+  } else { # L
+    my $l = $$piece{'line'};
+    if($3 eq '+') {
+      $lp += $4;
+    } elsif($3 eq '-') {
+      $lp -= $4;
+    }
+    $lp .= $l;
+  }
+}
+print $lp . $lt;
+@
+
+To actually use this back end, a new wrapper script is provided.  It
+assumes that [[notangle]] is the NoWeb version, copies it, and
+replaces [[nt]] with [[nt-adv]].
+
+\lstset{language=make}
+<<Build Source>>=
+notangle-adv \
+@
+
+<<Clean temporary files>>=
+rm notangle-adv \
+@
+
+<<makefile.rules>>=
+notangle-adv: nt-adv
+	sed 's%$$LIB/nt%nt-adv%' < `which notangle` >notangle-adv
+	chmod +x notangle-adv
+@
+
+\lstset{language=txt}
+<<FIXME>>=
+use this instead of notangle everywhere possible
+@
+
+This is not the end of it:  [[noroots]] needs changes as well.  Is
+markup really necessary for this?  I think not.
+
+<<Build Script Executables>>=
+noroots-adv \
+@
+
+\lstset{language=perl}
+<<noroots-adv>>=
+<<Common Perl Prefix>>
+
+my (%def, %use);
+
+open(my $f, "-|", "/usr/libexec/noweb/markup", @ARGV);
+
+while(<$f>) {
+  if(/^\@quote$/) {
+    while(<$f>) {
+      last if(/\@endquote$/);
+    }
+  } elsif(/^\@defn (.*?)(?:\s*\(\@.*\))?$/) {
+    $def{$1} = 1;
+  } elsif(/^\@use (.*)$/) {
+    $use{$1} = 1;
+  }
+}
+for my $u (keys %use) {
+  until($def{$u}) {
+    last unless($u =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|(\[(?3)\]))*)\]\]$/);
+    $u = $1;
+  }
+  $use{u} = 1 if($def{$u});
+}
+for my $d (keys %def) {
+  print "@<<$d@>>\n" unless $use{$d};
+}
+@
+
+\lstset{language=txt}
+<<FIXME>>=
+fix hard-coding of lib location
+use noroots-adv instead of noroots
+fix noroots example
+@
+
+These enhancements also require changes to the weavers.  A filter run
+before the indexing can strip off all extra characters on the
+definitions (and maybe uses as well, but that requires a full list of
+[[$NOWEB_ORDER]] to ensure that all possible uses are detected).  The
+excess text can simply be marked with a different token, such as
+[[@tjma]] for appended text and [[@tjmp]] for prepended text.  A
+filter run after indexing can then re-add the prepended and appended
+text, and also append the full formal parameter list to any chunk that
+doesn't have it.  The main thing missing in this approach is any sane
+way of dealing with parameter references.  However, it appears that
+the NoWeb backends deal with use-references without cross reference
+information in an appropriate manner, so the prefilter just hides them
+by converting them to [[@tjmuse]] and the post-filter unhides them.
+
+<<Build Script Executables>>=
+nw-adv-preindex nw-adv-postindex \
+@
+
+\lstset{language=perl}
+<<nw-adv-preindex>>=
+<<Common Perl Prefix>>
+
+my (%defs, %args);
+
+if($#ARGV >= 0) {
+  foreach my $a (@ARGV) {
+    open(my $fh, "markup $a|");
+    while(<$fh>) {
+      next unless(m/^\@defn \*?(.*?)(?:\s*\(\@(.*)\))?$/);
+      $defs{$1} = 1;
+      $args{$1} = $2 if($2);
+    }
+  }
+}
+
+my @file = <STDIN>;
+foreach my $l (@file) {
+  next unless($l =~ m/^\@defn \*?(.*?)(?:\s*(\(\@.*\)))?$/);
+  $defs{$1} = 1;
+  $args{$1} = $2 if($2);
+}
+
+foreach my $l (@file) {
+  if($l =~ m/^\@defn (\*)?(.*?)(?:\s*\(\@.*\))?$/) {
+    print "\@tjmp *\n" if($1);
+    my $a = $args{$2};
+    print "\@tjma $a\n" if($a);
+    print "\@defn $2\n";
+  } elsif($l =~ /^\@use (.*\[\[.*\]\])$/) {
+    my $a = "";
+    my $b = $1;
+    until($defs{$b}) {
+      last unless($b =~ /(.*?)\s*(?<!@)(\[\[((?:[^][]|(\[(?3)\]))*)\]\])$/);
+      $b = $1;
+      $a = $2 . $a;
+    }
+    if($defs{$b} and $a ne "") {
+      print "\@tjma $a\n\@use $b\n";
+    } else {
+      print $l;
+    }
+  } else {
+    $l =~ s/^\@use \@/\@tjmuse \@/;
+    print $l;
+  }
+}
+@
+
+<<nw-adv-postindex>>=
+<<Common Perl Prefix>>
+
+my $tjmp = "";
+my $tjma = "";
+
+while(<STDIN>) {
+  s/^\@tjmuse /\@use /;
+  if(/^\@tjmp (.*)$/) {
+    $tjmp = $1;
+  } elsif(/^\@tjma (.*)$/) {
+    $tjma = $1;
+  } elsif(/^\@(defn|use) (.*)$/) {
+    print "\@$1 $tjmp$2$tjma\n";
+    $tjmp = $tjma = '';
+  } else {
+    print "$_";
+  }
+}
+@
+
+\lstset{language=txt}
+<<FIXME>>=
+use for nw2latex & nw2html
+@
+
 \section{PDF Code Documentation}
 
 Building the PDF code documentation is simple: just convert to \LaTeX{}
@@ -1304,6 +2050,7 @@ added to the config file so the user can set the environment variable
 appropriately (which also coincidentally overrides the security
 feature, as well).
 
+\lstset{language=make}
 <<makefile.config>>=
 # The PDF command to use: must be pdflatex or xelatex.
 # note: to use attachments with xetex, the following may be necessary:
@@ -1451,16 +2198,6 @@ nwweavefilt \
 @
 
 \lstset{language=perl}
-<<Common Perl Prefix>>=
-#!/bin/sh
-#!perl
-<<Common NoWeb Warning>>
-eval 'exec perl -x -f "$0" "$@"'
-  if 0;
-
-use strict;
-@
-
 <<nwweavefilt>>=
 <<Common Perl Prefix>>
 
@@ -4544,74 +5281,16 @@ really changes.
 \end{itemize}
 
 \item While I'm at it, replace noweb as well.  The main deficiency of
-noweb is the lack of macro support.  Other deficiencies include no
-method of having chunks which do not end in a newline, and no method
-to have indented code with [[#line]] directives.  Of course this could
-be added using a filter, but too many filters just makes everything
-slow and awkward.
+noweb is the lack of macro support (but I guess I've got a partially
+working solution above).  Other deficiencies include no method of
+having chunks which do not end in a newline (again, solved above), and
+no method to have indented code with [[#line]] directives.  Of course
+this could be added using a filter, but too many filters just makes
+everything slow and awkward.
 
-How:
+How (see above for implementation of macros and no-newline):
 
 \begin{itemize}
-
-\item In a macro definition, separate the name from argument names
-using a special syntax.  For example, using double-percents:
-\begin{verbatim}
- @<<mymacro%%arg1%%arg2%%arg3>>=
-\end{verbatim}
-
-\item Macro continuations would not need to continue listing the
-arguments.  However, the weaver would have to always weave the full
-call syntax; e.g.:
-\begin{verbatim}
-  @<<mymacro @<<arg1@>>@<<arg2@>>@<<arg3@>>@>>+=...
-\end{verbatim}
-
-\item Within the macro definition, chunk references named after
-arguments are replaced with the argument's value at the call point.
-This requires top-down selective substitution:  you don't know what
- @<<arg1>> really means until you are sure it's either not a macro
-definition or you know what the macro call text is.
-\begin{verbatim}
-  doit(@<<arg1>>, @<<arg2>>, @<<arg3>>);
-\end{verbatim}
-Rendering this might even be more difficult:  the def/ref links may be
-difficult to determine without knowing the full tree.  Perhaps to make
-it simpler, at least all used arg names could become reserved for use
-as macro args.  On the other hand, macro args could have a different
-syntax that clearly distinguishes them (e.g. a leading equals sign).
-
-\item At the macro call point, the chunk reference contains the actual
-argument values in the same format.
-\begin{verbatim}
- @<<mymacro%%x%%y%%z@>>
-\end{verbatim}
-becomes
-\begin{verbatim}
-  doit(x, y, z);
-\end{verbatim}
-When rendered, this is transformed as well:
-\begin{verbatim}
-  @<<mymacro @<<x>>@<<y>>@<<z>>>>
-\end{verbatim}
-or perhaps
-\begin{verbatim}
-  @<<mymacro @<<arg1=x>>@<<arg2=y>>@<<arg3=z>>>>
-\end{verbatim}
-
-\item A way to escape double-percents must be provided.  Since noweb
-uses @ to escape other things, it can be used to escape @ characters
-preceeding double-percents as well as double-percents themselves.
-
-\item If implemented as a filter, the filter would have to do all
-expansion manually, since the expander would need to be hooked to do
-the correct parameter expansions.  The weaver would also need to be
-hooked to present macro definitions and calls in an appropriate
-manner, which may also need rewriting of some of the \LaTeX{} macros.
-In short, it would be better to just rewrite it.
-
-\item For the lack of no-newline support, a special no-newline end
-directive could be provided (e.g. instead of just @, use @\%).
 
 \item For the lack of properly indented [[#line]] directives, there is
 little that can be done.  That deficiency might need to stay.  One
@@ -4630,22 +5309,22 @@ though.
 \end{itemize}
 
 \item Go back to explicit import/export: maybe just require a prefix
-like @ for all globals.
+like ! for all globals.
 
 How:
 \begin{itemize}
 
-\item In tangle, prepend source name to all nodes that don't have @
+\item In tangle, prepend source name to all nodes that don't have !
 prefix in a filter:
 \begin{quote}
 \begin{verbatim}
  @file <fn> -> set file
- @defn <x> -> convert <x> if not @-prefixed
- @use <x> -> convert <x> if not @-prefixed
+ @defn <x> -> convert <x> if not !-prefixed
+ @use <x> -> convert <x> if not !-prefixed
 \end{verbatim}
 \end{quote}
 
-\item In weave, remove @, but add "(exported)" to node name if first
+\item In weave, remove !, but add "(exported)" to node name if first
 defined in this file, or "(source-file.nw)" to node name if defined
 elsewhere.  Note that r77 already implemented the latter, but could
 not implement the former because exports are not specially flagged.

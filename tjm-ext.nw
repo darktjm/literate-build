@@ -94,9 +94,9 @@ I also prefer a little bit higher warning level than the default.
 <<makefile.vars>>=
 CC=gcc
 CFLAGS=-O2
-EXTRA_CFLAGS += -Wall -Wmissing-prototypes -Wno-unused-result -Wshadow \
+EXTRA_CFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow \
                 -Wmissing-prototypes
-EXTRA_CXXFLAGS += -Wall -Wmissing-prototypes -Wno-unused-result -Wshadow
+EXTRA_CXXFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow
 @
 
 \section{Types}

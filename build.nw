@@ -520,7 +520,12 @@ Building plain files is done the same way, but without the complicated
 checks, assuming that no additional processing needs to be done.  For files
 where additional processing is necessary, additional dependencies on the
 [[misc]] target, as well as [[<<Install other files>>]] can be used to add
-files with special build rules.
+files with special build rules.  Another way to add additional
+processing steps is to modify the tangling pipeline (by adding
+[[NOTANGLE_OPTS]]) or to add a post-processing pipeline (using
+[[NOTANGLE_POSTPROC]]).  GNU make allows setting these variables
+per-target, making adding processing to just one or two files relatively
+easy.
 
 Note that [[<<Plain Files>>]] is intended for installable targets.
 For plain files generated as part of the build, use
@@ -545,7 +550,7 @@ GENERATED_TEMP_FILES = <<Plain Built Files>>
 
 <<makefile.rules>>=
 $(MISC_FILES) $(MISC_TEMP_FILES): $(NOWEB_ORDER)
-	-notangle -R$@ $^ >$@
+	-notangle $(NOTANGLE_OPTS) -R$@ $^ $(NOTANGLE_POSTPROC) >$@
 @
 
 <<Clean built files>>=
@@ -684,12 +689,14 @@ mainline source, named the same as the executable but with a \texttt{.c}
 extenstion.  All local libraries built from local sources are linked into
 every executable.
 
-Since all C files share the same rule, a hook ([[C_POSTPROCESS]]) is
-provided for doing further modifications to the code before compilation.
-The hook is in the form of a GNU make function call, which takes the target
-file name as an argument.  It is expected to return an appropriate pipeline
-for that target.  Scripts, on the other hand, are easy enough to modify
-using separate rules.
+C files share the ability to have per-file post-processing using
+[[NOTANGLE_POSTPROC]].  Previous versions of this build system only
+supported per-file post-processing for C files, using the
+[[C_POSTPROCESS]] hook.  The C-specific hook was a function call
+rather than a plain variable expansion; i.e., instead of using [[$@]]
+to refer to the target, it was expected that [[$1]] would be used.
+Using [[NOTANGLE_POSTPROC]] is more consistent, but some old documents
+still use the old method.  The old method is supported, but deprecated.
 
 <<Executables>>=
 $(C_EXEC) $(SCRIPT_EXEC) \
@@ -729,15 +736,17 @@ USE_LINE:=-L
 
 <<makefile.rules>>=
 $(SCRIPT_EXEC): $(NOWEB)
-	-notangle -R$@ $(NOWEB_ORDER) >$@
+	-notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) >$@
 	chmod +x $@
 
 # C_POSTPROCESS can be used to add boilerplate code
 $(NOWEB_HEADERS): $(NOWEB)
-	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
+	-notangle $(NOTANGLE_OPTS) $(USE_LINE) -R$@ $(NOWEB_ORDER) \
+	    $(NOTANGLE_POSTPROC) $(call C_POSTPROCESS,$@) >$@
 
 $(NOWEB_CFILES): $(NOWEB)
-	-notangle $(USE_LINE) -R$@ $(NOWEB_ORDER) $(call C_POSTPROCESS,$@) >$@
+	-notangle $(NOTANGLE_OPTS) $(USE_LINE) -R$@ $(NOWEB_ORDER) \
+	    $(NOTANGLE_POSTPROC) $(call C_POSTPROCESS,$@) >$@
 
 # disable gmake built-in .c->exe rule
 ifeq ($(MAKEPP_VERSION),)
@@ -793,7 +802,7 @@ $(BUILD_SCRIPT_EXEC) \
 
 <<makefile.rules>>=
 $(BUILD_SCRIPT_EXEC): $(NOWEB)
-	-notangle -R$@ $(NOWEB_ORDER) >$@
+	-notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) >$@
 	chmod +x $@
 @
 
@@ -973,7 +982,7 @@ $(TEST_C_EXEC_SUPPORT) $(TEST_C_EXEC): $(LOCAL_LIB_FILES)
 $(TEST_C_EXEC): $(TEST_C_EXEC_SUPPORT)
 
 $(TEST_SCRIPT_EXEC) $(TEST_SCRIPT_EXEC_SUPPORT): $(NOWEB)
-	-notangle -R$@ $(NOWEB_ORDER) >$@
+	-notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) >$@
 	chmod +x $@
 
 @
@@ -1123,11 +1132,6 @@ the exact same syntax as automatically generated, up to the arguments'
 opening parenthesis, is removed from [[cproto.h]].  One which tends to
 vary from mainline to mainline is [[main]], so it is always removed.
 
-Also, local prototypes tend to rely on locally defined data types.  To
-support this, the entire include of the static prototype file can be
-moved down to a location specified by a line containing only the
-comment [[// static_proto]].
-
 This uses the GNU [[-i]] extension, which may not be supported on all
 UNIX systems.  If it doesn't, obtaining and using GNU sed is free and
 relatively painless.  GNU sed also does not have a hidden line length
@@ -1192,18 +1196,32 @@ cproto.h \
 rm -f cproto.h{,.*.h} $(CFILES:%=%.static_proto)
 @
 
-<<makefile.vars>>=
-C_POSTPROCESS = | (tf="/tmp/.$$$$"; trap "rm $$tf" 0; cat >$$tf; \
-                   if grep '^[ \t]*// static_proto$$' "$$tf" >/dev/null; then \
-		     p='^[ \t]*// static_proto$$'; \
-		   else \
-		     p='^\#include "cproto.h"'; \
-		   fi; \
-		   sed -e "s%$$p%"'&\n\#include "$1.static_proto"%' $$tf)
-@
-
 <<Build Source>>=
 $(CFILES:%=%.static_proto) \
+@
+
+Also, local prototypes tend to rely on locally defined data types.  To
+support this, the entire include of the static prototype file can be
+moved down to a location specified by a line containing only the
+comment [[// static_proto]].  This is done by adding a tangle
+post-processing filter to automatically generated C files.  Care must
+be taken when overriding [[NOTANGLE_POSTPROC]] to not clobber this.
+
+<<makefile.vars>>=
+# stupid GNU make does not support setting this directly (cuts off value)
+CFILE_POSTPROC = | \
+  (tf="/tmp/.$$$$"; trap "rm $$tf" 0; cat >$$tf; \
+   if grep '^[ \t]*// static_proto$$' "$$tf" >/dev/null; then \
+     p='^[ \t]*// static_proto$$'; \
+   else \
+     p='^\#include "cproto.h"'; \
+   fi; \
+   sed -e "s%$$p%"'&\n\#include "$@.static_proto"%' $$tf)
+# stupid GNU make always gives "missing separator" for this.  Why?
+# however, apparently that's safe enough; if blank, nothing happens
+#ifneq($(NOWEB_CFILES),)
+$(NOWEB_CFILES): NOTANGLE_POSTPROC = $(CFILE_POSTPROC)
+#endif
 @
 
 Stripping down the C prototype requires proper handling of nested
@@ -1369,16 +1387,16 @@ FIGS_EPS_RAW:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.eps>>/{s/@<<//;s/@>>//;p;
 
 <<makefile.rules>>=
 $(FIGS_DIA): $(NOWEB)
-	notangle -R$@ $(NOWEB_ORDER) | gzip >$@
+	notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) | gzip >$@
 
 %.eps: %.dia
 	dia -e $@ $<
 
 $(FIGS_EPS_RAW): $(NOWEB)
-	notangle -R$@ $(NOWEB_ORDER) >$@
+	notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) >$@
 
 $(FIGS_XFIG): $(NOWEB)
-	notangle -R$@ $(NOWEB_ORDER) >$@
+	notangle $(NOTANGLE_OPTS) -R$@ $(NOWEB_ORDER) $(NOTANGLE_POSTPROC) >$@
 
 %.eps: %.fig
 	fig2dev -L eps $< $@
@@ -2177,7 +2195,7 @@ as well, since the [[moreemph]] directives are parsed out.
 
 <<Known Data Types>>=
 % C
-regex_t,regmatch_t,FILE,va_list,pollfd,pthread_t,%
+regex_t,regmatch_t,FILE,va_list,pollfd,pthread_t,size_t,ssize_t,%
 pthread_mutex_t,pthread_cond_t,uid_t,gid_t,mode_t,pid_t,time_t,socklen_t,%
 sockaddr_in,sockaddr,off_t,utimbuf,%
 @
@@ -2815,6 +2833,10 @@ every pass until there is nothing left to print.
 # strip trailing semicolon to make pattern simpler (never gets re-added)
 # also strip any trailing comment(s)
 s/;.*//;
+# strip whitespace preceeding , and ) (usually due to chunk insertion)
+s/[ \n\t]*\([,)]\)/\1/g;
+# strip whitespace following ( (usualy due to chunk insertion, again)
+s/([ \n\t]*/(/g
 # create spaces out of all text up to first paren and append full proto
 h;s/[^(]/ /g;s/(.*/ /;G;
 # remove up to first paren plus up to end of first parameter
@@ -3979,13 +4001,22 @@ attached to the original electronic forms of this document:\\
 \verb!\input{Sources.tex} % txt!
 \end{quote}
 
-\item Syntax highlighted C prototypes: the prototype of a C function can be
-repeated as a highlighted code chunk using a special comment:
-\verb!% !\emph{function-name}\verb! prototype! prints a reformatted version
-of the prototype extracted from [[cproto.h]], which is automatically
-generated for all C files.  Any prototypes which would not be placed there
-can be manually added using the [[<<C Prototypes>>]] chunk; all prototypes
-from the chunk must consist of exactly one line of text.
+\item Customized tangling:  the [[NOTANGLE_OPTS]] variable (which can,
+of course, be set on a per-target basis in GNU make) should contain
+additional command-line arguments for tangling.  Most commonly, this
+will be [[-t8]] for files which require tabs.
+
+\item Customized tangled output post-processing:  the
+[[NOTANGLE_POSTPROC]] variable (which can, of course, be set on a
+per-target basis in GNU make) should contain a pipeline to be appended
+to the tangle process.  Generally, assignment should be done using
+[[+=]] rather than [[=]] in order to allow previously defined filters
+to work.  For example:
+\begin{quote}
+[[<<makefile.vars>>]]=\\
+[[$(MY_C_FILES): NOTANGLE_POSTPROC+=|sed '1i\copyright blurb']]\\
+[[@]]
+\end{quote}
 
 \item Repeated documentation: a separate NoWeb-like macro facility which
 only does substitutions can be used to repeat documentation in e.g. a users'
@@ -4062,25 +4093,32 @@ functions out of order, a static prototype file is generated for each
 C file as well.  This is included right after [[cproto.h]], unless the
 comment \texttt{//~static\_proto} is found on a line by itself, in
 which case it is placed after that comment.  That way, the static
-prototypes can be placed after any private data type declarations.  As
-mentioned above, [[cproto.h]] is used for API documentation as well.
+prototypes can be placed after any private data type declarations.
+
+In order to assist in documenting C functions, the prototype of a C
+function can be repeated as a highlighted code chunk using a special
+comment:
+
+\begin{quote}
+\verb!% !\emph{function-name}\verb! prototype!
+\end{quote}
+
+This prints a reformatted version of the prototype extracted from
+[[cproto.h]], described above.  Any prototypes which would not be
+placed there can be manually added using the [[<<C Prototypes>>]]
+chunk.  In paritcular, macro prototypes should be added to this chunk.
 
 Several internal variables are meant to be set or expanded in
 extensions to [[<<makefile.vars>>]]:
 
 \begin{itemize}
-\item [[C_POSTPROCESS]] is a pipeline to apply to all automatically
-extracted C files.  This is a function taking the file name as an
-argument (which can be ignored if there are no file-specific
-transformations).  The return value (or value of the plain variable,
-since there is no difference between functions which ignore their
-arguments and variables) should be a pipeline element, starting with
-the pipe symbol.  For example:
-\begin{quote}
-[[<<makefile.vars>>]]=\\
-[[C_POSTPROCESS+=|sed '1i\copyright blurb']]\\
-[[@]]
-\end{quote}
+\item [[C_POSTPROCESS]] is a deprecated method of adding
+post-procesing to C files while they are being generated.  Its value
+should be a post-processing pipeline; see [[NOTANGLE_POSTPROC]] for
+details.  Unlike [[NOTANGLE_POSTPROC]], this is a function which takes
+the target name as its single argument.   The argument can, of course,
+be ignored, and there is no difference between a simple variable
+assignment and a function ignoring all arguments.
 \item The [[EXTRA_CFLAGS]] variable should be extended with required
 options; that way, the user can replace [[CFLAGS]] with just
 optimization and debugging flags.
@@ -4264,64 +4302,142 @@ TODO list for years.
 \subsection{Not missing}
 
 \begin{itemize}
+
+\item Reintegration with LyX:  LyX has its own document format, only
+editable with LyX.  It is \emph{not} a \LaTeX{} editor, even though it
+is often promoted as such (even by me).  Great care would need to be
+taken to ensure conversion between its native format and more portable
+formats is sane (and in my experience, it very rarely is).  Making it
+more programmer-friendly would likely require either modification of
+LyX or abusing external insets somehow (which would require all code
+chunks to be stored in separate files, so probably not).  Also, LyX
+was moving to distance itself even more from \LaTeX{} last time I
+abandoned it.
+
+\item LibreOffice/OpenOffice integration:  Like LyX, LibreOffice and
+OpenOffice aren't really programmer's editors.  However, at least
+their document format is standardized and editable with other
+products, as well.  It might be possible to make a plugin to behave
+more programmer-editor-like in code blocks (likewise with LyX,
+actually), but that would require a lot of effort and still wouldn't
+take away the bulkiness, slowness, and inability to edit in a
+text-only terminal.  Existing tools to use this format:  nano-lp
+(tangle only; uses specially named style to tag code blocks:
+\url{http://code.google.com/p/nano-lp/}), odtWeave/StatWeave (weave
+only; primarily for result reinsertions; not really literate despite
+claims:
+\url{http://www.stat.uiowa.edu/~rlenth/StatWeave/}).
+
 \item Plain \TeX{}: not really an option, even though NoWeb supports
 it.  Porting framed and listings from \LaTeX{} is beyond the scope of
 this project.  Most of the highlighters I find also expect to be used
 with \LaTeX{}.
-\item texinfo: Way too \TeX{}-depedent; see above item about that.
-It's not really as output-independent as claimed; much of its
+
+\item texinfo: Way too dependent on plain \TeX{}; see above item about
+that.  It's not really as output-independent as claimed; much of its
 independence comes from having to use output-specific escapes
 everywhere.  Most output independence I need is HTML vs. PDF, and I
 get that with latex-to-HTML converters with about as much utility as
 texinfo provides.  And the texinfo format itself (having to repeat
 section titles in node definitions and manually insert TOC entries as
 menus) is not that appealing (although I could automate some of that).
+
 \item docbook: probably not possible, but should look at it since it's
 popular.  It's definitely a pain in the ass raw; like all XML formats,
 it's not meant to be edited by a plain text editor or read/understood
 by humans (even though the XML movement started with the exact
 opposite claims).
+
 \item asciidoc: docbook in a way humans can edit it, but still can't
 produce PDF easily or correctly.
-\item reStructuredText: slightly better than asciidoc; may be worth a
-look some day.
+
 \end{itemize}
 
 \subsection{Missing}
 
 \begin{itemize}
+
 \item bibtex, makeindex for l2h.  bibtex requires running latex and
 bibtex once, and makeindex requires running latex and makeindex and
 also providing support for reading the .ind and formatting it correctly.
+
 \item optional automatic symbol index (requires a lot of work; the
 symbol extractor for NoWeb is way too simplistic and in fact anything
 short of a compiler can't deal with scoping, name spaces, preprocessor
 name mangling and other issues).
+
 \item highlighting of in-line code.  In addition to just intercepting
 text between @quote and @endquote, the system would need to handle
 line wrapping somehow.  Currently, quoted code may wrap, and that's
-usually a good thing.  Placing the quoted code in a box in order to
-set its background color will likely screw everything up.
+usually a good thing.
+
+Placing the quoted code in a box in order to set its background color
+will likely screw everything up.  I have found two solutions to this
+problem, both of which split the text into potentially splittable
+chunks, and then apply the background color to each chunk separately.
+Neither solution works:  one uses only a specific character to split
+into chunks
+(\url{http://tex.stackexchange.com/questions/94965/wrapping-inline-long-lines-and-adding-background-color})
+and one is smarter, but still can't handle basic syntax-highlighted
+text as its argument (the soul package).  The soulpos package still
+depends on the soul package to do its parsing, so even though its
+chunks are bigger, they still don't work.  Supposedly soul can skip
+``font-setting'' commands, but registering all of the commands defined
+in latexhl.sty does not help, either.  The former solution may be
+adaptable somehow using syntax highlighting boundaries as break points
+(and perhaps also inserting such boundaries after underscores and
+spaces), but even that may not work.  It seems the only solution will
+require luatex, with its hooking mechanism.  A command can introduce
+sentinels, which are later used to insert the background color using a
+post-processing hook.
+
+On the other hand, in-line code could just get no background.
+However, it is common to use background color only to highlight
+in-line code, so that would be a major shortcoming.
+
 \end{itemize}
 
 \subsection{Needs testing}
 
 \begin{itemize}
+
 \item tex4ht is an undocumented piece of crap (well, I guess the
 original author being dead may have something to do with that, but it
 has always been that way, so I doubt the situation would be any
 different were that not the case) that is flaky and in fact the last
 release I tested does not work any more and I don't have the energy to
 try and fix it.
+
 \item I don't have access to commercial UNIX any more, so I don't know
 what does or does not work.  In particular, I use GNU sed's [[-i]]
 option too much now.  I should probably just convert all that to C or
 perl or something like that that people regularly install on systems.
+
 \end{itemize}
 
 \subsection{Improvements}
 
 \begin{itemize}
+
+\item reStructuredText: slightly better than asciidoc; may be worth a
+look some day.  Fernando G\'omez did some work on producing HTML
+output with reST and noweb using sphinx.  Basically, a noweb weaver
+plugin must generate special paragraph types for code, and a sphinx
+plugin must be created to handle that and generate the appropriate
+HTML and \LaTeX{}.  The plain docutils would probably be harder to
+hook into, but many of sphinx's features are not really needed for
+this build system (and in fact may get in the way).  Note that I said
+\LaTeX{}: there is a native PDF converter (rst2pdf), but its output
+looks rather unprofessional. Also, on my system, installing it with
+hyphenation support is a pain.
+
+\item Speaking of reStructuredText: it uses the pygments
+(\url{http://pygments.org}) syntax highlighter.  Pygments claims to
+support a large number of languages for input and HTML and \LaTeX{} for
+output.  Maybe I should support it.  However, I will still substitute
+code blocks with direct highlighter output as always, and not rely on
+the built-in code block highlighting in docutils.
+
 \item Replace hodge-podge of sed, awk, grep, and perl with C.  The
 only non-portable dependency would be POSIX regex and GNU make
 (maybe).  I'd probably leave the perl notangle, though, since it's
@@ -4337,7 +4453,95 @@ Odin needs a lot of work (and in particular making a simple bootstrap
 like this system uses may be impossible).  On the other hand, this
 document could just implement its own simple build system (aka the old
 v1.x shell script method, but with parallel build and dependency
-support).
+support).  Of course that loses some of the advantages of make:
+predefined rules for things I don't otherwise support, well-known
+variable names for various overrides (e.g. CFLAGS), and well-known
+usage (e.g. make -j4 doc).
+
+\begin{itemize}
+\item Global customization variables (e.g. CC, CFLAGS).  All implicit
+rules for make use this, but explicit rules need to know these and add
+them manually.  Often, C++ code accidentally uses CFLAGS causing me
+excess warning headaches (there is an option for C which just raises
+warnings for C++).  Odin sort of supports this, but only allows
+changing the variables when creating a new cache.  Since Odin
+automatically checks for command changes anyway, this should not be a
+requirement.
+\item Implicit rules (e.g. producing obj from C).  Both GNU make and
+Odin have implicit rule support, and may built-in implicit rules.
+However, GNU make implicit rules are all based on file name patterns,
+which is annoying.  Odin rules are also based on file name patterns,
+but a file or product can be explicitly ``cast'' to another type.  The
+main deficiency of Odin is that all implicit rules must be set up
+during cache creation, like the variables above.  Unlike the
+variables, allowing changes after the fact has some serious
+consequences with respect to the next point.
+\item Complex rules.  GNU make's language is not really up to the
+task.  Other make clones add powerful languages directly to the
+makefile syntax.  Odin's implicit rules are run by external commands,
+which use a complex API that both transfers all relevant information
+to and from the command, and also ensures that Odin knows when the
+command needs to be re-run due to environment changes.  Odinfile rules
+can sometimes be complex as well.
+\item The rule for a file product should be relatively easy to find.
+This is a weird way of saying that the rule for a creating a file
+should be in the same directory as the file.  Odin enforces this
+somewhat (although an Odinfile can include files from other
+directories, which may actually contain the relevant rule), making it
+possible to e.g. ``odin x/y/z'' and be assured that Odin will find the
+correct rules.  Makefiles, on the other hand, often contain rules for
+targets in other directories. Recursive makefiles make this job even
+more difficult, making it nearly impossible to figure out which
+directory to start in, and often making it impossible to request a
+specific target.  For example, the Linux makefiles support making a
+specific module, but always require starting make in the top level
+directory, and using a special variable to indicate which target to
+build.
+\item Intermediate file removal.  Intermediate files clutter up the
+directory.  Odin by default keeps intermediate files in the cache.
+GNU make does not build intermediate files if they have been deleted,
+and a rule inference can be made to show that a target is newer than
+all its root sources.  However, make still requires explicit rules for
+cleaning.  Due to Odin's nature, there is generally not a ``clean''
+target, so that should probably be added as well.  An automatic
+``clean'' target could probably be built by removing all targets which
+have been derived from other sources, but which are not marked as final.
+\item Installation targets.  GNU autoconf or CMake are generally used
+to add automatic rules for installation targets to make.  Odin has no
+such facility.  It would be nice to have automatic install and
+uninstall rules, like CMake.
+\item Catching all results of an operation.  \TeX{} in particular has
+directives to create auxiliary files of any name, and these are used
+by numerous packages to create their own special file.  Odin catches
+these by running an action in its own directory.  GNU make has no such
+facility, and in fact does not support multiple outputs from a single
+rule at all.  Makepp does catch newly created files and warns, at least,
+and supports multiple outputs from a single rule, but still requires
+explicit mention of each output.  Makepp also parses the command line
+a bit, but its notion of shell syntax is too simplistic for anything
+but very common tasks.
+\item Automatic dependency calculation.  This has been the focus of
+most make replacements.  There is a fine art in making this
+calculation quick and reliable.  As with everything else, Odin uses
+external commands to do this in a relatively simple way.  How fast and
+reliable it is depends on how complex the script is.  A clever
+filtering mechanism makes Odin pretty good.  Makepp, GNU autoconf, and
+CMake all enhance makefiles with some automatic dependency checking as
+well, but the latter mostly only support C, and all require some work
+to do anything unusual.
+\item Manual dependency calculation.  Some make replacements don't
+really support this properly, Odin included.
+\item Change detection other than just timestamps.  If a file changed,
+it shouldn't matter if it got older (e.g. reverting to an older
+version).  If it didn't, it shouldn't matter if it got newer.  In more
+advanced detection, if a comment changed, there should be no need to
+recompile (unless debugging is enabled, in which case debug info may
+change).  GNU make only supports timestamps.  Odin at least detects
+file changes, and may support custom intermediate products that detect
+code-only changes.  Makepp tries to do it all, but fails sometimes,
+since it stops short of compiling the code to find out if anything
+really changes.
+\end{itemize}
 
 \item While I'm at it, replace noweb as well.  The main deficiency of
 noweb is the lack of macro support.  Other deficiencies include no
@@ -4349,18 +4553,34 @@ slow and awkward.
 How:
 
 \begin{itemize}
+
 \item In a macro definition, separate the name from argument names
 using a special syntax.  For example, using double-percents:
 \begin{verbatim}
  @<<mymacro%%arg1%%arg2%%arg3>>=
 \end{verbatim}
+
 \item Macro continuations would not need to continue listing the
-arguments.
+arguments.  However, the weaver would have to always weave the full
+call syntax; e.g.:
+\begin{verbatim}
+  @<<mymacro @<<arg1@>>@<<arg2@>>@<<arg3@>>@>>+=...
+\end{verbatim}
+
 \item Within the macro definition, chunk references named after
 arguments are replaced with the argument's value at the call point.
+This requires top-down selective substitution:  you don't know what
+ @<<arg1>> really means until you are sure it's either not a macro
+definition or you know what the macro call text is.
 \begin{verbatim}
   doit(@<<arg1>>, @<<arg2>>, @<<arg3>>);
 \end{verbatim}
+Rendering this might even be more difficult:  the def/ref links may be
+difficult to determine without knowing the full tree.  Perhaps to make
+it simpler, at least all used arg names could become reserved for use
+as macro args.  On the other hand, macro args could have a different
+syntax that clearly distinguishes them (e.g. a leading equals sign).
+
 \item At the macro call point, the chunk reference contains the actual
 argument values in the same format.
 \begin{verbatim}
@@ -4370,22 +4590,43 @@ becomes
 \begin{verbatim}
   doit(x, y, z);
 \end{verbatim}
+When rendered, this is transformed as well:
+\begin{verbatim}
+  @<<mymacro @<<x>>@<<y>>@<<z>>>>
+\end{verbatim}
+or perhaps
+\begin{verbatim}
+  @<<mymacro @<<arg1=x>>@<<arg2=y>>@<<arg3=z>>>>
+\end{verbatim}
+
 \item A way to escape double-percents must be provided.  Since noweb
 uses @ to escape other things, it can be used to escape @ characters
 preceeding double-percents as well as double-percents themselves.
+
 \item If implemented as a filter, the filter would have to do all
 expansion manually, since the expander would need to be hooked to do
 the correct parameter expansions.  The weaver would also need to be
 hooked to present macro definitions and calls in an appropriate
 manner, which may also need rewriting of some of the \LaTeX{} macros.
 In short, it would be better to just rewrite it.
+
 \item For the lack of no-newline support, a special no-newline end
 directive could be provided (e.g. instead of just @, use @\%).
+
 \item For the lack of properly indented [[#line]] directives, there is
 little that can be done.  That deficiency might need to stay.  One
 possible minor remedy would be to add a \%-directive such as \%t to
 add the current indentation level after this and before each
 subsequent line.  That would in fact cure most of the problem.
+
+\item The fangle (\url{www.nongnu.org/fangle}) tool only supports
+TeXmacs and LyX file formats, but supports macros and automatic
+escaping.  The automatic escaping bit in particular would be useful.
+For example, shell code inserted into make code has dollar signs
+doubled, and any code inserted into a C string gets properly escaped
+for C strings.  This requires a lot of language-specific coding,
+though.
+
 \end{itemize}
 
 \item Go back to explicit import/export: maybe just require a prefix
@@ -4393,6 +4634,7 @@ like @ for all globals.
 
 How:
 \begin{itemize}
+
 \item In tangle, prepend source name to all nodes that don't have @
 prefix in a filter:
 \begin{quote}
@@ -4402,6 +4644,7 @@ prefix in a filter:
  @use <x> -> convert <x> if not @-prefixed
 \end{verbatim}
 \end{quote}
+
 \item In weave, remove @, but add "(exported)" to node name if first
 defined in this file, or "(source-file.nw)" to node name if defined
 elsewhere.  Note that r77 already implemented the latter, but could
@@ -4411,12 +4654,15 @@ good:  the last file before this would be better, as any extensions
 would be included, and presumably that file then links to the previous
 file in the chain anyway.  On the other hand, documentation for the
 symbol is likely only in the first.
+
 \item Would need backend work to support hyperlinking to other
 documents, adding a label in front of the first definition of
 an exported symbol and then modifying the chunk index and the first
 chunk's previous reference somehow.  That would be nearly impossible
 with split HTML, though, unless the split HTML were generated first.
+
 \end{itemize}
+
 \item Related to above:  it might be possible to come up with
 alternate methods of combining globals:
 \begin{quote}
@@ -4431,22 +4677,32 @@ Global import/export requires prefix char:
 \end{quote}
 How:
 \begin{itemize}
+
 \item Actual symbol name is renamed to
 <sourcename>+<node\_without\_prefix> in tangle
+
 \item If an inherited global is not defined in a file, the symbol is
 inherited from parent by defining a single chunk with the parent's
 chunk as contents.  In other words, as if an empty @<<+...@>>= chunk
 defined.
+
 \item In one file, can only use one prefix.  Same node name with two
 different prefixes raises error and refuses to tangle/weave.
+
 \item If any file declares !, and later one decalres =, raises error and
 refuses to tangle/weave.
+
 \item in tangle, insert parent's global after first +. 
+
 \item in tangle, insert parent's global after end of last -.
+
 \item in tangle, ignore parent's global if =.
+
 \item in tangle, replace all @-references with top-level source file's
 version
+
 \end{itemize}
+
 \item Automatically set CreationDate and ModDate for PDF to RCSDate.
 Need to actually find all dates of all relevant files and use most
 recent.  svn-multi will do that automatically in \LaTeX{}, but I need to
@@ -4464,6 +4720,20 @@ from [[<<Sources>>]].
 
 \item Generate exported prototypes into an exportable header
 automatically.  Perhaps a sepcially formated comment?
+
+\item Root nodes should be specially indicated in the chunk index.  An
+option should be provided to move them to the top and/or move them to
+a different section.
+
+\item Chunk languages should be set automatically by default or some
+other way (e.g. a specially formatted comment).  The old listings
+package directives can simply be added automatically as needed.
+
+\item Perhaps do simple continuation, such as @<<@>>= to continue last
+chunk, or elipses following chunk names to abbreviate.  However, both
+are prone to accidental misuse, so probably avoid.
+
+\item Perhaps conditional tangling/weaving (leew's nocond looks OK)
 
 \end{itemize}
 

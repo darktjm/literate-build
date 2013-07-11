@@ -1582,7 +1582,7 @@ while($#ARGV >= 0) {
     $chunk = $1;
   } elsif($ARGV[0] =~ /^-t(.*)/) {
     $tab = $1;
-    $tab = 0 if $tab = "";
+    $tab = 0 if $tab eq "";
   } elsif($ARGV[0] =~ /^-L(.*)/) {
     $line = $1 eq '' ? '#line %L "%F"%N' : $1;
   } else {
@@ -1891,6 +1891,7 @@ empty after indenting.
 $in_progress{$basename} = 1;
 my $tindent = '';
 my $l = $line;
+my $was_parmref;
 for(my $i = 0; $i <= $#$chunk; $i++) {
   my $piece = $$chunk[$i];
   my $text = $$piece{'text'};
@@ -1912,7 +1913,8 @@ for(my $i = 0; $i <= $#$chunk; $i++) {
     }
     <<Adjust chunk indentation and print [[$text]]>>
     # assume @x is short, and avoid #line mangling
-    $line = undef if(substr($ref, 0, 1) eq '@');
+    $was_parmref = (substr($ref, 0, 1) eq '@');
+    $line = undef if $was_parmref;
     print "\n" if($line and $text ne "" and substr($text, 1) ne "\n");
     $file = $$piece{'file'};
     $lineno = $$piece{'refline'};
@@ -1934,9 +1936,12 @@ $in_progress{$basename} = undef;
 
 <<Adjust chunk indentation and print [[$text]]>>=
 $text =~ s/\n/\n$indent/gm;
-$text = $tindent . $text;
+$text = $tindent . $text unless $was_parmref;
 if($tab > 0) {
-  while($text =~ s/^(\t*) {$tab}/$1\t/gm) {}
+  if($indent ne "" or ($tindent ne "" and not $was_parmref)) {
+    while($text =~ s/^(\t*) {$tab}/$1\t/) {}
+  }
+  while($text =~ s/(\n\t*) {$tab}/$1\t/gm) {}
 }
 print $text;
 @

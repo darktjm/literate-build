@@ -2077,10 +2077,10 @@ foreach my $l (@file) {
     until($defs{$b}) {
       last unless($b =~ /(.*?)\s*(?<!@)(\[\[((?:[^][]|\[(?2)\])*)\]\])$/);
       $b = $1;
-      $a = $2 . $a;
+      $a = '[[' . $2 . ']]' . $a;
     }
     if($defs{$b} and $a ne "") {
-      print "\@nwenha [[$a]]\n\@use $b\n";
+      print "\@nwenha $a\n\@use $b\n";
     } else {
       print $l;
     }

@@ -4,12 +4,19 @@ NoWeb, GNU make, and a number of other freely available packages.  It
 can be configured to use one of several different highlighting
 packages (listings, GNU source-highlight, André Simon's highlight),
 and can produce PDF and HTML output in several different ways
-(pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to make
-literate C code easier.
+(pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to
+make literate programming, especially in C, easier.
 
-For details, see http://darkalpha.homelinux.org/literate/.  That page
-has a complete summary of the history of this project, including some
-much older versions of the build system.
+For details, read the source.  It's meant to be read, anyway.  On the
+other hand, instead of reading the source code, you can just read the
+users' manual:
+
+   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.pdf
+   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.html
+
+For more details, see http://darkalpha.homelinux.org/literate/.  That
+page has a complete summary of the history of this project, including
+some much older versions of the build system.
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
@@ -21,17 +28,19 @@ available in the downloads section:
    https://bitbucket.org/darktjm/literate-build/downloads/build.pdf
    https://bitbucket.org/darktjm/literate-build/downloads/build.html
 
-I have split out the basic user documentation into its own file,
-build-doc.{nw,pdf,html}.  You can just download that instead.  The PDF
-and HTML versions have both their own source and build.nw attached, so
-no further downloads are required.
-
-   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.pdf
-   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.html
+The documentation referenced above is mostly the Usage section of the
+code, split out into its own file using the documentation reinsertion
+facility.  The source code for both the split out documentation and
+the build system are attached to those files, so no further downloads
+are required.
 
 There are a few extra C utilities that I use in a lot of my other code
 as well.  It's pretty poorly designed (at least namespace-wise), but
-very convenient for me.
+very convenient for me.  Read the source for details; it's shorter
+than the build system's users' guide.  Again, these have their own
+source attached, as well as the source for the build system.  However,
+they do not have instructions on how to extract and build; see the
+above for that.
 
    https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.pdf
    https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.html

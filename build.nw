@@ -4345,9 +4345,9 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -html -filter "./nwweavefilt ./htmlhl $noweb_order" -filter l2h \
+  noweave -html -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" \
           -filter "./nw-enh-preidx $noweb_order" -index \
-          -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx | \
+          -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
 	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
          cat
 

@@ -948,12 +948,6 @@ Ideally, this should ensure that libraries dependent on others are listed
 earlier in the library order.  Instead, the list is printed in reverse
 order, so the least dependent libraries are printed first.
 
-\input{begin-hidden.tex} %%% doc
-% supporess "(imported)", but still has "??" due to permanently undef'd ref
-<<Library [[name]] Members>>=
-@
-\input{end-hidden.tex} %%% doc
-
 Since \texttt{tac} may not be available everywhere, an alternative may
 be specified in [[makefile.config]].
 
@@ -1668,15 +1662,15 @@ if($hasstar and $chunkname eq '') {
 }
 if($3) {
   if($args{$chunkname} and $args{$chunkname} ne $3) {
-    print STDERR "$file: $lineno: argument mismatch ($args{$chunkname} " .
+    print STDERR "$file:$lineno: argument mismatch ($args{$chunkname} " .
                  "originally defined at $argdef{$chunkname}\n";
     exit 1;
   }
   $args{$chunkname} = $3;
-  $argdef{$chunkname} = "$file: $lineno";
+  $argdef{$chunkname} = "$file:$lineno";
 }
 if(/^\@defn (\*)?\@/) {
-  print STDERR "$file: $lineno: chunk names may not begin with \@\n";
+  print STDERR "$file:$lineno: chunk names may not begin with \@\n";
   exit 1;
 }
 if(<> !~ /^\@nl( |$)/) {
@@ -1703,7 +1697,7 @@ while(<>) {
     <<Clear [[%curchunk]]>>
   <<Adjust code chunk line/file based on directives>>
   } elsif(!/^\@index( |$)/) {
-    print STDERR "$file: $lineno:  Invalid code chunk\n";
+    print STDERR "$file:$lineno:  Invalid code chunk\n";
     exit 1;
   }
 }
@@ -1773,17 +1767,17 @@ my $chunk = $chunks{$basename};
 unless($chunk) {
   # parameters cannot have parameters, so error out immediately
   if($name =~ /^\@/) {
-    print STDERR "$file: $lineno: undefined parameter: $name\n";
+    print STDERR "$file:$lineno: undefined parameter: $name\n";
     return 1; # nothin generated; suppress newline
   }
   <<Strip actual parameters until no more or valid chunk name>>
 }
 unless($chunk) {
-  print STDERR "$file: $lineno: undefined chunk name: @<<$name@>>\n";
+  print STDERR "$file:$lineno: undefined chunk name: @<<$name@>>\n";
   return 1; # nothing generated; suppress newline
 }
 if($in_progress{$basename}) {
-  print STDERR "$file: $lineno: cyclic expansion $basename\n";
+  print STDERR "$file:$lineno: cyclic expansion $basename\n";
     exit 1;
 }
 @
@@ -1820,7 +1814,7 @@ string rather than print it.
 <<Expand any parameter references in [[$argtxt]] into [[$arg]]>>=
 while($argtxt =~ /(.*?)(?<!@)@<<(@[^@]+)@>>(.*)/) {
   my $parm = $chunks{$2};
-  print STDERR "$file: $lineno: undefined parameter: $2\n" unless($parm);
+  print STDERR "$file:$lineno: undefined parameter: $2\n" unless($parm);
   $arg .= $1 . ${$$parm[0]}{'text'};
   $argtxt = $3;
 }
@@ -1857,9 +1851,9 @@ while($chunkargs ne "") {
 }
 # Warn of mismatch between # of expected and actual args
 if($#argv >= 0) {
-  print STDERR "$file: $lineno: too many arguments for @<<$basename@>>\n";
+  print STDERR "$file:$lineno: too many arguments for @<<$basename@>>\n";
 } elsif($too_few) {
-  print STDERR "$file: $lineno: too few arguments for @<<$basename@>>\n";
+  print STDERR "$file:$lineno: too few arguments for @<<$basename@>>\n";
 }
 <<Perform chunk reference expansion using new parameter values>>
 my ($v, $old);

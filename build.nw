@@ -2011,6 +2011,7 @@ nt-enh: NOTANGLE:=notangle
 #nt-enh: NOTANGLE_DEP:=
 nt-enh: $(NOWEB)
 	$(call NOTANGLE_CHUNK,$@) >$@
+	chmod +x nt-enh
 @
 
 These enhancements also require changes to the weavers.  A filter run

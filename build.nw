@@ -1800,7 +1800,7 @@ Parameter references are expanded immediately, to avoid conflict with
 setting the parameter values for the chunk to be expanded.
 
 <<Strip actual parameters until no more or valid chunk name>>=
-while($basename =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|(\[(?2)\]))*)\]\]$/) {
+while($basename =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|\[(?2)\])*)\]\]$/) {
   my $arg = ''; my $argtxt = $2;
   $basename = $1;
   <<Expand any parameter references in [[$argtxt]] into [[$arg]]>>
@@ -2070,7 +2070,7 @@ foreach my $l (@file) {
     my $a = "";
     my $b = $1;
     until($defs{$b}) {
-      last unless($b =~ /(.*?)\s*(?<!@)(\[\[((?:[^][]|(\[(?3)\]))*)\]\])$/);
+      last unless($b =~ /(.*?)\s*(?<!@)(\[\[((?:[^][]|\[(?2)\])*)\]\])$/);
       $b = $1;
       $a = $2 . $a;
     }
@@ -2147,10 +2147,10 @@ while(<$f>) {
 }
 for my $u (keys %use) {
   until($def{$u}) {
-    last unless($u =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|(\[(?3)\]))*)\]\]$/);
+    last unless($u =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|\[(?2)\])*)\]\]$/);
     $u = $1;
   }
-  $use{u} = 1 if($def{$u});
+  $use{$u} = 1 if($def{$u});
 }
 for my $d (keys %def) {
   print "@<<$d@>>\n" unless $use{$d};
@@ -5503,6 +5503,12 @@ little that can be done.  That deficiency might need to stay.  One
 possible minor remedy would be to add a \%-directive such as \%t to
 add the current indentation level after this and before each
 subsequent line.  That would in fact cure most of the problem.
+
+\item Speaking of [[#line]] directives, insertion into a macro is
+impossible, due to macros needing specific formatting.  In general, it
+might be nice to have a feature similar to no-newline to suppress
+[[#line]] processing on an expansion.  In fact, the syntax could be
+the same:  a leading star in a reference means [[#line]] suppression.
 
 \item The fangle (\url{www.nongnu.org/fangle}) tool only supports
 TeXmacs and LyX file formats, but supports macros and automatic

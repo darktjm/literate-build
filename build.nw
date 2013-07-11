@@ -1890,12 +1890,14 @@ empty after indenting.
 <<Perform chunk reference expansion using new parameter values>>=
 $in_progress{$basename} = 1;
 my $tindent = '';
+my $l = $line;
 for(my $i = 0; $i <= $#$chunk; $i++) {
   my $piece = $$chunk[$i];
   my $text = $$piece{'text'};
   if($line and $text ne '') {
     <<Print notangle line directive>>
   }
+  $line = $l;
   my $ref = $$piece{'ref'};
   if($ref) {
     my $rindent = $indent;
@@ -1909,6 +1911,8 @@ for(my $i = 0; $i <= $#$chunk; $i++) {
       $rindent =~ s/\S/ /g;
     }
     <<Adjust chunk indentation and print [[$text]]>>
+    # assume @x is short, and avoid #line mangling
+    $line = undef if(substr($ref, 0, 1) eq '@');
     print "\n" if($line and $text ne "" and substr($text, 1) ne "\n");
     $file = $$piece{'file'};
     $lineno = $$piece{'refline'};
@@ -2019,14 +2023,14 @@ before the indexing can strip off all extra characters on the
 definitions (and maybe uses as well, but that requires a full list of
 [[$NOWEB_ORDER]] to ensure that all possible uses are detected).  The
 excess text can simply be marked with a different token, such as
-[[@tjma]] for appended text and [[@tjmp]] for prepended text.  A
+[[@nwenha]] for appended text and [[@nwenhp]] for prepended text.  A
 filter run after indexing can then re-add the prepended and appended
 text, and also append the full formal parameter list to any chunk that
 doesn't have it.  The main thing missing in this approach is any sane
 way of dealing with parameter references.  However, it appears that
 the NoWeb backends deal with use-references without cross reference
 information in an appropriate manner, so the prefilter just hides them
-by converting them to [[@tjmuse]] and the post-filter unhides them.
+by converting them to [[@nwenhuse]] and the post-filter unhides them.
 
 <<Build Script Executables>>=
 nw-enh-preidx nw-enh-postidx \
@@ -2058,9 +2062,9 @@ foreach my $l (@file) {
 
 foreach my $l (@file) {
   if($l =~ m/^\@defn (\*)?(.*?)(?:\s*\(\@.*\))?$/) {
-    print "\@tjmp *\n" if($1);
+    print "\@nwenhp *\n" if($1);
     my $a = $args{$2};
-    print "\@tjma $a\n" if($a);
+    print "\@nwenha $a\n" if($a);
     print "\@defn $2\n";
   } elsif($l =~ /^\@use (.*\[\[.*\]\])$/) {
     my $a = "";
@@ -2071,12 +2075,12 @@ foreach my $l (@file) {
       $a = $2 . $a;
     }
     if($defs{$b} and $a ne "") {
-      print "\@tjma $a\n\@use $b\n";
+      print "\@nwenha [[$a]]\n\@use $b\n";
     } else {
       print $l;
     }
   } else {
-    $l =~ s/^\@use \@/\@tjmuse \@/;
+    $l =~ s/^\@use \@/\@nwenhuse \@/;
     print $l;
   }
 }
@@ -2085,18 +2089,18 @@ foreach my $l (@file) {
 <<nw-enh-postidx>>=
 <<Common Perl Prefix>>
 
-my $tjmp = "";
-my $tjma = "";
+my $nwenhp = "";
+my $nwenha = "";
 
 while(<STDIN>) {
-  s/^\@tjmuse /\@use /;
-  if(/^\@tjmp (.*)$/) {
-    $tjmp = $1;
-  } elsif(/^\@tjma (.*)$/) {
-    $tjma = $1;
+  s/^\@nwenhuse /\@use /;
+  if(/^\@nwenhp (.*)$/) {
+    $nwenhp = $1;
+  } elsif(/^\@nwenha (.*)$/) {
+    $nwenha = $1;
   } elsif(/^\@(defn|use) (.*)$/) {
-    print "\@$1 $tjmp$2$tjma\n";
-    $tjmp = $tjma = '';
+    print "\@$1 $nwenhp$2$nwenha\n";
+    $nwenhp = $nwenha = '';
   } else {
     print "$_";
   }
@@ -2369,11 +2373,7 @@ A code chunk begins with the chunk name, which can be ignored.  After that,
 all lines are sucked in as part of the code, until the end of the chunk.
 
 <<Process lines from NoWeb token stream>>=
-if(/^\@begin code/) {
-  # skip @defn
-  $_ = <STDIN> or last;
-  <<Filter lines from NoWeb token stream>>
-  print $_;
+if(/^\@defn/) {
   # skip @nl
   $_ = <STDIN> or last;
   <<Filter lines from NoWeb token stream>>
@@ -2415,12 +2415,15 @@ while(<STDIN>) {
     $code .= "\n";
   } elsif(/^\@index ((local|)defn|nl)/) {
     $end .= $_;
-  } elsif(/^\@(use|index|xref)/) {
+  } elsif(/^\@((nwenh|)use|index|xref)/) {
     $code .= $marker;
     push @use, $_;
   } elsif(/^\@end/) {
     push @use, $end . $_;
     last;
+  } elsif(/^\@nwenha/) {
+    $code .= $marker;
+    push @use, $_ . <STDIN>; # next line is always @use
   } else {
     print STDERR " ????? " . $_ . " ?????\n";
   }
@@ -3139,7 +3142,7 @@ flexibility, this is done in a perl script.
 
 \lstset{language=perl}
 <<Filter lines from NoWeb token stream>>=
-if(/^\@use / or /^\@defn /) {
+if(/^\@use / or /^\@defn / or /^\@nwenh/) {
   s/_/\\_/g unless /\[\[/;
 }
 @
@@ -3287,7 +3290,7 @@ mkdir -p $HLDIR
 EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -filter "./nwweavefilt $filt $noweb_order | ./nw-enh-preidx $noweb_order" \
+  noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
           -delay -index -filter "./nw-enh-postidx" - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
@@ -4346,8 +4349,8 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -html -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" \
-          -filter "./nw-enh-preidx $noweb_order" -index \
+  noweave -html -filter "./nw-enh-preidx $noweb_order" \
+          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -index \
           -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
 	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
          cat

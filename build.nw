@@ -1644,7 +1644,7 @@ an easy way to maintain a list without duplicates. [[keys
 %parmchunks]] is actually the array we're interested in.
 
 <<[[strip_chunkname]]>>=
-my $parm_re = '(\(\@[^)]*\)|\[\[((?:[^][]|\[(?-1)\])*)\]\])';
+my $parm_re = '(\(\@[^)]*\)|(?<!@)\[\[((?:[^][]|\[(?-1)\])*)\]\])';
 sub strip_chunkname($)
 {
   my $n = shift;
@@ -2481,7 +2481,7 @@ while(<STDIN>) {
   } elsif(/^\@end/) {
     push @use, $end . $_;
     last;
-  } elsif(/^\@nwenha/) {
+  } elsif(/^\@nwenhcall/) {
     $code .= $marker;
     push @use, $_ . <STDIN>; # next line is always @use
   } else {

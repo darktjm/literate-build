@@ -15,7 +15,9 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb}
 \author{Thomas J. Moore}
-\date{Version 3.14.\RCSRevision\\\RCSDate}
+% Begin-doc build-ver
+\date{Version 3.15.\RCSRevision\\\RCSDate}
+% End-doc build-ver
 \maketitle
 
 \begin{abstract}
@@ -1315,8 +1317,7 @@ NoWeb's tangler has a simple syntax and usage, but suffers from the
 lack of a few features.  Sometimes, files should not end in a newline,
 but notangle always adds one.  Also, sometimes, consecutive chunks
 should not be separated by newlines, but again, notangle always adds
-one.  Fixing this is not difficult; a filter could be created to do
-this.
+one.
 
 I like to consolidate code as much as possible.  I do this in C using
 either subroutines or preprocessor macros.  The macros are more useful
@@ -1328,8 +1329,7 @@ preprocessor can usually accomplish what I need, but the price is that
 the debugger cannot debug code defined by the preprocessor.  In
 addition, there are some languages which lack a preprocessor.  As
 such, the original Web system had macros with arguments, and I would
-like something similar.  Fixing this will require much more than just
-a filter.
+like something similar.
 
 I propose the following syntax changes:
 
@@ -1360,28 +1360,22 @@ When \texttt{chunk} is extracted, the text will not have a trailing
 newline (due to the final star), and there will be no newline between
 [[text]] and [[text2]] (due to the first star).
 
-\item A chunk name used in a chunk definition line may be followed by
-a parameter list in parentheses.  All parameter names begin with an
-at-sign (@).  The only characters forbidden in parameter names are
-at-signs (other than the first) and invalid NoWeb syntax.  Since every
-parameter name begins with an at-sign, no separator is required (or
-allowed) between parameter names.  The actual chunk name is the text
-preceeding the opening parenthesis and optional whitespace.  All chunk
-extensions using this chunk name must either specify no parameters or
-the same list of parameter names.  When weaved, all chunk extensions
-of that chunk will display the full parameter list.
+\item A chunk name used in a chunk definition line may contain
+parameter definitions in parentheses.  All parameter names begin with
+an at-sign (@).  The only characters forbidden in parameter names are
+close-parentheses and invalid NoWeb syntax.  Thus the parameter name
+is terminated by its closing parenthesis.
 
 For example:
 \begin{quote}
 \begin{verbatim}
-@<<macro (@arg1@arg2)>>=
+@<<macro (@arg1) with (@arg2)>>=
 text
 @@
 \end{verbatim}
 \end{quote}
 
-The actual chunk name is [[macro]].  The parameters are [[@arg1]] and
-[[@arg2]].
+The parameters are [[@arg1]] and [[@arg2]].
 
 \item No chunk name may begin with an at-sign (@).  That is, the names
 starting with an at-sign are reserved for parameter names.
@@ -1414,12 +1408,13 @@ expand to [[macro]]'s argument.  When expanded within [[macro2]], both
 [[@arg]] and [[other]] will expand to [[macro2]]'s argument.
 
 \item A chunk reference consisting of the name of a chunk taking
-parameters, followed by optional whitespace, followed by as many
-in-line code segments as there are parameters, represents an expansion
-of the reference with the parameters taking the value of the code
-within the in-line code segments in their respective positions.  No
-expansion is done within the code segments except for parameter
-references; these may be used to pass parameters on to another macro.
+parameters, with all parameter references replaced by NoWeb in-line
+code segments, represents an expansion of the reference with the
+parameters taking the value of the code within the in-line code
+segments in their respective positions.  No expansion is done within
+the code segments except for parameter references; these may be used
+to pass parameters on to another macro.
+
 For example:
 
 \begin{quote}
@@ -1439,88 +1434,14 @@ The [[caller]] chunk expands to [[text text text2 text text3]].
 \end{itemize}
 % End-doc nw-enh-syntax
 
-For example:
+\subsection{Tangling}
 
-\lstset{language=txt}
-<<nt-enh-tst>>=
-@<<*blah@>>=
-No trailing newline.
-@@
-
-@<<blah(@x@y)@>>=
-blah now takes parameters @x and @y.
-@@
-
-@<<blah@>>=
-x=@<<@x@>>; y=@<<@y@>>;
-@@
-
-@<<bar@>>=
-This expands blah with @x=15 and @y=a + b.
-@<<blah[[15]][[a + b]]@>>
-This expands blah with @x and @y undefined/blank
-@<<blah@>>
-This refers to an undefined parameter @z
-@<<@z@>>
-@@
- 
-@<<boo(@a)@>>=
-This expands blah with @x=@a and @y=@a
-@<<blah [[@<<@a@>>]][[@<<@a@>>]]@>>
-@@
- 
-@<<zoo(@x)>>=
-Both of the following expand to the same thing, setting
-@@x and @y of blah without affecting @x of zoo.
-@<<blah[[x@<<@x@>>x]][[y@<<@x@>>y]]@>>
-@<<blah[[x@<<@x@>>x]][[y@<<@x@>>y]]@>>
-@@
- 
-@<<bar@>>=
-@<<boo[[yup]]@>>
-@<<zoo[[gup]]@>>
-@@
-@
-
-Running the above text through the tangler to produce bar should
-result in the following text:
-
-<<nt-enh-tst-out>>=
-This expands blah with @x=15 and @y=a + b.
-No trailing newline.blah now takes parameters @x and @y.
-x=15; y=a + b;
-This expands blah with @x and @y undefined/blank
-No trailing newline.blah now takes parameters @x and @y.
-x=; y=;
-This refers to an undefined parameter @z
-
-This expands blah with @x=@a and @y=@a
-No trailing newline.blah now takes parameters @x and @y.
-x=yup; y=yup;
-Both of the following expand to the same thing, setting
-@@x and @y of blah without affecting @x of zoo.
-No trailing newline.blah now takes parameters @x and @y.
-x=xgupx; y=ygupy;
-No trailing newline.blah now takes parameters @x and @y.
-x=xgupx; y=ygupy;
-@
-
-and the following warnings:
-
-<<nt-enh-tst-warn>>=
-nt-enh-tst: 17: too few arguments for @<<blah@>>
-nt-enh-tst: 10: undefined parameter: @x
-nt-enh-tst: 10: undefined parameter: @y
-nt-enh-tst: 19: undefined parameter: @z
-@
-
-Tangling these enhancements is the easy part.  Rather than create a
-new tangler, the NoWeb pipeline is used.  Also, rather than modifying
-the NoWeb tangler, a new one is developed from scratch.   If Ramsey
-had made the parsing and collection portions of the tangler a library,
-maybe that library could be used here, but instead everything is
-rewritten, slightly differently.  The as-yet-unreleased NoWeb 3 is
-better in that regard, but this is for NoWeb 2.
+Rather than create a new tangler, the NoWeb pipeline is used.  Also,
+rather than modifying the NoWeb tangler, a new one is developed from
+scratch.  While it is possible to write this as a filter, doing so is
+extremely expensive and only buys the ability to use the standard
+pipeline of both version 2 and 3.  Since 3 is permanently alpha, I
+don't really care about that.
 
 While I would prefer to write this in C, there are valid arguments for
 writing this in perl instead%
@@ -1590,23 +1511,17 @@ while($#ARGV >= 0) {
 Gathering code chunks is completely different from the raw
 [[notangle]] replacement.  Basically, it is a duplication of the
 original notangle code, converted to perl.  The only change (other
-than the internal representation) is that arguments are stripped and
-collected separately, and that the initial star is stripped and stored
-separately as well.
+than the internal representation) is that the initial star is stripped
+and stored separately.
 
 The internal representation is as follows:  [[%chunks]] is a hash
-whose index is the chunk name (without arguments).  [[%args]] and
-[[%argdef]] are indexed on the chunk name as well; the former is the
-argument list, with parentheses and initial at-sign stripped, and the
-latter is the file name and line number on which it was first defined.
-
-Each entry in [[%chunks]] is an array.  Each array element is corresponds
-to (possibly empty) text followed by a (possibly empty) chunk
-reference.  The file and line number are stored as well, along with
-the no-newline flag.  These are stored in a hash, whose index name is
-[[text]], [[ref]], [[file]], [[line]], and [[nonl]], respectively.
-Since the reference, if present, is at the end of the text, the end
-position is saved as well ([[refline]]).
+whose index is the chunk name.  Each entry in [[%chunks]] is an array.
+Each array element is corresponds to (possibly empty) text followed by
+a (possibly empty) chunk reference.  The file and line number are
+stored as well, along with the no-newline flag.  These are stored in a
+hash, whose index name is [[text]], [[ref]], [[file]], [[line]], and
+[[nonl]], respectively.  Since the reference, if present, is at the
+end of the text, the end position is saved as well ([[refline]]).
 
 <<Gather code chunks from NoWeb pipeline>>=
 my $lineno = 1; my $file = '<stdin>';
@@ -1642,7 +1557,7 @@ if(/^\@fatal( |$)/) {
 @
 
 <<Other code chunk gathering globals>>=
-my (%chunks, %args, %argdef);
+my (%chunks, %parmchunks);
 @
 
 <<Read chunk into hash table>>=
@@ -1654,20 +1569,11 @@ while(<>) {
   last if(/^\@defn /)
 }
 last if eof;
-m/^\@defn (\*)?(.*?)(?:\s*\(\@(.*)\))?$/;
+m/^\@defn (\*)?(.*)/;
 my $chunkname = $2; my $hasstar = $1;
 if($hasstar and $chunkname eq '') {
   $hasstar = undef;
   $chunkname = '*';
-}
-if($3) {
-  if($args{$chunkname} and $args{$chunkname} ne $3) {
-    print STDERR "$file:$lineno: argument mismatch ($args{$chunkname} " .
-                 "originally defined at $argdef{$chunkname}\n";
-    exit 1;
-  }
-  $args{$chunkname} = $3;
-  $argdef{$chunkname} = "$file:$lineno";
 }
 if(/^\@defn (\*)?\@/) {
   print STDERR "$file:$lineno: chunk names may not begin with \@\n";
@@ -1692,8 +1598,7 @@ while(<>) {
   } elsif(/^\@use (.*)$/) {
     $curchunk{'ref'} = $1;
     $curchunk{'refline'} = $lineno;
-    $chunks{$chunkname} = [] unless(@chunks{$chunkname});      
-    push @{$chunks{$chunkname}}, {%curchunk};
+    <<Add [[$chunkname]] to chunk table>>
     <<Clear [[%curchunk]]>>
   <<Adjust code chunk line/file based on directives>>
   } elsif(!/^\@index( |$)/) {
@@ -1701,16 +1606,61 @@ while(<>) {
     exit 1;
   }
 }
+<<Add [[$chunkname]] to chunk table>>
+@
+
+<<Add [[$chunkname]] to chunk table>>=
 $chunks{$chunkname} = [] unless(@chunks{$chunkname});      
 push @{$chunks{$chunkname}}, {%curchunk};
 @
 
 <<Clear [[%curchunk]]>>=
-%curchunk = undef;
-$curchunk{'text'} = "";
-$curchunk{'file'} = $file;
-$curchunk{'line'} = $lineno;
-$curchunk{'nonl'} = $hasstar;
+%curchunk = ('text', "", 'file', $file, 'line', $lineno, 'nonl', $hasstar);
+@
+
+In order to make matching parameterized expansions with the
+appropriate definition easier, a separate hash which associates a
+stripped version of the name with all unstripped versions that might
+match is built as well.
+
+The stripping removes converts all potential in-line code in a
+reference to the same string ([[(@)]]).  In-line code may match
+in-line code in the definition name, or parameter definitions in the
+in-line name. While I would normally use a simple loop with bracket
+tracking to determine the in-line code boundaries and whether or not
+the brackets are correct, a single recursive regular expression is
+used instead.
+
+References are stripped the same way, even though parameter
+definitions are technically not allowed.  This supports any legacy
+chunks that have syntax that looks like parameterization.  Literal
+matches at any position are considered good, but do not cause any
+parameter assignment.
+
+The [[%parmchunks]] hash is indexed on the stripped name, and each
+element is a hash indexed on every chunk name that strips to the
+index.  The element need not necessarily be a hash; the hash is just
+an easy way to maintain a list without duplicates. [[keys
+%parmchunks]] is actually the array we're interested in.
+
+<<[[strip_chunkname]]>>=
+my $parm_re = '(\(\@[^)]*\)|\[\[((?:[^][]|\[(?-1)\])*)\]\])';
+sub strip_chunkname($)
+{
+  my $n = shift;
+  $n =~ s/$parm_re/(@)/g;
+  return $n;
+}
+@
+
+<<Other code chunk gathering globals>>=
+<<[[strip_chunkname]]>>
+@
+
+<<Add [[$chunkname]] to chunk table>>=
+my $strip = strip_chunkname $chunkname;
+$parmchunks{$strip} = {} if not $parmchunks{$strip};
+${$parmchunks{$strip}}{$chunkname} = 1;
 @
 
 The expansion of a chunk simply outputs the text portions, and
@@ -1749,28 +1699,30 @@ sub expand_chunk($$) {
 }
 @
 
-The name of the chunk to expand may include actual parameters.
-Regardless of whether or not the chunk being called actually takes
-parameters, the chunk reference has potential actual parameters
-stripped from the end until either there are no more or the remaining
-portion of the reference names an existing chunk.  As they are being
-stripped off, their text is saved in [[@argv]].  Since parameters are
-stripped off the tail end, they are added to this array in reverse
-order.  The chunk name with parameters stripped off is retained in
-[[$basename]].
+The name of the chunk to expand is either identical to an existing
+definition, or it might be a parameter expansion, or it might be a
+parameterized expansion.  The parameter expansions can most easily be
+dealt with by adding them to the [[%chunks]] table, so both of the
+first two cases can be checked the same way.  A lookup failure then
+causes the third case to be considered.  Since the chunk name needs to
+be parsed in order to match potential definitions anyway, the argument
+associations can be extracted at the same time.
+
+<<Other code chunk gathering globals>>=
+<<[[find_best_def]]>>
+@
 
 <<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my @argv;
-my $basename = $name;
-my $chunk = $chunks{$basename};
-# If not found, it may be a parameterized expansion
+my ($basename, %argv);
+my $chunk = $chunks{$basename = $name};
 unless($chunk) {
   # parameters cannot have parameters, so error out immediately
   if($name =~ /^\@/) {
     print STDERR "$file:$lineno: undefined parameter: $name\n";
     return 1; # nothin generated; suppress newline
   }
-  <<Strip actual parameters until no more or valid chunk name>>
+  ($basename, %argv) = find_best_def("$file:$lineno: ", $basename);
+  $chunk = $chunks{$basename} if $basename;
 }
 unless($chunk) {
   print STDERR "$file:$lineno: undefined chunk name: @<<$name@>>\n";
@@ -1782,78 +1734,115 @@ if($in_progress{$basename}) {
 }
 @
 
-The actual parameters claim to support any valid NoWeb syntax, but
-really the only supported syntax is nested balanced square braces, and
-parameter references in the form of normal chunk references.  At-signs
-may be used to escape the parameter references.  While I would
-normally use a simple loop with brace tracking to determine the
-boundaries and whether or not the braces are correct, a single
-recursive regular expression is used instead.
+To find out if this is a parameterized chunk reference, all
+definitions are searched for possible matches.  The stripping function
+actually limits the search to definitions which allow in-line code
+in the same positions as the in-line code of the reference.
 
-Parameter references are expanded immediately, to avoid conflict with
-setting the parameter values for the chunk to be expanded.
+If there is in-line code in a definition, it must match the same
+in-line code in the use.  If there is a parameter definition in the
+definition, it must match any in-line code.  Since there is some
+ambiguity when one definition has in-line code at a spot, and the
+other has a parameter, the match which has the fewest number of
+substitutions is chosen, and, failing that, the one which has a
+non-substitution in the earliest spot where the two differ in that
+regard.  A warning is issued for the latter case as well.
 
-<<Strip actual parameters until no more or valid chunk name>>=
-while($basename =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|\[(?2)\])*)\]\]$/) {
-  my $arg = ''; my $argtxt = $2;
-  $basename = $1;
-  <<Expand any parameter references in [[$argtxt]] into [[$arg]]>>
-  # add to parameter array
-  push @argv, $arg;
-  $chunk = $chunks{$basename};
-  last if($chunk);
+Parameter substitution supports parameter references in values, as
+well.  Rather than deal with this at every expansion time, the
+parameters are substituted immediately.  As a hidden feature, if a
+reference's in-line code would match literal in-line code after
+parameter substitution in the reference, it is still considered an
+exact match.
+
+As the parameters are being matched, a hash is built to assign
+parameter values to names.  This hash is returned along with the name
+of the definition to use.
+
+<<[[find_best_def]]>>=
+sub find_best_def($$) {
+  my ($loc, $curchunk) = @_;
+  my $pchunks = $parmchunks{strip_chunkname $curchunk};
+  return if not $pchunks;
+  my ($best, $best_len, %best_parms, @best_parms_loc);
+  $best_len = length $curchunk;
+  my @ambig;
+  PCHUNK: foreach my $may (keys %$pchunks) {
+    my $len = 0;
+    my (%may_parms, @may_parms_loc);
+    my $mayrest = $may;
+    my $currest = $curchunk;
+    while($mayrest =~ /$parm_re(.*)/) {
+      my $mayp = $1;
+      $mayrest = $3;
+      $currest =~ /$parm_re(.*)/;
+      my $curp = $1;
+      $currest = $3;
+      next if $curp eq $mayp;
+      next PCHUNK if substr($curp, 0, 1) eq "(";
+      <<Expand any parameter references in [[$curp]]>>
+      next if $curp eq $mayp;
+      next PCHUNK if substr($mayp, 0, 1) eq "[";
+      $len++;
+      $may_parms{substr($mayp, 1, -1)} = substr($curp, 2, -2);
+      push @may_parms_loc, length $mayrest;
+    }
+    next if $len > $best_len;
+    if($len == $best_len) {
+      push @ambig, $best if $#ambig < 1;
+      push @ambig, $may;
+      for(my $i = 0; $i <= $#may_parms_loc; $i++) {
+        next PCHUNK if $may_parms_loc[$i] < $best_parms_loc[$i];
+        last if $may_parms_loc[$i] > $best_parms_loc[$i];
+      }
+    } else {
+      @ambig = undef;
+    }
+    $best = $may;
+    $best_len = $len;
+    %best_parms = (%may_parms);
+    @best_parms_loc = (@may_parms_loc);
+  }
+  if($#ambig > 0) {
+    print STDERR $loc . "ambiguous expansion of @<<$curchunk@>>:\n";
+    foreach my $may (@ambig) {
+      print "  @<<$may@>>\n";
+      print " (chosen)" if $may eq $best;
+      print "\n";
+    }
+  }
+  return ($best, %best_parms);
 }
 @
 
-A recursive call would be the most consistent way to expand the
-parameter reference, but actually parameters are never anything but a
-single block of pure text, so a direct lookup is sufficient.
-Otherwise, the entire routine would have to be rewritten to return a
-string rather than print it.
+As mentioned above, the [[$chunks]] table is used to store parameter
+values as well.  This could be expanded with a recursive call to full
+reference expansion, but since parameters are always nothing more than
+a single, simple text string, and I don't want to do [[#line]]
+processing on that string, it is expanded directly.
 
-<<Expand any parameter references in [[$argtxt]] into [[$arg]]>>=
-while($argtxt =~ /(.*?)(?<!@)@<<(@[^@]+)@>>(.*)/) {
-  my $parm = $chunks{$2};
-  print STDERR "$file:$lineno: undefined parameter: $2\n" unless($parm);
-  $arg .= $1 . ${$$parm[0]}{'text'};
-  $argtxt = $3;
+<<Expand any parameter references in [[$curp]]>>=
+my $curp_rest = $curp;
+$curp = '';
+while($curp_rest =~ /(.*?)(?<!@)@<<(.*?)(?<!@)@>>(.*)/) {
+  my $v = $chunks{$2};
+  $curp .= $1 . ${$$v[0]}{'text'};
+  $curp_rest = $3;
 }
-$arg .= $argtxt;
+$curp .= $curp_rest;
 @
 
 Now that there is a valid chunk name and parameter list, formal
-parameters can be assigned values.  Any formal parameters for which an
-actual parameter was not provided is explicitly unassigned, so that
-higher level assignments don't interfere.  Passing variable values
-down must be done explicitly.  Since the values need to be restored
-after this chunk has been expanded, the old values are retained in
-[[%revert]].
+parameters can be assigned values.  Since the values need to be
+restored after this chunk has been expanded, the old values are
+retained in [[%revert]].
 
 <<Expand chunk [[$name]] and indent it by [[$indent]]>>=
 my %revert;
-my $too_few;
-my $chunkargs = $args{$basename} or "";
-while($chunkargs ne "") {
-  $chunkargs =~ /([^@]+)(?:\@(.*))?/;
-  $chunkargs = $2;
-  my $v = '@' . $1;
-  $revert{$v} = $chunks{$v};
-  my %newent;
-  $newent{'file'} = $file;
-  $newent{'line'} = $lineno;
-  if($#argv >= 0) {
-    $newent{'text'} = pop @argv;
-    $chunks{$v} = [{%newent}];
-  } else {
-    $too_few = 1;
-    $chunks{$v} = undef;
-  }
-}
-# Warn of mismatch between # of expected and actual args
-if($#argv >= 0) {
-  print STDERR "$file:$lineno: too many arguments for @<<$basename@>>\n";
-} elsif($too_few) {
-  print STDERR "$file:$lineno: too few arguments for @<<$basename@>>\n";
+foreach my $arg (keys %argv) {
+  $revert{$arg} = $chunks{$arg};
+  my %v = ('file', $file, 'line', $lineno, 'text', $argv{$arg});
+  $chunks{$arg} = [\%v];
 }
 <<Perform chunk reference expansion using new parameter values>>
 my ($v, $old);
@@ -2017,19 +2006,19 @@ nt-enh: $(NOWEB)
 	chmod +x nt-enh
 @
 
-These enhancements also require changes to the weavers.  A filter run
-before the indexing can strip off all extra characters on the
-definitions (and maybe uses as well, but that requires a full list of
-[[$NOWEB_ORDER]] to ensure that all possible uses are detected).  The
-excess text can simply be marked with a different token, such as
-[[@nwenha]] for appended text and [[@nwenhp]] for prepended text.  A
-filter run after indexing can then re-add the prepended and appended
-text, and also append the full formal parameter list to any chunk that
-doesn't have it.  The main thing missing in this approach is any sane
-way of dealing with parameter references.  However, it appears that
-the NoWeb backends deal with use-references without cross reference
-information in an appropriate manner, so the prefilter just hides them
-by converting them to [[@nwenhuse]] and the post-filter unhides them.
+\subsection{Weaving}
+
+These enhancements also require changes to the weavers.  No particular
+effort will be made to typeset things nicely.  Parameter references
+should be typeset as chunk references, but without the links (where
+would they link to?).  To do that, they need to be hidden from the
+indexer, and unhidden after the indexer.  Likewise, to get cross
+references right, references to parameterized chunks with actual
+parameters need to be converted to the definition format for the
+indexer, and then changed back afterwards.  The star prefix
+requires stripping the star before indexing, and re-adding it
+afterwards.  These tasks can be accomplished by two filters: one for
+before indexing, and one for after.
 
 <<Build Script Executables>>=
 nw-enh-preidx nw-enh-postidx \
@@ -2039,45 +2028,111 @@ nw-enh-preidx nw-enh-postidx \
 <<nw-enh-preidx>>=
 <<Common Perl Prefix>>
 
-my (%defs, %args);
+@
 
-if($#ARGV >= 0) {
-  foreach my $a (@ARGV) {
-    open(my $fh, "markup $a|");
-    while(<$fh>) {
-      next unless(m/^\@defn \*?(.*?)(?:\s*\(\@(.*)\))?$/);
-      $defs{$1} = 1;
-      $args{$1} = $2 if($2);
-    }
+<<nw-enh-postidx>>=
+<<Common Perl Prefix>>
+
+@
+
+The pre-index filter needs to know how to interpret chunk references
+with in-line code:  either as in-line code, or as macro parameters.
+The only way to do this is to know the names of all chunks.  Since
+weaving does not require all tangling inputs, but this particular task
+does require them, any inputs not included in the weaving process must
+be specified on the filter's command line.  While it might be nice to
+use the standard markup tool for this, it is not present in noweb 3.
+Instead, the file is parsed directly, with a very limited view of what
+constitutes the start of a chunk.  This probably needs improvement.
+
+Much like the tangler's reader, each definition is placed into two
+arrays:  one indexed by its real name, and one indexed by its name
+with all parameter definitions and references stripped out.  That way,
+finding the actual chunk to use for a macro reference is easier.
+
+<<nw-enh-preidx>>=
+<<[[strip_chunkname]]>>
+
+my (%chunks, %parmchunks);
+
+foreach my $a (@ARGV) {
+#  open(my $fh, "markup $a|");
+  open(my $fh, "$a");
+  while(<$fh>) {
+#    next unless(m/^\@defn (\*)?(.*)$/);
+    next unless(m/^@<<(\*)?(.*)@>>=$/);
+    # note: don't care if '*' gets flagged correctly or not
+    $chunks{$2} = 1;
+    my $s = strip_chunkname($1);
+    $parmchunks{$s} = {} if not $parmchunks{$s};
+    ${$parmchunks{$s}}{$1} = 1;
   }
+  close $fh;
 }
+@
 
+The filter process needs to scan the file more than once.  The first
+time, it gathers definitions just like it did for the command-line
+arguments.  For convenience, the file is just read into an array of
+plain text lines for processing.
+
+<<nw-enh-preidx>>=
 my @file = <STDIN>;
 foreach my $l (@file) {
-  next unless($l =~ m/^\@defn \*?(.*?)(?:\s*(\(\@.*\)))?$/);
-  $defs{$1} = 1;
-  $args{$1} = $2 if($2);
+  next unless($l =~ m/^\@defn (\*)?(.*)$/);
+  $chunks{$2} = 1;
+  my $s = strip_chunkname($2);
+  $parmchunks{$s} = {} if not $parmchunks{$s};
+  ${$parmchunks{$s}}{$2} = 1;
 }
+@
+
+For the second pass, an attempt is made to match a chunk reference
+with a definition.  If it matches, and requires parameter expansion to
+do so, it will replace its name with the parameterized definition, and
+save its old name using [[@nwenhcall]].  The matching method is
+copied from the tangler.  The main difference is that file and line
+information are not tracked by this filter, so the location string is
+always blank.
+
+A leading star in an [[@defn]] is removed the same way.
+
+Parameter references are simply hidden away by renaming them to
+[[@nwenhuse]].
+
+As a special hack, in order to highlight parameters better, an extra
+set of square brackets is placed around them.  This repeasts some of
+the work that [[find_best_def]] does, but that's not too terrible.
+
+<<nw-enh-preidx>>=
+<<[[find_best_def]]>>
 
 foreach my $l (@file) {
-  if($l =~ m/^\@defn (\*)?(.*?)(?:\s*\(\@.*\))?$/) {
-    print "\@nwenhp *\n" if($1);
-    my $a = $args{$2};
-    print "\@nwenha $a\n" if($a);
-    print "\@defn $2\n";
-  } elsif($l =~ /^\@use (.*\[\[.*\]\])$/) {
-    my $a = "";
-    my $b = $1;
-    until($defs{$b}) {
-      last unless($b =~ /(.*?)\s*(?<!@)(\[\[((?:[^][]|\[(?2)\])*)\]\])$/);
-      $b = $1;
-      $a = '[[' . $2 . ']]' . $a;
-    }
-    if($defs{$b} and $a ne "") {
-      print "\@nwenha $a\n\@use $b\n";
+  if($l =~ /^\@use ([^@].*\[\[.*\]\].*)$/) {
+    my ($best,) = find_best_def('', $1);
+    if($best and $best ne $1) {
+      my $cur = '';
+      my ($b, $c) = ($best, $1);
+      while($b =~  /$parm_re(.*)/) {
+        my $bp = $1;
+        $b = $3;
+        $c =~ /^(.*?)$parm_re(.*)/;
+        my $cp = $2;
+        $c = $4;
+	$cur .= $1;
+	if($cp eq $bp) {
+	  $cur .= $cp;
+	} else {
+	  $cur .= '[[' . $cp . ']]';
+	}
+      }
+      $cur .= $c;
+      print "\@nwenhcall $cur\n\@use $best\n";
     } else {
       print $l;
     }
+  } elsif($l =~ /^\@defn \*(.+)$/) {
+    print "\@nwenhcall *$1\n\@defn $1\n";
   } else {
     $l =~ s/^\@use \@/\@nwenhuse \@/;
     print $l;
@@ -2085,73 +2140,79 @@ foreach my $l (@file) {
 }
 @
 
-<<nw-enh-postidx>>=
-<<Common Perl Prefix>>
+For the third pass, done after the index, the above-added tags are
+reverted.
 
-my $nwenhp = "";
-my $nwenha = "";
+<<nw-enh-postidx>>=
+my $nwenhcall;
 
 while(<STDIN>) {
-  s/^\@nwenhuse /\@use /;
-  if(/^\@nwenhp (.*)$/) {
-    $nwenhp = $1;
-  } elsif(/^\@nwenha (.*)$/) {
-    $nwenha = $1;
-  } elsif(/^\@(defn|use) (.*)$/) {
-    print "\@$1 $nwenhp$2$nwenha\n";
-    $nwenhp = $nwenha = '';
+  if(/^\@nwenhcall (.*)$/) {
+    $nwenhcall = $1;
+  } elsif(/^\@(defn|use) / and $nwenhcall) {
+    print "\@$1 $nwenhcall\n";
+    $nwenhcall = undef;
   } else {
+    s/^\@nwenhuse /\@use /;
     print "$_";
   }
 }
 @
 
-This is not the end of it:  [[noroots]] needs changes as well.  There
-is no reason to retain the pipeline for this tool, so it could be
-standalone and not depend on the markup parser.  However, keeping the
-parsing to the one official parser might be a good idea.  The
-[[noroots]] script is not a simple pipeline, though:  it includes the
-entire ``backend'' in-line.  To make a replacement script, the library
-location is lifted from the existing script so it can call the markup
-parser.
+\subsection{Other}
 
-\lstset{language=make}
+This is not the end of it:  [[noroots]] (noweb-2 only) needs changes
+as well.  There is no reason to retain the pipeline for this tool, so
+it could be standalone and not depend on the markup parser.  However,
+keeping the parsing to the one official parser might be a good idea.
+The [[noroots]] script is not a simple pipeline, though:  it includes
+the entire ``backend'' in-line.  To make a replacement script, the
+library location is lifted using a trick filter in notangle.
+
+The procedure is the same as standard [[noroots]], except that after
+collecting all usages, a pass is made over the usage array to add
+parameterized usages.
+
 <<Build Script Executables>>=
 noroots-enh \
 @
 
-<<makefile.rules>>=
-noroots-enh: NOTANGLE_POSTPROC=| \
-  ( eval $$(grep '^LIB=' $$(which noroots)); sed "s#\#\#LIB\#\##$$LIB#")
-@
-
-\lstset{language=perl}
 <<noroots-enh>>=
 <<Common Perl Prefix>>
 
-my (%def, %use);
+my $LIB = `notangle -filter 'echo \$LIB >&3' /dev/null 2>/dev/null 3>&1`;
+chomp $LIB;
 
-open(my $f, "-|", "##LIB##/markup", @ARGV);
+my (%chunks, %parmchunks, %use);
+
+open(my $f, "-|", "$LIB/markup", @ARGV);
+
+<<[[strip_chunkname]]>>
 
 while(<$f>) {
   if(/^\@quote$/) {
     while(<$f>) {
       last if(/\@endquote$/);
     }
-  } elsif(/^\@defn (.*?)(?:\s*\(\@.*\))?$/) {
-    $def{$1} = 1;
+  } elsif(/^\@defn (.*)$/) {
+    $chunks{$1} = 1;
+    my $s = strip_chunkname($1);
+    $parmchunks{$s} = {} if not $parmchunks{$s};
+    ${$parmchunks{$s}}{$1} = 1;
   } elsif(/^\@use (.*)$/) {
     $use{$1} = 1;
   }
 }
+
+<<[[find_best_def]]>>
+
 for my $u (keys %use) {
-  until($def{$u}) {
-    last unless($u =~ /(.*?)\s*(?<!@)\[\[((?:[^][]|\[(?2)\])*)\]\]$/);
-    $u = $1;
+  if(substr($b, 0, 1) ne '@') {
+    my ($b,) = find_best_def('', $u);
+    $use{$b} = 1 if $b;
   }
-  $use{$u} = 1 if($def{$u});
 }
-for my $d (keys %def) {
+for my $d (keys %chunks) {
   print "@<<$d@>>\n" unless $use{$d};
 }
 @

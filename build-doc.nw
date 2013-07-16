@@ -18,7 +18,7 @@
 
 \title{Syntax Highlighting Modular Build System for NoWeb (Users' Guide)}
 \author{Thomas J. Moore}
-\date{Version 3.13.\RCSRevision\\\RCSDate}
+\input{build-ver.tex} %%% doc
 \maketitle
 
 \section*{Building packages based on \texttt{build.nw}}

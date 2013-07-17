@@ -1615,7 +1615,7 @@ push @{$chunks{$chunkname}}, {%curchunk};
 @
 
 <<Clear [[%curchunk]]>>=
-%curchunk = ('text', "", 'file', $file, 'line', $lineno, 'nonl', $hasstar);
+%curchunk = (text => "", file => $file, line => $lineno, nonl => $hasstar);
 @
 
 In order to make matching parameterized expansions with the
@@ -1841,7 +1841,7 @@ retained in [[%revert]].
 my %revert;
 foreach my $arg (keys %argv) {
   $revert{$arg} = $chunks{$arg};
-  my %v = ('file', $file, 'line', $lineno, 'text', $argv{$arg});
+  my %v = (file => $file, line => $lineno, text => $argv{$arg});
   $chunks{$arg} = [\%v];
 }
 <<Perform chunk reference expansion using new parameter values>>
@@ -2248,19 +2248,39 @@ In order to support attachments, the [[xelatex]] backend may need to
 be informed of the file location.  This should include the current
 directory by default, but a common ``security'' measure is to remove
 the current directory from the default configuration file search path,
-which removes it from the attachment search path as a side effect. 
+which removes it from the attachment search path as a side effect.
 Rather than hard-code the backend and configuration path, a note is
 added to the config file so the user can set the environment variable
 appropriately (which also coincidentally overrides the security
 feature, as well).
 
+Since [[xelatex]] is intended primarily for UTF-8 support, it can also
+be selected using a global UTF-8 flag.  This automatically converts
+[[pdflatex]] to [[xelatex]], but as mentioned in the previous
+paragraph, this can't just be a direct replacement.  Thus the note is
+moved to a new configuration variable, which sets the [[xelatex]]
+command only.  The default value of that variable is what works on my
+system, and may work on any TeX distribution which uses kpathsea.
+
 \lstset{language=make}
 <<makefile.config>>=
-# The PDF command to use: must be pdflatex or xelatex.
-# note: to use attachments with xetex, the following may be necessary:
-#LATEXCMD=env DVIPDFMXINPUTS=.:\$$TEXMF/dvipdfmx/ xelatex
+# Set to non-blank if NoWeb files are UTF-8.
+NW_UTF8=
+
+# The LaTeX-to-PDF command to use: must be pdflatex or xelatex.
+# If this is pdflatex, it will automatically be switched to
+# $(UTF8LATEXCMD) when NW_UTF8 is non-blank.
 LATEXCMD=pdflatex
 
+# The UTF-8 LaTeX-to-PDF command to use (xelatex).
+# To use attachments, the search path may need to be adjusted as follows:
+#<<[[xelatex]] command>>
+UTF8LATEXCMD:=<<[[xelatex]] command>>
+
+@
+
+<<[[xelatex]] command>>=
+env DVIPDFMXINPUTS=.:\$$TEXMF/dvipdfmx/ xelatex
 @
 
 <<makefile.vars>>=
@@ -2269,6 +2289,8 @@ NOWEB_NINCL:=$(shell \
     grep '^\\input{'"$$x"'}$$' $(NOWEB) >/dev/null && continue; \
     echo "$$x"; \
   done)
+latexcmd = $(if $(and $(NW_UTF8),$(findstring pdflatex,$(LATEXCMD))), \
+                $(UTF8LATEXCMD),$(LATEXCMD))
 @
 
 <<Source Code Documentation Files>>=
@@ -2304,7 +2326,7 @@ LMSCMD = /xparse\/.*define-command/b; \
 
 %.pdf: %.tex
 	set -x; \
-	while $(LATEXCMD) -interaction batchmode $< >/dev/null; do \
+	while $(latexcmd) -interaction batchmode $< >/dev/null; do \
 	  rerun=; \
 	  <<Mangle aux files>>
 	  test -n "$$rerun" && continue; \
@@ -2508,16 +2530,44 @@ This requires the [[open2()]] function.  In addition, the command is passed
 as individual arguments, gaining a little more speed by not calling the
 shell to parse the command at every invocation.
 
+For UTF-8 input, tabs are once again stripped (incorrectly) by the
+final weave stage.  In order to prevent this, at least for code
+chunks, they are stripped here, instead.  The main text cannot be
+processed this way without reconstructing the text from the pipeline
+as above, so verbatim text in the documentation will have to be
+changed manually.
+
 <<Initialize [[nwweavefilt]]>>=
 use FileHandle;
 use IPC::Open2;
 # first arg is name of highlighting helper
 my $filt = shift @ARGV;
+# UTF-8 encode stdin and all output files in UTF-8 mode
+my $utf8_mode = $ENV{'NW_UTF8'};
+chomp $utf8_mode;
+$utf8_mode = $utf8_mode && $utf8_mode ne '';
+# ?? needs to reference $utf8_mode or it will always be false
+use if \$utf8_mode, open => ':std', ':encoding(utf8)';
 @
 
 <<Highlight accumulated code>>=
 my ($pid, $reader, $writer);
 $pid = open2($reader, $writer, $filt, $lang);
+
+# fix utf-8 tabs
+# length function is UTF-8 length
+# proper Unicode support would use grapheme cluster length instead
+# and take into account width of characters, but that's too complex
+if($utf8_mode) {
+  # avoid warnings
+  binmode $writer, ":encoding(utf8)";
+  # allow UTF-8 on input
+  binmode $reader, ":encoding(utf8)";
+  # maybe switch to index/rindex some day
+  while($code =~ /((?:.|\n)*?)^([^\t\n]*)\t((?:.|\n)*)/m) {
+    $code = $1 . $2 . (' ' x (8 - (length($2) % 8))) . $3;
+  }
+}
 
 print $writer $code;
 close $writer;
@@ -3287,9 +3337,15 @@ Rather than looking for that particular line, a special comment is replaced:
 The following script does this, and brings all of the above together.
 In order to merge sources correctly, the dependency order (tree) needs
 to be passed in as well as the input and output file names.  The
-highlight theme can be selected using a command-line parameter.
-Selection of the listings package versus an external highlighter is
-done by prefixing the highlight theme name with [[list:]].
+highlight information is selected via environment variables, normally
+passed in via exports from the makefile.  Selection of the listings
+package versus an external highlighter is done by prefixing the
+highlight theme name with [[list:]].
+
+While most processing is identical for Latin-1 encoding and UTF-8
+encoding, NoWeb's markup processor strips tabs from input, converting
+them to spaces.  This does not work in UTF-8 when there are multi-byte
+characters, so it is disabled.
 
 \lstset{language=make}
 <<makefile.config>>=
@@ -3299,8 +3355,11 @@ HL_THEME:=
 
 @
 
+<<makefile.vars>>=
+export HL_THEME HLPROG_TYPE NW_UTF8
+@
+
 <<makefile.rules>>=
-export HL_THEME HLPROG_TYPE HEADERS
 %.tex: %.nw nw2latex $(call tree,%.nw)
 	./nw2latex $< $@ "$(call tree,$<)"
 @
@@ -3351,7 +3410,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
-          -delay -index -filter "./nw-enh-postidx" - | \
+          -delay -index -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -3833,6 +3892,10 @@ of plain [[notangle]].
 
 <<[[nw2latex]] deps>>=
 notangle-enh \
+@
+
+<<makefile.vars>>=
+export HEADERS
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
@@ -4409,7 +4472,7 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -html -filter "./nw-enh-preidx $noweb_order" \
+  noweave ${NW_UTF8:+-t} -html -filter "./nw-enh-preidx $noweb_order" \
           -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -index \
           -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
 	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
@@ -4726,7 +4789,12 @@ nw2html: cproto.h $(HEADERS)
 Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be
 standards compliant any more, HTML Tidy%
 \footnote{\url{http://tidy.sourceforge.net}}
-is used to clean up the output.
+is used to clean up the output.  When switching to [[xelatex]] for
+Unicode input, HTML Tidy needs to switch to UTF-8 input as well.
+
+<<makefile.vars>>=
+export TIDY_FLAGS
+@
 
 \lstset{language=sed}
 <<Filter noweave output without removal>>=
@@ -4741,7 +4809,7 @@ s%</*tableofcontents>%%
 
 \lstset{language=sh}
 <<nw2html>>=
-tidy -q -wrap 0 -i -asxhtml -m "$outf" 2>tidy.log
+tidy -q -wrap 0 -i -asxhtml -m ${NW_UTF8:+-utf8} "$outf" 2>tidy.log
 # report unexpected errors
 fgrep -ivf- tidy.log <<EOF >/dev/null || :
 missing <!DOCTYPE>

@@ -62,3 +62,17 @@ abandoned years ago.  It does work with some of my old Ada sources,
 but is mostly a non-functional repository for my old version 1 and 2
 code.  The only reason it's here is that this is a mirror of my SVN
 build directory, where that happens to reside.
+
+As a side note, this is a copy of an SVN project.  I use the SVN Id,
+Date, and Revision information in the printed output, as well as to
+stamp every object file.  Linus says this is stupid of me, so git
+discourages this.  However, if you want your printed output to look
+like mine, you'll need to expand the keywords.  I have found a project
+which does this (https://github.com/turon/git-rcs-keywords), sort of.
+I have included a copy of the (corected and updated) filters in
+.git_filters; to use them, as per the original project's README, add
+the following to ~/.gitconfig:
+
+[filter "rcs-keywords"]
+	clean  = .git_filters/rcs-keywords.clean
+	smudge = .git_filters/rcs-keywords.smudge %f

@@ -1937,7 +1937,7 @@ foreach my $arg (keys %argv) {
   my $vrest = $argv{$arg};
   while($vrest =~ /(.*?)@<<(@.*?)(?<!@)@>>(.*)/) {
     my $pv = $chunks{$2};
-    $v .= $1 . ${$$v[0]}{'text'};
+    $v .= $1 . ${$$pv[0]}{'text'};
     $vrest = $3;
   }
   $v .= $vrest;

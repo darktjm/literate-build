@@ -55,7 +55,7 @@ the tjm-ext library without using the build system from scratch:
 For all of the downloads listed above, I may upload less frequently
 than I update the git.  Updating the git from my personal sources is
 scriptable, but as far as I can tell, uploads are not.  It's too much
-trouble to keep 6 files up-to-date all the time.
+trouble to keep 7 files up-to-date all the time.
 
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,
@@ -65,7 +65,7 @@ build directory, where that happens to reside.
 
 As a side note, this is a copy of an SVN project.  I use the SVN Id,
 Date, and Revision information in the printed output, as well as to
-stamp every object file.  Linus says this is stupid of me, so git
+stamp every object file.  Linus says this is stupid of me**, so git
 discourages this.  However, if you want your printed output to look
 like mine, you'll need to expand the keywords.  I have found a project
 which does this (https://github.com/turon/git-rcs-keywords), sort of.
@@ -77,4 +77,32 @@ the following to ~/.gitconfig:
 	clean  = .git_filters/rcs-keywords.clean
 	smudge = .git_filters/rcs-keywords.smudge %f
 
+After that, either clone a fresh copy, or force a checkout of all
+noweb files.  I know nothing about git, so I have no idea how to do
+that properly (not checkout -f, that's for sure), but this works:
+
+  for x in *.nw; do /bin/rm $x; git checkout $x; done
+
+The same is true for all of my other bitbucket-posted literate
+projects.
+
 * see https://github.com/darktjm/git-rcs-keywords
+
+** http://www.gelato.unsw.edu.au/archives/git/0610/28891.html:
+   "The whole notion of keyword substitution is just totally idiotic."
+   "doing it should be in helper scripts or something"
+   "[the Linux kernel's snapshot script] is how to do keyword
+    substitution in a _sane_ way."
+   "... keyword substitution is just stupid."
+     You know what?  The latex rcs package parses svn keywords well and
+     allows me to put the last checkin date and revision ID on my title
+     pages without having to write a script for it.  I also like to
+     store $Id$ in all object files, so that a "strings" will tell me
+     the versions of all code in a binary.  Linus might have a point for
+     the binaries, in that unlike SVN, you can store just one hash in
+     one place, rather than in every file, but even then, I'd prefer
+     the hash and date of the last modification in each file instead.
+     Providing VCS info in the final output product has been a desirable
+     property since time immemorial.  But yeah, I guess it's stupid to
+     want to make it convenient.  After all, git was designed for Linux
+     development, and other people using it is just silly.

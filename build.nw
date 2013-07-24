@@ -1364,12 +1364,13 @@ newline (due to the final star), and there will be no newline between
 parameter definitions in parentheses.  All parameter names begin with
 an at-sign (@).  The only characters forbidden in parameter names are
 close-parentheses and invalid NoWeb syntax.  Thus the parameter name
-is terminated by its closing parenthesis.
+is terminated by its closing parenthesis.  parameter definition syntax
+within in-line code is ignored.
 
 For example:
 \begin{quote}
 \begin{verbatim}
-@<<macro (@arg1) with (@arg2)>>=
+@<<macro (@arg1) with -(@arg2)- (but not @[[(@arg3)]])>>=
 text
 @@
 \end{verbatim}
@@ -1383,7 +1384,8 @@ starting with an at-sign are reserved for parameter names.
 \item Chunk references beginning with an at-sign (@) expand to the
 parameter with that name, as defined by the closest parent taking a
 parameter of that name.  When weaved, such references are not linked
-anywhere, and they are not added to the index.
+anywhere, and they are not added to the index.  When tangled, the
+[[-L]] option is ignored.
 
 For example:
 
@@ -1391,7 +1393,7 @@ For example:
 \begin{verbatim}
 @<<macro (@arg)>>=
 text @<<@arg>>
-@<<other>
+@<<other>>
 @@
 @<<macro2 (@arg)>>=
 text2 @<<@arg>>
@@ -1421,15 +1423,51 @@ For example:
 \begin{verbatim}
 @<<macro (@arg)>>=
 text @<<@arg>>
-@<<other>
+@@
+@<<macro2 (@arg)>>=
+@<<macro @[[and @<<@arg>>]]>>
+@@
+@<<macro3 (@arg)>>=
+@<<macro4>>
+@@
+@<<macro4>>=
+can reference @<<@arg>> of macro3.
 @@
 @<<caller>>=
-text @<<macro @[[text2]]>> @<<macro @[[text3]]>>
+text @<<macro @[[text2]]>> @<<macro2 @[[text3]]>>
+@<<macro3 @[[text4]]>>
 @@
 \end{verbatim}
 \end{quote}
 
 The [[caller]] chunk expands to [[text text text2 text text3]].
+
+\item When more than one parameterized chunk could be used to replace
+a reference, the one with the least parameter replacements is chosen.
+For equal numbers, the one which does not contain the earliest
+parameter replacement is chosen.
+
+For example:
+
+\begin{quote}
+\begin{verbatim}
+@<<macro (@arg1) and (@arg2)>>=
+text @<<@arg1>> blah @<<@arg2>>
+@@
+@<<macro @[[1]] and (@arg)>>=
+text blah blah @<<@arg>>
+@@
+@<<macro (@arg) and @[[2]]>>=
+text blah blah blah @<<@arg>>
+@@
+@<<*>>=
+@<<macro @[[a]] and @[[b]]>> -- one blah
+@<<macro @[[1]] and @[[b]]>> -- two blahs
+@<<macro @[[a]] and @[[2]]>> -- three blahs
+@<<macro @[[1]] and @[[2]]>> -- two blahs and a warning
+@@
+\end{verbatim}
+\end{quote}
 
 \end{itemize}
 % End-doc nw-enh-syntax
@@ -1623,13 +1661,12 @@ appropriate definition easier, a separate hash which associates a
 stripped version of the name with all unstripped versions that might
 match is built as well.
 
-The stripping removes converts all potential in-line code in a
-reference to the same string ([[(@)]]).  In-line code may match
-in-line code in the definition name, or parameter definitions in the
-in-line name. While I would normally use a simple loop with bracket
-tracking to determine the in-line code boundaries and whether or not
-the brackets are correct, a single recursive regular expression is
-used instead.
+The stripping converts all potential in-line code in a reference to
+the same string ([[(@)]]).  In-line code may match in-line code in the
+definition name, or parameter definitions in the in-line name. While I
+would normally use a simple loop with bracket tracking to determine
+the in-line code boundaries and whether or not the brackets are
+correct, a single recursive regular expression is used instead.
 
 References are stripped the same way, even though parameter
 definitions are technically not allowed.  This supports any legacy
@@ -1640,10 +1677,12 @@ parameter assignment.
 The [[%parmchunks]] hash is indexed on the stripped name, and each
 element is a hash indexed on every chunk name that strips to the
 index.  The element need not necessarily be a hash; the hash is just
-an easy way to maintain a list without duplicates. [[keys
-%parmchunks]] is actually the array we're interested in.
+an easy way to maintain a list without duplicates. [[keys %parmchunks]]
+is actually the array we're interested in.
 
 <<[[strip_chunkname]]>>=
+# note: $parm_re's first capture group is the parameter
+#       $parm_re's second cpature group is for recursion (ignore!)
 my $parm_re = '(\(\@[^)]*\)|(?<!@)\[\[((?:[^][]|\[(?-1)\])*)\]\])';
 sub strip_chunkname($)
 {
@@ -1704,9 +1743,11 @@ definition, or it might be a parameter expansion, or it might be a
 parameterized expansion.  The parameter expansions can most easily be
 dealt with by adding them to the [[%chunks]] table, so both of the
 first two cases can be checked the same way.  A lookup failure then
-causes the third case to be considered.  Since the chunk name needs to
-be parsed in order to match potential definitions anyway, the argument
-associations can be extracted at the same time.
+causes the third case to be considered.  The third case actually
+searches for the \emph{best} parameter expansion, as defined by the
+rules.  Since the chunk name needs to be parsed in order to match
+potential definitions anyway, the argument associations can be
+extracted at the same time.
 
 <<Other code chunk gathering globals>>=
 <<[[find_best_def]]>>
@@ -1739,97 +1780,169 @@ definitions are searched for possible matches.  The stripping function
 actually limits the search to definitions which allow in-line code
 in the same positions as the in-line code of the reference.
 
-If there is in-line code in a definition, it must match the same
-in-line code in the use.  If there is a parameter definition in the
-definition, it must match any in-line code.  Since there is some
-ambiguity when one definition has in-line code at a spot, and the
-other has a parameter, the match which has the fewest number of
-substitutions is chosen, and, failing that, the one which has a
-non-substitution in the earliest spot where the two differ in that
-regard.  A warning is issued for the latter case as well.
-
-Parameter substitution supports parameter references in values, as
-well.  Rather than deal with this at every expansion time, the
-parameters are substituted immediately.  As a hidden feature, if a
-reference's in-line code would match literal in-line code after
-parameter substitution in the reference, it is still considered an
-exact match.
-
-As the parameters are being matched, a hash is built to assign
-parameter values to names.  This hash is returned along with the name
-of the definition to use.
-
 <<[[find_best_def]]>>=
 sub find_best_def($$) {
   my ($loc, $curchunk) = @_;
   my $pchunks = $parmchunks{strip_chunkname $curchunk};
   return if not $pchunks;
-  my ($best, $best_len, %best_parms, @best_parms_loc);
-  $best_len = length $curchunk;
-  my @ambig;
-  PCHUNK: foreach my $may (keys %$pchunks) {
-    my $len = 0;
-    my (%may_parms, @may_parms_loc);
-    my $mayrest = $may;
-    my $currest = $curchunk;
-    while($mayrest =~ /$parm_re(.*)/) {
-      my $mayp = $1;
-      $mayrest = $3;
-      $currest =~ /$parm_re(.*)/;
-      my $curp = $1;
-      $currest = $3;
-      next if $curp eq $mayp;
-      next PCHUNK if substr($curp, 0, 1) eq "(";
-      <<Expand any parameter references in [[$curp]]>>
-      next if $curp eq $mayp;
-      next PCHUNK if substr($mayp, 0, 1) eq "[";
-      $len++;
-      $may_parms{substr($mayp, 1, -1)} = substr($curp, 2, -2);
-      push @may_parms_loc, length $mayrest;
-    }
-    next if $len > $best_len;
-    if($len == $best_len) {
-      push @ambig, $best if $#ambig < 1;
-      push @ambig, $may;
-      for(my $i = 0; $i <= $#may_parms_loc; $i++) {
-        next PCHUNK if $may_parms_loc[$i] < $best_parms_loc[$i];
-        last if $may_parms_loc[$i] > $best_parms_loc[$i];
-      }
-    } else {
-      @ambig = undef;
-    }
-    $best = $may;
-    $best_len = $len;
-    %best_parms = (%may_parms);
-    @best_parms_loc = (@may_parms_loc);
-  }
-  if($#ambig > 0) {
-    print STDERR $loc . "ambiguous expansion of @<<$curchunk@>>:\n";
-    foreach my $may (@ambig) {
-      print "  @<<$may@>>\n";
-      print " (chosen)" if $may eq $best;
-      print "\n";
-    }
-  }
-  return ($best, %best_parms);
+  <<Find best definition match for [[$curchunk]]>>
 }
 @
 
-As mentioned above, the [[$chunks]] table is used to store parameter
-values as well.  This could be expanded with a recursive call to full
-reference expansion, but since parameters are always nothing more than
-a single, simple text string, and I don't want to do [[#line]]
-processing on that string, it is expanded directly.
+Each possible expansion is checked, keeping the best.  As mentioned
+above, the parameter symbol definitions are extracted at the same time.
 
-<<Expand any parameter references in [[$curp]]>>=
-my $curp_rest = $curp;
-$curp = '';
-while($curp_rest =~ /(.*?)(?<!@)@<<(.*?)(?<!@)@>>(.*)/) {
-  my $v = $chunks{$2};
-  $curp .= $1 . ${$$v[0]}{'text'};
-  $curp_rest = $3;
+<<Find best definition match for [[$curchunk]]>>=
+my ($best, %best_parms);
+<<Prepare for finding best definition match>>
+PCHUNK: foreach my $may (keys %$pchunks) {
+  my %may_parms;
+  <<Check [[$may]] and collect parameter defs into [[%may_parms]]>>
+  <<[[next PCHUNK]] if [[$may]] is not best>>
+  $best = $may;
+  %best_parms = (%may_parms);
+  <<Save additional best info about [[$may]]>>
 }
-$curp .= $curp_rest;
+<<Finish up after finding best definition match>>
+return ($best, %best_parms);
+@
+
+Checking for a match involves simultaneously iterating over the replaced
+portions of the names.  If the replaced portion of both names matches,
+it's considered a match (even if both are in the parameter definition
+form, although perhaps that should be an error).  If they do not
+match exactly, they still match if the definition side is in parameter
+definition form, and the usage side is in literal code text form.
+
+<<Check [[$may]] and collect parameter defs into [[%may_parms]]>>=
+<<Prepare to check if definition matches>>
+my $mayrest = $may;
+my $currest = $curchunk;
+while($mayrest =~ /$parm_re(.*)/) {
+  <<Prepare for resolving ambiguity per match>>
+  my $mayp = $1;
+  $mayrest = $3;
+  $currest =~ /$parm_re(.*)/;
+  my $curp = $1;
+  $currest = $3;
+  next if $curp eq $mayp;
+  next PCHUNK if substr($mayp, 0, 1) eq "[" ||
+                 substr($curp, 0, 1) eq "(";
+  <<Store parameter [[$curp]] in [[$mayp]]>>
+}
+@
+
+<<Store parameter [[$curp]] in [[$mayp]]>>=
+$may_parms{substr($mayp, 1, -1)} = substr($curp, 2, -2);
+@
+
+To resolve ambiguity, the name with the fewest substitutions is
+retained.
+
+<<Prepare for finding best definition match>>=
+my $best_len = length $curchunk; # larger than all possible lengths
+@
+
+<<Prepare to check if definition matches>>=
+my $len = 0;
+@
+
+<<Store parameter [[$curp]] in [[$mayp]]>>=
+$len++;
+@
+
+<<[[next PCHUNK]] if [[$may]] is not best>>=
+next PCHUNK if $len > $best_len;
+@
+
+<<Save additional best info about [[$may]]>>=
+$best_len = $len;
+@
+
+If two names have an equal number of substitutions, the one which has
+in-line code at the first position where the two differ is chosen, and
+a warning is issued.  If two names have an equal number of
+substitutions, and all are in the same places, then there is an
+unresolvable ambiguity, leading to error exit.
+
+<<Prepare for finding best definition match>>=
+my @best_parms_loc;
+my (@ambig, $bad_ambig);
+@
+
+<<Prepare to check if definition matches>>=
+my @may_parms_loc;
+my $parm_loc = 0;
+@
+
+<<Prepare for resolving ambiguity per match>>=
+$parm_loc++;
+@
+
+<<Store parameter [[$curp]] in [[$mayp]]>>=
+push @may_parms_loc, $parm_loc;
+@
+
+<<[[next PCHUNK]] if [[$may]] is not best>>=
+if($len == $best_len) {
+  $ambig[0] = $best if $#ambig == 0;
+  push @ambig, $may;
+  my $i;
+  for($i = 0; $i <= $#may_parms_loc; $i++) {
+    next PCHUNK if $may_parms_loc[$i] < $best_parms_loc[$i];
+    last if $may_parms_loc[$i] > $best_parms_loc[$i];
+  }
+  $bad_ambig = 1 if $i == $#may_parms_loc + 1;
+  if($bad_ambig) {
+    $best = undef;
+    next PCHUNK;
+  }
+} else {
+  @ambig = undef;
+  $bad_ambig = undef;
+}
+@
+
+<<Save additional best info about [[$may]]>>=
+@best_parms_loc = (@may_parms_loc);
+@
+
+<<Finish up after finding best definition match>>=
+if($#ambig > 0) {
+  print STDERR $loc;
+  print STDERR "fatal: unresolvable " if $bad_ambig;
+  print STDERR "ambiguous expansion of @<<$curchunk@>>:\n";
+  foreach my $may (@ambig) {
+    print STDERR "  @<<$may@>>";
+    print STDERR " (chosen)" if $may eq $best;
+    print STDERR "\n";
+  }
+  exit 1 if $bad_ambig;
+}
+@
+
+Parameter substitution supports parameter references in values, as
+well.  Rather than deal with this at every expansion time, the
+parameters are substituted immediately.  As mentioned above, the
+[[%chunks]] table is used to store parameter values as well.  This
+could be expanded with a recursive call to full reference expansion,
+but since parameters are always nothing more than a single, simple
+text string, and I don't want to do [[#line]] processing on that
+string, it is expanded directly.  This needs to be done before the new
+symbol values are placed in [[%chunks]].
+
+<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
+foreach my $arg (keys %argv) {
+  my $v = '';
+  my $vrest = $argv{$arg};
+  while($vrest =~ /(.*?)@<<(@.*?)(?<!@)@>>(.*)/) {
+    my $pv = $chunks{$2};
+    $v .= $1 . ${$$pv[0]}{'text'};
+    $vrest = $3;
+  }
+  $v .= $vrest;
+  $argv{$arg} = $v;
+}
 @
 
 Now that there is a valid chunk name and parameter list, formal
@@ -1932,7 +2045,9 @@ print $text;
 Ramsey puts a lot more effort into managing whitespace and line
 directives, but really, this is generated code, not meant to be read
 or used directly by anyone.  As long as the line numbers are correct,
-who cares?
+who cares?  The main issue with not doing it exactly the same way is
+that it becomes more difficult to verify identical operation when the
+enhancements are unused.
 
 <<Print notangle line directive>>=
 my $lp; my $lt = $line;

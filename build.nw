@@ -49,6 +49,7 @@ License.
 
 \section{Overview}
 
+% Begin-doc literate-intro
 Most of my old personal programming projects started out as a general
 idea, along with numerous scattered pieces of paper with notes
 detaling some particular aspects of the design.  Most of my
@@ -111,6 +112,8 @@ output, and an arbitrary number of output files and source languages.
 However, it does little to make the code look like part of the
 documentation.  The code in this document serves to provide a build
 system that includes syntax-highlighted code, at the very least.
+
+% End-doc literate-intro
 
 While the build system could simply be a carefully crafted shell script, a
 makefile is used instead.  This allows use of implicit rules and the
@@ -4984,14 +4987,16 @@ endif
 
 \section{Usage}
 
-% Begin-doc build-usage
-
+% Begin-doc build-usage-1
 Users of this document fall into at least two categories: ones who wish to
 create documents that use this build system, and ones who wish to build
 packages which were created using this build system.  This section is for
-the former.  Instructions for the latter were included on the first page,
+the former.
+% End-doc build-usage-1
+Instructions for the latter were included on the first page,
 but should also be included in any document using this system:
 
+% Begin-doc build-usage
 \begin{quote}
 \verb!\input{build-doc.tex} %%% doc!
 \end{quote}
@@ -5129,8 +5134,10 @@ the configurable variables are included here using:
 \verb!\input{makefile.config.tex} % make!
 \end{quote}
 
+% End-doc build-usage
 \input{makefile.config.tex} % make
 
+% Begin-doc build-usage
 One use of this feature which should be in every document is to list the
 RCS/CVS/subversion ID tag of all source files from which the document was
 built:
@@ -5883,6 +5890,13 @@ stabilize the output or filter out just the time-sensitive parts.
 
 \verb|\hypersetup{pdfinfo={CreationDate=D:\svnpdfdate}}|\\
 \verb|\hypersetup{pdfinfo={CreationDate=D:YYYYMMDDHHMMSS-hh'mm')}|
+
+\item Generate [[\RCSDate]] correctly for HTML output
+
+\item At least support isolation if not explicit import/export.  Build
+separate trees for each present file.  When doing tangling (and
+noroots), consider each tree separately until a result is found.  For
+weaving, use the tree containing the file being weaved.
 
 \item Generate [[<<Common NoWeb Warning>>]] and [[<<Version Strings>>]]
 from [[<<Sources>>]].

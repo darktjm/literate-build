@@ -21,7 +21,26 @@
 \input{build-ver.tex} %%% doc
 \maketitle
 
-\section*{Building packages based on \texttt{build.nw}}
+\tableofcontents
+
+\section{Introduction}
+
+\input{literate-intro.tex} %%% doc
+
+\section{Creating packages based on \texttt{build.nw}}
+
+\input{build-usage-1.tex} %%% doc
+Instructions for the latter are in the next section. A summary should
+be included in every document using this system as well, using the
+following:
+
+\input{build-usage.tex} %%% doc
+
+See the next section for prerequisites; the same applies to
+development as well.  Better yet, read the original source for
+comments on what is needed, and why.
+
+\section{Building packages based on \texttt{build.nw}}
 
 Building from scratch has a number of system dependencies:
 
@@ -66,14 +85,6 @@ type \texttt{make} or \texttt{make~install}.
 The following are the build parameters for \texttt{build.nw} itself:
 
 \input{makefile.config.tex} % make
-
-\section*{Creating packages based on \texttt{build.nw}}
-
-\input{build-usage.tex} %%% doc
-
-See the beginning of this document for prerequisites; the same applies
-to development as well.  Better yet, read the original source for
-comments on what is needed, and why.
 
 \end{document}
 

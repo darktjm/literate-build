@@ -1907,7 +1907,7 @@ if($len == $best_len) {
 @
 
 <<Save additional best info about [[$may]]>>=
-@best_parms_loc = (@may_parms_loc);
+@@best_parms_loc = (@may_parms_loc);
 @
 
 <<Finish up after finding best definition match>>=

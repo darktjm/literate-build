@@ -2399,7 +2399,7 @@ specializations of that parameter are marked used as well.  This
 but it's probably good enough for a program that isn't really
 officially supported, anyway.
 
-<<noroots-parm>>=
+<<noroots-enh>>=
 for my $u (keys %use) {
   next if rindex($u, '@<<@') < 2;  # needs at least one parm ref in code
   my $pchunks = $parmchunks{strip_chunkname $u};
@@ -2450,7 +2450,7 @@ for my $u (keys %use) {
 
 Once that's been taken care of, the roots can be printed.
 
-<<noroots-parm>>=
+<<noroots-enh>>=
 for my $d (keys %chunks) {
   print "@<<$d@>>\n" unless $use{$d};
 }

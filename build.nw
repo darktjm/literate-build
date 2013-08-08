@@ -2260,17 +2260,20 @@ For the second pass, an attempt is made to match a chunk reference
 with a definition.  If it matches, and requires parameter expansion to
 do so, it will replace its name with the parameterized definition, and
 save its old name using [[@nwenhcall]].  The matching method is
-copied from the tangler.  The main difference is that file and line
+copied from the tangler, with minor differences.  File and line
 information are not tracked by this filter, so the location string is
-always blank.
+always blank.  Also, since a standalone chunk does not have parameter
+values, the specialization performed after parameter expansion in chunk
+names can't be done.  Unfortunately, there is also no special link
+between a parameterized chunk and all of its potential specializations.
 
 A leading star in an [[@defn]] is removed the same way.
 
-Parameter references are simply hidden away by renaming them to
+Parameter references are simply hidden by renaming them to
 [[@nwenhuse]].
 
 As a special hack, in order to highlight parameters better, an extra
-set of square brackets is placed around them.  This repeasts some of
+set of square brackets is placed around them.  This repeats some of
 the work that [[find_best_def]] does, but that's not too terrible.
 
 <<nw-enh-preidx>>=
@@ -2381,6 +2384,73 @@ for my $u (keys %use) {
     $use{$b} = 1 if $b;
   }
 }
+@
+
+One major problem is that finding a new match after parameter
+expansion is no longer done.  The only way to check for these is to
+check each root, expanding any parameter references, and marking any
+newly used definitions.  This would need to be done in two passes:
+first to cover unparameterized roots, and then to cover any remaining
+parameterized roots.  Thus the entire code above would need to be
+rewritten.  Instead, a simple hack is performed: for any usage of a
+parameterizable chunk with a passed-on parameter, all possible
+specializations of that parameter are marked used as well.  This
+(along with the previous loop) may end up marking more than necessary,
+but it's probably good enough for a program that isn't really
+officially supported, anyway.
+
+<<noroots-parm>>=
+for my $u (keys %use) {
+  next if rindex($u, '@<<@') < 2;  # needs at least one parm ref in code
+  my $pchunks = $parmchunks{strip_chunkname $u};
+  next if not $pchunks ||
+       (scalar keys %$pchunks) == 0 ; # needs possible resolutions
+  my ($b, %bp) = find_best_def('', $u);
+  next if $b eq $u; # needs to resolve without specialization
+  # find possible parameters with parameter expansion
+  my %vars;
+  foreach my $v (keys %bp) {
+    $vars{$v} = 1 if index($bp{$v}, '@<<@') >= 0;
+  }
+  next if (scalar keys %vars) == 0;
+  # map vars to var positions
+  my @vpos;
+  my $brest = $b;
+  while($brest =~ /$parm_re(.*)/) {
+    my $bp = $1;
+    $brest = $3;
+    push @vpos, substr($bp, 0, 1) eq '(' && $vars{substr($bp, 1, -1)};
+  }
+  # for each possible resolution, allow anything at $u's var positions
+  # also, allow mapping of any parm to any code text
+  foreach my $pc (keys %$pchunks) {
+    next if $pc eq $b;
+    my $i = 0;
+    my $urest = $u;
+    my $prest = $pc;
+    my $matched = 1;
+    while($prest =~ /$parm_re(.*)/) {
+      my $bp = $1;
+      $prest = $3;
+      $urest =~ /$parm_re(.*)/;
+      my $up = $1;
+      $urest = $3;
+      if(substr($bp, 0, 1) eq '[') {
+        $matched = $vpos[$i] || $bp eq $up;
+      } else {
+        $matched = substr($up, 0, 1) eq '[' || $bp eq $up;
+      }
+      last if not $matched;
+      $i++;
+    }
+    $use{$pc} = 1 if $matched;
+  }
+}
+@
+
+Once that's been taken care of, the roots can be printed.
+
+<<noroots-parm>>=
 for my $d (keys %chunks) {
   print "@<<$d@>>\n" unless $use{$d};
 }

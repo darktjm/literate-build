@@ -1418,7 +1418,7 @@ code segments, represents an expansion of the reference with the
 parameters taking the value of the code within the in-line code
 segments in their respective positions.  No expansion is done within
 the code segments except for parameter references; these may be used
-to pass parameters on to another macro.
+to pass parameters on to another chunk.
 
 For example:
 
@@ -1443,7 +1443,14 @@ text @<<macro @[[text2]]>> @<<macro2 @[[text3]]>>
 \end{verbatim}
 \end{quote}
 
-The [[caller]] chunk expands to [[text text text2 text text3]].
+The [[caller]] chunk expands to
+
+\begin{quote}
+\begin{verbatim}
+text text text2 text and text3
+can reference text4 of macro3. &text1
+\end{verbatim}
+\end{quote}
 
 \item When more than one parameterized chunk could be used to replace
 a reference, the one with the least parameter replacements is chosen.
@@ -1468,6 +1475,29 @@ text blah blah blah @<<@arg>>
 @<<macro @[[1]] and @[[b]]>> -- two blahs
 @<<macro @[[a]] and @[[2]]>> -- three blahs
 @<<macro @[[1]] and @[[2]]>> -- two blahs and a warning
+@@
+\end{verbatim}
+\end{quote}
+
+\item For literal text matching, all passed-on variable references are
+expanded first.
+
+For example:
+
+\begin{quote}
+\begin{verbatim}
+@<<macro (@arg)>>=
+1 @<<@arg>>
+@@
+@<<macro @[[x y]]>>=
+1 z
+@@
+@<<macro2 (@arg)>>=
+@<<macro [[x @<<@arg>>]]>>
+@@
+@<<*>>=
+@<<macro2 @[[x]]>> -- 1 x x
+@<<macro2 @[[y]]>> -- 1 z
 @@
 \end{verbatim}
 \end{quote}
@@ -1617,7 +1647,7 @@ if($hasstar and $chunkname eq '') {
   $chunkname = '*';
 }
 if(/^\@defn (\*)?\@/) {
-  print STDERR "$file:$lineno: chunk names may not begin with \@\n";
+  print STDERR "$file:$lineno: initial \@ is reserved for parameter names\n";
   exit 1;
 }
 if(<> !~ /^\@nl( |$)/) {
@@ -1934,7 +1964,15 @@ text string, and I don't want to do [[#line]] processing on that
 string, it is expanded directly.  This needs to be done before the new
 symbol values are placed in [[%chunks]].
 
+In fact, it is possible that [[$basename]] is not yet the best choice
+for a chunk.  If a parameter substitution becomes literal text that
+matches a different chunk name, [[$basename]] may need to be switched.
+This check is only performed if any changes were made due to parameter
+substitution.
+
 <<Expand chunk [[$name]] and indent it by [[$indent]]>>=
+my $changed_name;
+my $new_name = $name;
 foreach my $arg (keys %argv) {
   my $v = '';
   my $vrest = $argv{$arg};
@@ -1944,7 +1982,20 @@ foreach my $arg (keys %argv) {
     $vrest = $3;
   }
   $v .= $vrest;
-  $argv{$arg} = $v;
+  if($v ne $argv{$arg}) {
+    # $argv{$arg} = $v; # reset by find_best_def anyway
+    $new_name =~ s/(?<!@)\[\[\Q$argv{$arg}\E\]\]/[[$v]]/;
+    $changed_name = 1;
+  }
+}
+if($changed_name) {
+  # find better match if var replacements were made
+  ($basename, %argv) = find_best_def("$file:$lineno: ", $new_name);
+  $chunk = $chunks{$basename} if $basename;
+  if($in_progress{$basename}) {
+    print STDERR "$file:$lineno: cyclic expansion $basename\n";
+      exit 1;
+  }
 }
 @
 

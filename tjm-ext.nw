@@ -62,6 +62,12 @@ are a few macros.
 <<Common C Warning>>
 #ifndef MALLOCDEF_H
 #define MALLCDEF_H
+
+<<Convenience definitions for dealing with memory>>
+#endif
+@
+
+<<Convenience definitions for dealing with memory>>=
 #define resize(buf, len) do { \
     buf = realloc(buf, (len) * sizeof(*(buf))); \
     if(!(buf)) { \
@@ -79,21 +85,74 @@ are a few macros.
 #define clearbuf(buf, len) memset(buf, 0, (len) * sizeof(*(buf)))
 #define movebuf(dst, src, len) memmove(dst, src, (len) * sizeof(*(dst)))
 #define cpybuf(dst, src, len) memcpy(dst, src, (len) * sizeof(*(dst)))
-#endif
 @
 
 <<Common C Includes>>=
 #include "mallocdef.h"
 @
 
+In fact, the most common use of [[resize]] is to resize a buffer if
+the new length would exceed a maximum, while increasing the maximum at
+the same time.  My old Ada version of simple resizable arrays had
+three parameters: a start size, a size up to which the size should be
+doubled when more space is needed, and a size after which the size
+should only increase by that size every time.  This way, the array
+grows quickly when needed without wasting massive amounts of space
+when large.  Rather than provide macros which do all of this, here is
+a macro which choose arbitrary constants for this.  Note that it is
+not possible to resize parallel arrays at the same time with this
+macro.  To do that, the original size would need to be saved, and the
+others resized if a change occurred.
+
+<<Convenience definitions for dealing with memory>>=
+/* arbitrary lower limit */
+#ifndef MIN_MALLOC_SIZE
+#define MIN_MALLOC_SIZE 16
+#endif
+/* when to stop doubling; set to ~0ULL to never stop */
+#ifndef MAX_MALLOC_DOUBLE
+#define MAX_MALLOC_DOUBLE 128*1024*1024
+#endif
+/* max_len may be evaluated more than once */
+/* buf and max_len should be lvals */
+#define check_size(buf, max_len, new_len) do { \
+  size_t _new_len = new_len; \
+  size_t _cur_max = max_len; \
+  if(_new_len <= _cur_max) \
+    break; \
+  if(!(max_len)) { \
+    if(_new_len < MIN_MALLOC_SIZE) \
+      _new_len = MIN_MALLOC_SIZE; \
+    inisize(buf, max_len = _new_len); \
+  } else if(_new_len < MAX_MALLOC_DOUBLE) { \
+    while(_new_len > _cur_max) \
+      _cur_max *= 2; \
+    resize(buf, max_len = _cur_max); \
+  } else { \
+    _new_len = (_new_len + MAX_MALLOC_DOUBLE - 1) / MAX_MALLOC_DOUBLE; \
+    if(_new_len * MAX_MALLOC_DOUBLE <= _cur_max) { \
+      /* errno = ENOSPC; */ \
+      /* perror(#buf); */ \
+      exit(1); \
+    } \
+    resize(buf, max_len = _new_len * MAX_MALLOC_DOUBLE); \
+  } \
+} while(0)
+@
+
 \section{Warnings}
 
-I also prefer a little bit higher warning level than the default.
+I also prefer a little bit higher warning level than the default.  I
+probably ought to provide a [[makefile.config.defaults]] as a separate
+file, since the [[makefile]] only comes from [[build.nw]].
 
 \lstset{language=make}
-<<makefile.vars>>=
+<<makefile.rules>>=
 CC=gcc
 CFLAGS=-O2
+@
+
+<<makefile.vars>>=
 EXTRA_CFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow \
                 -Wmissing-prototypes
 EXTRA_CXXFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow

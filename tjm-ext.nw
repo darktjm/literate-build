@@ -147,12 +147,14 @@ probably ought to provide a [[makefile.config.defaults]] as a separate
 file, since the [[makefile]] only comes from [[build.nw]].
 
 \lstset{language=make}
-<<makefile.rules>>=
-CC=gcc
-CFLAGS=-O2
-@
-
 <<makefile.vars>>=
+ifeq ($(CC),cc)
+CC=gcc
+endif
+ifeq ($(CFLAGS),)
+CFLAGS=-O2
+endif
+# -ftrack-macro-expansion would be useful with gcc-4.7.x (default on 4.8)
 EXTRA_CFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow \
                 -Wmissing-prototypes
 EXTRA_CXXFLAGS += -Wall -Wmissing-declarations -Wno-unused-result -Wshadow

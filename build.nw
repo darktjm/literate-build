@@ -85,33 +85,42 @@ reference and index (in addition to the chunk index).
 Knuth felt that programs should be pleasant to read, like documents
 which happen to have executable code in them.  He believed that his
 method would allow creation of programs which are by their nature
-easier to maintain and less error-prone.  Whether or not a document is
-pleasant to read is always very dependent on the writer (and, to a
-lesser extent, the reader).  Easier maintenance and fewer bugs are
-but a pipe dream: people will in fact be even more tempted to ignore
-the source code in favor of the commentary, thus missing obvious bugs.
-Code reordering, and especially small code chunks may also make it
-difficult for some to follow the code to find out what \emph{really}
-gets executed.  My own reasons for doing this are mainly to keep my
-scattered design notes in one place (the source) and to keep the
-design document in sync with the implementation (since they are the
-same thing).  
+easier to maintain and less error-prone.  I disagree.  Whether or not
+a document is pleasant to read is always very dependent on the writer
+(and, to a lesser extent, the reader).  Easier maintenance and fewer
+bugs are but a pipe dream: people will in fact be even more tempted to
+ignore the source code in favor of the commentary, thus missing
+obvious bugs. Code reordering, and especially small code chunks may
+also make it difficult for some to follow the code to find out what
+\emph{really} gets executed.  Instead of these lofty goals, my own
+reasons for doing this are mainly to keep my scattered design notes in
+one place (the source) and to keep the design document in sync with
+the implementation (since they are the same thing).  
 
 Creating programs as documents using literate programming principles
-requires a system that supports easy-to-write documentation, and code that
-is both structured like the documentation and actually part of the
-documentation.  For simple programs, a set of tools which support only a
-single source language and a single program file can be used.  As programs
-become more complicated, though, the number of source files may increase,
-and when designing entire products, the number of source languages may
-increase as well.  Current common public documentation standards also
-require a system which produces at least HTML and PDF output. After long
-searching, I have not found any systems which meet these requirements.
-Instead, the closest is the NoWeb package.  It supports \LaTeX{} and HTML
-output, and an arbitrary number of output files and source languages.
-However, it does little to make the code look like part of the
-documentation.  The code in this document serves to provide a build
-system that includes syntax-highlighted code, at the very least.
+requires a system that supports easy-to-write documentation, and code
+that is both structured like the documentation and actually part of
+the documentation.  For simple programs, a set of tools which support
+only a single source language and a single program file can be used.
+As programs become more complicated, though, the number of source
+files may increase, and when designing entire products, the number of
+source languages may increase as well.  Current common public
+documentation standards also require a system which produces at least
+HTML and PDF output.  After long searching, I have not found any
+systems which meet these requirements. Instead, the closest is the
+NoWeb package%
+\footnote{In particular, version 2.  Version 3 is available and
+functional, but has been in ``alpha'' for many years, has a different
+command syntax, and is missing a few important bits (like the style
+files for weaving and a [[noroots]]-like command, although those can
+just be obtained from a version 2 archive).  I'm also not particularly
+fond of using a custom version of Lua (I converted it to use a
+standard Lua 5.1 a while back, but lost all of that work somehow).
+}.  It supports \LaTeX{} and HTML output, and an arbitrary number of
+output files and source languages. However, it does little to make the
+code look like part of the documentation.  The code in this document
+serves to provide a build system that includes syntax-highlighted
+code, at the very least.
 
 % End-doc literate-intro
 
@@ -149,13 +158,11 @@ notangle -t8 build.nw > makefile\\*
 make install
 }\end{quote}
 
-If NoWeb is not available, but perl is, the following code can be copied and
-pasted into a text file using a reasonable document viewer and made
-executable as an imperfect, but adequate [[notangle]] replacement:
+Note that while some dependency-based package managers may pull in a
+full \TeX{} distribution as a dependency for noweb, none of that is
+actually needed when only compiling code (i.e., tangling).
 
-\input{perl-notangle.tex} % verbatim
 % End-doc build-doc
-
 As noted below, additional makefile components are created in separate files.
 % Begin-doc build-doc
 Additional build configuration can be done in \texttt{makefile.config}
@@ -603,85 +610,10 @@ NOROOTS=noroots
 @
 
 In fact, when building just the code, it is likely that the only part
-of NoWeb required is [[notangle]].  For this, an equivalent can be
-provided in [[perl]], which is installed on most modern UNIX systems
-by default.  It is not a perfect emulation, but it should be close
-enough.
-
-\lstset{language=perl}
-<<perl-notangle>>=
-#!/bin/sh
-#!perl
-# This code barely resembles noweb's notangle enough to work for simple builds
-eval 'exec perl -x -f "$0" "$@"'
-  if 0;
-@
-
-The only recognized command-line options are for tab size ([[-t]]) and
-chunk name ([[-R]]), which defaults to [[*]].  The remaining
-parameters are file names, and are left in [[ARGV]].
-
-<<perl-notangle>>=
-my $chunk = '*';  my $tab = 0;
-
-while($#ARGV >= 0 && $ARGV[0] =~ /^-.*/) {
-  if($ARGV[0] =~ /^-R(.*)/) {
-    $chunk = $1;
-  } elsif($ARGV[0] =~ /^-t(.*)/) {
-    $tab = $1;
-  }
-  shift @ARGV;
-}
-@
-
-Next, the files are read ([[<>]] just uses all files from [[ARGV]])
-and raw chunks are extracted.  They are stored in a hash keyed on
-chunk name.
-
-<<perl-notangle>>=
-my ($inchunk, %chunks);
-while(<>) {
-  if(/^@<<(.*)@>>=$/) {
-    $inchunk = $1;
-  } elsif(/^@( |$)/) {
-    $inchunk = "";
-  } elsif($inchunk ne "") {
-    $chunks{$inchunk} .= $_;
-  }
-}
-@
-
-Then, the desired chunk is processed.  Any chunk references are
-repeatedly extracted (using a regular expression) and replaced with
-their equivalent chunk.  Multiline replacements get spaces prepended
-equivalent to the number of characters before the first line.
-
-<<perl-notangle>>=
-my $chunkout = $chunks{$chunk};
-while($chunkout =~ /(?:^|\n)(|[^\n]*[^\n@])(?:@<<((?:[^>\n]|>[^>\n])*)@>>)/) {
-  my $cv = $chunks{$2};
-  my $ws = $1;
-  $cv =~ s/\n$//;
-  $ws =~ s/\S/ /g;
-  $cv =~ s/\n/$&$ws/g;
-  $chunkout =~ s/(^|[^@])(@<<(([^>\n]|>[^>\n])*)@>>)/$1$cv/;
-}
-@
-
-Next, any final escapes are undone.  NoWeb requires (and strips)
-escapes for [[<<]] and [[>>]].  Also, if the tab option was specified,
-initial groups of spaces equal to the tab size are replaced with tabs.
-
-<<perl-notangle>>=
-$chunkout =~ s/@(@<<|@>>)/\1/g;
-$chunkout =~ s/((^|\n)\t*) {$tab}/$1\t/g if($tab gt 0);
-@
-
-Finally, the result is printed to standard output.
-
-<<perl-notangle>>=
-print $chunkout;
-@
+of NoWeb required is [[notangle]].  However, with the extensions of
+the next section (in particular parameterized chunks), a simple
+replacement (as provided in previous versions of this document) is not
+possible.
 
 \subsection{Additional Features}
 
@@ -746,17 +678,20 @@ reinsertions, but instead of checking correctly there, it's flagged
 here.
 
 Because this check is a separate rule, target-specific altering of the
-tangling process is not supported.  Making drasting changes to source
+tangling process is not supported.  Making drastic changes to source
 code using the tangle process alterations should not be done anyway,
 and rules like this make some kinds of alterations impossible.
 
 <<makefile.rules>>=
 .PHONY: check
 check: $(NOWEB) $(NOTANGLE_DEP)
+	@# Print all roots to find misnamed/unreferenced chunks
+	@# At same time, untangle each to find undefined chunks
 	@ <<[[noroots]]>> $(NOWEB) | sed 's/@<<//;s/@>>//;' | sort | while read x; do \
           echo "Root: $$x"; \
           $(call NOTANGLE_CHUNK,"$$x") >/dev/null; \
         done
+	@# Check for proper @-usage
 	@for f in $(NOWEB); do \
 	   lno=1 gotat=y; \
            while IFS= read -r x; do \
@@ -773,39 +708,7 @@ check: $(NOWEB) $(NOTANGLE_DEP)
              lno=$$((lno+1)); \
            done < "$$f"; \
 	 done
-	@for f in $(NOWEB); do \
-	   lno=1 std=0; \
-           while IFS= read -r x; do \
-             case "$$x" in \
-	        "% Begin-doc "*) \
-		  std=$$((std+1)); eval bd$$std='"$${x#* * }"' bl$$std=$$lno; \
-		  stp=1; while [ $$stp -lt $$std ]; do \
-		    eval bd='"$$bd'$$stp\" bl=\$$bl$$stp; \
-		    if [ "$${x#* * }" = "$$bd" ]; then \
-		      echo "Recursive Begin-doc $$bd at $$bl/$$lno"; break; \
-		    fi; \
-		    stp=$$((stp+1)); \
-		  done;; \
-		"% End-doc "*) \
-		  if [ $$std -eq 0 ]; then \
-		    echo "$$f: unexpected end-doc at $$lno"; \
-		  else \
-		    eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
-		    if [ "$${x#* * }" != "$$bd" ]; then \
-		      echo "$$f: Begin-doc $$bd at $$bl" \
-		           "ended by $${x#% } at $$lno"; break; \
-	            fi; \
-		    std=$$((std-1)); \
-		  fi;; \
-             esac; \
-             lno=$$((lno+1)); \
-           done < "$$f"; \
-	   while [ $$std -gt 0 ]; do \
-	     eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
-	     echo "$$f: unended Begin-doc $$bd at $$bl"; \
-	     std=$$((std-1)); \
-	   done; \
-	 done
+	<<Other source file consistency checks>>
 @
 
 \section{Binaries}
@@ -1298,11 +1201,6 @@ really need to come last.
 <<Common C Warning>>
 <<Common C Includes>>
 #include "cproto.h"
-static const char version_id[] = <<Version Strings>>;
-@
-
-<<Version Strings>>=
-"$Id$\n"
 @
 
 Some of those prototypes are hard to enable, but here are a few extra flags
@@ -1312,6 +1210,53 @@ to help.
 <<makefile.vars>>=
 EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
                 -D_XOPEN_SOURCE_EXTENDED=1
+@
+
+I perfer to have each file indicate its source version number(s).  The
+easy way to do this is with [[#ident]], but that is not supported
+everywhere, and places it in a common section with other things that
+many prefer stripped out (e.g. gcc places system info in the same
+section, which most don't care about).  There is no real portable way
+to do this, so I'll just stick it in the main data section unless
+using gcc and Linux, in which case it's placed in an arbitrarily named
+custom section.  Placing it in a custom section prevents the data from
+being loaded into memory.
+
+A further complication is that static variables are optimized out.
+Making it global will cause link errors unless a unique global name is
+used, and there is no way to generate a unique global name.
+[[__FILE__]] would be the obvious choice, but it has a dot (usually)
+and maybe even more garbage, and in any case it is impossible to turn
+into an identifier token.  One way to prevent this is to reference the
+variable elsewhere, but that runs into the same issues.  On the other
+hand, gcc does provide a psuedo-reference:  the [[used]] attribute.
+For now, this is only enabled for Linux as well.  The proper test
+would be ``systems which support arbitrarily named sections which are
+normally ignored''.  This includes, at minimum, all ELF-based systems
+(so this hack doesn't even work with a.out Linux, but that hasn't been
+in common use in ages).
+
+An alternate for Microsoft-compatible compilers (including gcc on
+Microsoft Windows targets) would be to reference the static string
+with a global pointer declared with the same name in every file, each
+using the attribute [[__declspec(selectany)]].  Only one of the
+pointers will be emitted, without generating an error or warning, but
+all static strings should still be present.
+
+\lstset{language=C}
+<<Common C Header>>=
+static const char version_id[]
+#if defined(__GNUC__) && defined(__linux__)
+  __attribute__(( section(".note.id"), used ))
+#endif
+   = <<Version Strings>>;
+#ifdef _WIN32 /* not that build.nw really supports win32... */
+__declspec(selectany) const char *global_version_id_string = version_id;
+#endif
+@
+
+<<Version Strings>>=
+"$Id$\n"
 @
 
 \section{NoWeb Enhancements}
@@ -3870,25 +3815,94 @@ and underscores.  Insertion is done using a special input command:
 $\backslash$input\{\emph{chunk-name}.tex\} \%\%\% doc
 }\end{quote}
 
-This is done before weaving so that NoWeb formatting can be done on this, as
-well.  It requires two passes in case the chunks are out of order or in
-different files.  The first pass extracts the chunks, and the second pass
-replaces any remaining unresolved internal references.
+Since this introduces a new macro language, it needs to be checked for
+consistency along with the rest of the source.  This includes checking
+for a documentation chunk nested within itself (although no check for
+a documentation reference nested within the same chunk), mismatched
+terminators, or missing terminators.  No checks are made for undefined
+references or recursive insertions; these will show up in the main
+error log (and cause an error abort) upon weaving.
+
+<<Other source file consistency checks>>=
+@@grep '^% Begin-doc ' $(NOWEB) | cut -d: -f2- | sort -u
+@@for f in $(NOWEB); do \
+  lno=1 std=0; \
+  while IFS= read -r x; do \
+    case "$$x" in \
+      "% Begin-doc "*) \
+        std=$$((std+1)); eval bd$$std='"$${x#* * }"' bl$$std=$$lno; \
+	stp=1; while [ $$stp -lt $$std ]; do \
+	  eval bd='"$$bd'$$stp\" bl=\$$bl$$stp; \
+	  if [ "$${x#* * }" = "$$bd" ]; then \
+	    echo "Self-nested Begin-doc $$bd at $$bl/$$lno"; break; \
+	  fi; \
+	  stp=$$((stp+1)); \
+	done;; \
+      "% End-doc "*) \
+        if [ $$std -eq 0 ]; then \
+	  echo "$$f: unexpected end-doc at $$lno"; \
+	else \
+	  eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
+	  if [ "$${x#* * }" != "$$bd" ]; then \
+	    echo "$$f: Begin-doc $$bd at $$bl" \
+	         "ended by $${x#% } at $$lno"; break; \
+	  fi; \
+	  std=$$((std-1)); \
+	fi;; \
+    esac; \
+    lno=$$((lno+1)); \
+  done < "$$f"; \
+  while [ $$std -gt 0 ]; do \
+    eval bd='"$$bd'$$std\" bl=\$$bl$$std; \
+    echo "$$f: unended Begin-doc $$bd at $$bl"; \
+    std=$$((std-1)); \
+  done; \
+done
+@
+
+The reinsertion is done before weaving so that NoWeb formatting can be
+done on this, as well.  A sed script is generated to convert all of
+the [[\input]] commands to their associated text, and then that script
+is applied in the pre-processing pipeline.  It requires multiple
+passes in order to resolve nested references.  The first pass simply
+extracts all explicitly referenced chunks.  Then, while references
+remain in the substitution text, they are replaced within the script
+by the script that would have been generated.  The second pass is done
+by generating a second script to replace just that reference in the
+main script being generated.
 
 <<Prepare for weave>>=
+# use eval to expand $noweb_order properly
 eval sed -n -e \''s/^\\input{\(.*\)\.tex} %%% doc$/\1/p'\' $noweb_order | \
   sort -u | while read c; do
+    # on the input line, replace the line with % and append the text
+    # /^\\input{blah\.tex} %%% doc$/{s/.*/%/;a\%\
     printf %s\\n "/^\\\\input{${c}\\.tex} %%% doc\$/{s/.*/%/;a\\%\\"
     eval sed -n "'/^% Begin-doc $c\$/,/^% End-doc $c\$/{
                   /^% Begin-doc $c\$/!{/^% End-doc $c\$/!"'{
                     s/\\/\\\\/g;s/$/\\/;p;};};}'\' $noweb_order | sed '$s/.$//'
     echo '}'
   done > /tmp/latexhl.doc.$$
-while grep '^\\\\input{.*\.tex} %%% doc\\$' /tmp/latexhl.doc.$$ >/dev/null; do
+touch /tmp/latexhl.docr.$$
+while grep '^\\\\input{.*\.tex} %%% doc\\$' /tmp/latexhl.doc.$$ >/tmp/latexhl.docn.$$; do
+  # check for recursion
+  diff /tmp/latexhl.doc[rn].$$ >/dev/null && \
+    echo "Recursive documentation reinsertion detected:" && \
+    sed 's/^\\\\input{\(.*\)\.tex}.*/\1/' /tmp/latexhl.docr.$$ && \
+    exit 1
+  mv /tmp/latexhl.doc{n,r}.$$
   sed -e '
+     # chunk header: replace script input line instead of doc input line
+     # /^\\\\input{blah\\\.tex} %%% doc\\$/{s/.*/%\\/;a
      s/\^/^\\\\/;s/doc\$/doc\\\\\$/;s^/%/^/%\\\\/^;h;s/$/\\\\/
-     :a x;s/\\\\//g;/\\$/!{x;s/$/\\/;n;b};x;n;h;s/\\/\\\\/g;s/$/\\/;ba' \
-              < /tmp/latexhl.doc.$$ >/tmp/latexhl.doc2.$$
+     # remainder of chunk:
+     :a
+       # until there is no terminating \ (which is not an explicit \)
+       x;s/\\\\//g;/\\$/!{x;s/$/\\/;n;b}
+       # double backslashes and add an extra backslash at end
+       x;n;h;s/\\/\\\\/g;s/$/\\/
+       # repeat
+       ba' < /tmp/latexhl.doc.$$ >/tmp/latexhl.doc2.$$
   sed -f /tmp/latexhl.doc2.$$ /tmp/latexhl.doc.$$ >/tmp/latexhl.doc3.$$
   mv /tmp/latexhl.doc3.$$ /tmp/latexhl.doc.$$
 done

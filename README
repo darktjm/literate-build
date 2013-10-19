@@ -1,11 +1,24 @@
 This is my literate programming support package.  Its main purpose is
 to provide syntax highlighting in multiple source languages using
-NoWeb, GNU make, and a number of other freely available packages.  It
+noweb, GNU make, and a number of other freely available packages.  It
 can be configured to use one of several different highlighting
 packages (listings, GNU source-highlight, André Simon's highlight),
 and can produce PDF and HTML output in several different ways
-(pdflatex, xelatex, noweb-l2h, tex4ht).  It also has several hacks to
-make literate programming, especially in C, easier.
+(pdflatex, xelatex, noweb-l2h, tex4ht).
+
+It also has a few side features:  attaching the noweb source to the
+PDF and HTML output, providing parameterized chunks, some
+auto-generated makefile boilerplate, automatic merging of multiple
+noweb files (allowing creation of what I call "modules"), support for
+out-of-order C (mainly by auto-generating prototypes), and some
+support for separate user-level documentation (by re-inserting parts
+of the main docs or tangled chunks, and for C, inserting formatted
+function prototypes).
+
+On the minus side, it does not provide automatic identifier indices in
+any language, automatic chunk language detection, or much
+customization (other than highlighting theme selection).  It is very
+tailored to my own needs and aesthetics.
 
 For details, read the source.  It's meant to be read, anyway.  On the
 other hand, instead of reading the source code, you can just read the

@@ -27,18 +27,52 @@
 
 \input{literate-intro.tex} %%% doc
 
-\section{Creating packages based on \texttt{build.nw}}
+The code in [[build.nw]] provides the following features to help with
+these problems:
 
-\input{build-usage-1.tex} %%% doc
-Instructions for the latter are in the next section. A summary should
-be included in every document using this system as well, using the
-following:
+\begin{itemize}
+\item PDF or HTML output from \LaTeX{} and extended noweb input
+\item Optional Unicode support using [[xelatex]] instead of [[pdflatex]]
+\item Automatic merging of multiple noweb source files for tangling and
+optionally for weaving
+\item Controlled merge order to support extensions (modules) for
+[[build.nw]]
+\item Syntax-highlighted code in multiple source languages (including
+background color and spanning pages in PDF output)
+\item Noweb source (and other optional extras) attached to the PDF and
+HTML output, so that only a single file needs to be distributed
+\item Parameterized noweb code chunks, for languages without
+parameterized macros or improved [[#line]] support for C
+\item Automatic prototype generation for easier out-of-order C
+\item Support for re-inserting documentation in separate sections or
+documents to keep user documentation in synch
+\item Support for re-inserting tangled code chunks into separate
+sections or documents
+\item Support for inserting formatted C prototypes for hand-written
+API documentation
+\end{itemize}
 
-\input{build-usage.tex} %%% doc
+It does not help with some of the other common issues:
 
-See the next section for prerequisites; the same applies to
-development as well.  Better yet, read the original source for
-comments on what is needed, and why.
+\begin{itemize}
+\item It does not detect the language of chunks automatically;
+instead, a command is provided to change the language for subsequent
+chunks.
+\item It relies on external highlighters which have various quirks,
+especially when formatting incomplete code chunks.
+\item It provides no support for automatic identifier indexing, and
+would probably fail miserably if links were added within the code
+chunks.  Identifier indexing requires tangling and partial compiling
+for anything more complex than short, simple demo code, anyway.
+\item It conforms to my aesthetics; in particular, a lot of effort was
+put into making things compact.  I prefer every page to be as full as
+possible.
+\item It does not support [[latex2html]], and the TeX4ht support is
+probably broken with anything recent; this also means that multi-file
+HTML output is not possible.  Even if TeX4ht support does work, there
+is no target to conveniently ship the HTML file and all its images and
+other references in one go.
+\end{itemize}
 
 \section{Building packages based on \texttt{build.nw}}
 
@@ -86,6 +120,17 @@ The following are the build parameters for \texttt{build.nw} itself:
 
 \input{makefile.config.tex} % make
 
+\section{Creating packages based on \texttt{build.nw}}
+
+\input{build-usage-1.tex} %%% doc
+Instructions for the latter are in the previous section. A summary should
+be included in every document using this system as well, using the
+following:
+
+\input{build-usage.tex} %%% doc
+
+See the previous section for prerequisites; the same applies to
+development as well.  Better yet, read the original source for
+comments on what is needed, and why.
+
 \end{document}
-
-

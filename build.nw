@@ -118,11 +118,10 @@ fond of using a custom version of Lua (I converted it to use a
 standard Lua 5.1 a while back, but lost all of that work somehow).
 }.  It supports \LaTeX{} and HTML output, and an arbitrary number of
 output files and source languages. However, it does little to make the
-code look like part of the documentation.  The code in this document
-serves to provide a build system that includes syntax-highlighted
-code, at the very least.
-
+code look like part of the documentation.
 % End-doc literate-intro
+The code in this document serves to provide a build system that
+includes syntax-highlighted code, at the very least.
 
 While the build system could simply be a carefully crafted shell script, a
 makefile is used instead.  This allows use of implicit rules and the

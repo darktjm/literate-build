@@ -3931,6 +3931,16 @@ stupidity, label commands may not span lines or contain curly braces.
 They may also not appear after a percent-sign character on the same
 line, even if that percent sign is escaped for \LaTeX{}.
 
+Another issue is that labels defined in macros may have repeated
+formats, but actually define different labels.  It is not really
+possible to detect the macros being defined and filter out the
+duplicates as is done for explicit labels, so these are just left
+alone for now.  This is detected by checking only for the \#
+character, which is necessary for macro arguments, but may also
+indicate the \# chracter itself.  The only way to fix this would be to
+detect the preamble, and require that such macros be defined there.
+This is left for a future revision.
+
 <<Pre-process before weave>>=
 awk '<<Remove duplicate labels from \LaTeX{} source>>
      { print }' | \
@@ -3948,7 +3958,8 @@ awk '<<Remove duplicate labels from \LaTeX{} source>>
     if(l in gotit)
       continue;
     os = os l
-    gotit[l] = 1
+    if(!match(s, "#"))
+      gotit[l] = 1
   }
   print(os s)
   next

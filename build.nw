@@ -667,14 +667,17 @@ echo "  $$cl code, $$((tl-bl-hl-cl)) doc, $$hl hidden, $$bl blank";
 @
 
 Finally, there is a rule to check the consistency of the NoWeb source.
-Checking the list of chunks which are not specifically referenced requires
-human intervention, so all root chunks are printed out for review.  The list
-of missing chunks should always be accurate, though.  The terminating [[@]]
-for code chunks isn't required by the NoWeb syntax when writing multiple
-consecutive code chunks, but it is required by some of the document
-converters.  The reinsertion code is stupid about unbalanced doc
-reinsertions, but instead of checking correctly there, it's flagged
-here.
+Checking the list of chunks which are not specifically referenced
+requires human intervention, so all root chunks are printed out for
+review.  The list of missing chunks should always be accurate, though.
+The terminating [[@]] for code chunks isn't required by the NoWeb
+syntax when writing multiple consecutive code chunks, but it is
+required by some of the document converters.  The (obsolescent, but
+still necessary) [[%def]] directive is broken in that if the next
+non-blank text is another code chunk, it corrupts the header, so that
+is flagged as well.  The reinsertion code is stupid about unbalanced
+doc reinsertions, but instead of checking correctly there, it's
+flagged here.
 
 Because this check is a separate rule, target-specific altering of the
 tangling process is not supported.  Making drastic changes to source
@@ -690,12 +693,13 @@ check: $(NOWEB) $(NOTANGLE_DEP)
           echo "Root: $$x"; \
           $(call NOTANGLE_CHUNK,"$$x") >/dev/null; \
         done
-	@# Check for proper @-usage
+	@# Check for proper @-usage and %def-usage
 	@for f in $(NOWEB); do \
-	   lno=1 gotat=y; \
+	   lno=1 gotat=y gotdef=; \
            while IFS= read -r x; do \
              case "$$x" in \
                 "@<<"*"@>>"=) \
+		   test "$$gotdef" && echo "$$f: $${lno}: %def w/o following text"; \
                    test "$$gotat" || echo "$$f: $$prev not terminated by @"; \
                    gotat=; \
                    prev="$${lno}: $$x";; \
@@ -703,6 +707,10 @@ check: $(NOWEB) $(NOTANGLE_DEP)
                 @|@[^@]*) \
 		   test "$$gotat" && echo "$$f: $${lno}: extra @"; \
                    gotat=y; \
+		   case "$$x" in \
+		     "@ %def "*) gotdef=y ;; \
+		   esac;; \
+		?*) gotdef= ;; \
              esac; \
              lno=$$((lno+1)); \
            done < "$$f"; \

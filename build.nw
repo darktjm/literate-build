@@ -3538,6 +3538,17 @@ encoding, NoWeb's markup processor strips tabs from input, converting
 them to spaces.  This does not work in UTF-8 when there are multi-byte
 characters, so it is disabled.
 
+Note that the [[-index]] option automatically marks unhighlighted code
+(currently code using the double-square-bracket notation) with cross
+references to identifiers it knows about.  This is broken for
+languages that its [[finduses]] filter doesn't understand, such as
+Forth.  For now, I've just disabled the feature entirely by tricking that
+filter into thinking there are no identifiers ([[-indexfrom /dev/null]]).
+I've already decided that automatic identifier extraction is broken by
+design as well, and such highlighting never did work with highlighted
+text, so nothing is really lost here.  The gain is that [[%def]] can
+be used to manually add a definition-only index.
+
 \lstset{language=make}
 <<makefile.config>>=
 # Highlight theme for PDF/HTML formatted source code
@@ -3601,7 +3612,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
-          -delay -index -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
+          -delay -indexfrom /dev/null -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -4744,7 +4755,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave ${NW_UTF8:+-t} -html -filter "./nw-enh-preidx $noweb_order" \
-          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -index \
+          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
           -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
 	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
          cat

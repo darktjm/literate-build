@@ -667,14 +667,17 @@ echo "  $$cl code, $$((tl-bl-hl-cl)) doc, $$hl hidden, $$bl blank";
 @
 
 Finally, there is a rule to check the consistency of the NoWeb source.
-Checking the list of chunks which are not specifically referenced requires
-human intervention, so all root chunks are printed out for review.  The list
-of missing chunks should always be accurate, though.  The terminating [[@]]
-for code chunks isn't required by the NoWeb syntax when writing multiple
-consecutive code chunks, but it is required by some of the document
-converters.  The reinsertion code is stupid about unbalanced doc
-reinsertions, but instead of checking correctly there, it's flagged
-here.
+Checking the list of chunks which are not specifically referenced
+requires human intervention, so all root chunks are printed out for
+review.  The list of missing chunks should always be accurate, though.
+The terminating [[@]] for code chunks isn't required by the NoWeb
+syntax when writing multiple consecutive code chunks, but it is
+required by some of the document converters.  The (obsolescent, but
+still necessary) [[%def]] directive is broken in that if the next
+non-blank text is another code chunk, it corrupts the header, so that
+is flagged as well.  The reinsertion code is stupid about unbalanced
+doc reinsertions, but instead of checking correctly there, it's
+flagged here.
 
 Because this check is a separate rule, target-specific altering of the
 tangling process is not supported.  Making drastic changes to source
@@ -690,12 +693,13 @@ check: $(NOWEB) $(NOTANGLE_DEP)
           echo "Root: $$x"; \
           $(call NOTANGLE_CHUNK,"$$x") >/dev/null; \
         done
-	@# Check for proper @-usage
+	@# Check for proper @-usage and %def-usage
 	@for f in $(NOWEB); do \
-	   lno=1 gotat=y; \
+	   lno=1 gotat=y gotdef=; \
            while IFS= read -r x; do \
              case "$$x" in \
                 "@<<"*"@>>"=) \
+		   test "$$gotdef" && echo "$$f: $${lno}: %def w/o following text"; \
                    test "$$gotat" || echo "$$f: $$prev not terminated by @"; \
                    gotat=; \
                    prev="$${lno}: $$x";; \
@@ -703,6 +707,10 @@ check: $(NOWEB) $(NOTANGLE_DEP)
                 @|@[^@]*) \
 		   test "$$gotat" && echo "$$f: $${lno}: extra @"; \
                    gotat=y; \
+		   case "$$x" in \
+		     "@ %def "*) gotdef=y ;; \
+		   esac;; \
+		?*) gotdef= ;; \
              esac; \
              lno=$$((lno+1)); \
            done < "$$f"; \
@@ -3530,6 +3538,17 @@ encoding, NoWeb's markup processor strips tabs from input, converting
 them to spaces.  This does not work in UTF-8 when there are multi-byte
 characters, so it is disabled.
 
+Note that the [[-index]] option automatically marks unhighlighted code
+(currently code using the double-square-bracket notation) with cross
+references to identifiers it knows about.  This is broken for
+languages that its [[finduses]] filter doesn't understand, such as
+Forth.  For now, I've just disabled the feature entirely by tricking that
+filter into thinking there are no identifiers ([[-indexfrom /dev/null]]).
+I've already decided that automatic identifier extraction is broken by
+design as well, and such highlighting never did work with highlighted
+text, so nothing is really lost here.  The gain is that [[%def]] can
+be used to manually add a definition-only index.
+
 \lstset{language=make}
 <<makefile.config>>=
 # Highlight theme for PDF/HTML formatted source code
@@ -3593,7 +3612,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
-          -delay -index -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
+          -delay -indexfrom /dev/null -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -4736,7 +4755,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave ${NW_UTF8:+-t} -html -filter "./nw-enh-preidx $noweb_order" \
-          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -index \
+          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
           -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
 	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
          cat

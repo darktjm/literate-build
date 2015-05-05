@@ -72,10 +72,6 @@ but is mostly a non-functional repository for my old version 1 and 2
 code.  The only reason it's here is that this is a mirror of my SVN
 build directory, where that happens to reside.
 
-For more details, see http://darkalpha.homelinux.org/literate/.  That
-page has a complete summary of the history of this project, including
-some much older versions of the build system.
-
 As a side note, this is a copy of an SVN project.  I use the SVN Id,
 Date, and Revision information in the printed output, as well as to
 stamp every object file.  Linus says this is stupid of me**, so git

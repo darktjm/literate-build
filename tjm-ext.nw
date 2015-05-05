@@ -527,6 +527,58 @@ static uint64_t _unused_attr min_mask64(uint64_t l)
 #endif /* BTRICKS_H */
 @
 
+\section{Timing}
+
+Some design decisions require timing tests.  To support this, here are
+some simple routines to include into a file for time testing.  This is
+not provided as either an include file or binary library:  you must
+explicitly include the code chunk [[<<POSIX timing support>>]].
+
+Microsecond timings are easy to get and standard, but for fast CPUs,
+it may be difficult to make a process last long enough for timings to
+be valid (i.e., for less than 5% variability, it would need to last at
+least 20 microseconds).  I know of no portable way to get nanosecond
+timings, so I'll only provide these for Linux with GNU libc.
+Technicially, this method is only valid with Linux 2.6.12+ and
+sufficiently recent GNU libc, but it's not likely that such old
+kernels or critical system libraries are used much any more.
+
+<<POSIX timing support>>=
+#if defined(__linux__) && defined(__GLIBC__)
+#include <time.h>
+static struct timespec time0;
+
+static void tstart(void)
+{
+  clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time0);
+}
+
+static double tend(void)
+{
+  struct timespec time1;
+  clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time1);
+  double ret = (double)(time1.tv_sec - time0.tv_sec) * 1000000.0;
+  return ret + (double)(time1.tv_nsec - time0.tv_nsec) / 1000.0;
+}
+#else
+#include <sys/resource.h>
+static struct rusage time0;
+
+static void tstart(void)
+{
+  getrusage(RUSAGE_SELF, &time0);
+}
+
+static double tend(void)
+{
+  struct rusage time1;
+  getrusage(RUSAGE_SELF, &time1);
+  double ret = (double)(time1.ru_utime.tv_sec - time0.ru_utime.tv_sec) * 1000000.0;
+  return ret + (double)(time1.ru_utime.tv_usec - time0.ru_utime.tv_usec);
+}
+#endif
+@
+
 \section{Code Index}
 \nowebchunks
 

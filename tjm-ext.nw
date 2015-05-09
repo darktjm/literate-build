@@ -56,7 +56,9 @@ $Id$
 
 I do a lot of simple memory allocations, and it's easy to forget to
 include the sizeof(element) scale factor.  To make this easier, here
-are a few macros.
+are a few macros.  My usual behavior with memory allocation failures
+is to print a message and exit the entire program, but I also provide
+macros that can do something different, instead.
 
 <<mallocdef.h>>=
 <<Common C Warning>>
@@ -68,20 +70,25 @@ are a few macros.
 @
 
 <<Convenience definitions for dealing with memory>>=
-#define resize(buf, len) do { \
+#define err_buf(buf) do { \
+   perror(#buf); \
+   perror("Allocating memory"); \
+   exit(1); \
+} while(0)
+#define resize_err(buf, len, err) do { \
     buf = realloc(buf, (len) * sizeof(*(buf))); \
     if(!(buf)) { \
-        perror(#buf); \
-        exit(1); \
+        err; \
     } \
 } while(0)
-#define inisize(buf, len) do { \
+#define inisize_err(buf, len, err) do { \
     buf = malloc((len) * sizeof(*(buf))); \
     if(!(buf)) { \
-        perror(#buf); \
-        exit(1); \
+        err; \
     } \
 } while(0)
+#define resize(buf, len) resize_err(buf, len, err_buf(buf))
+#define inisize(buf, len) inisize_err(buf, len, err_buf(buf))
 #define clearbuf(buf, len) memset(buf, 0, (len) * sizeof(*(buf)))
 #define movebuf(dst, src, len) memmove(dst, src, (len) * sizeof(*(dst)))
 #define cpybuf(dst, src, len) memcpy(dst, src, (len) * sizeof(*(dst)))
@@ -94,15 +101,17 @@ are a few macros.
 In fact, the most common use of [[resize]] is to resize a buffer if
 the new length would exceed a maximum, while increasing the maximum at
 the same time.  My old Ada version of simple resizable arrays had
-three parameters: a start size, a size up to which the size should be
-doubled when more space is needed, and a size after which the size
-should only increase by that size every time.  This way, the array
-grows quickly when needed without wasting massive amounts of space
-when large.  Rather than provide macros which do all of this, here is
-a macro which choose arbitrary constants for this.  Note that it is
-not possible to resize parallel arrays at the same time with this
-macro.  To do that, the original size would need to be saved, and the
-others resized if a change occurred.
+three parameters: a start size, a maximum doubling size, and a maximum
+size.  I do not support the maximum size in the macros below.  The
+maximum doubling size is a size up to which the size should be doubled
+when more space is needed.  To grow larger than the maximum doubling
+size, the maximum doubling size is added to the size, instead.  This
+way, the array grows quickly when needed without wasting massive
+amounts of space when large.  Rather than provide macros which do all
+of this, here is a macro which chooses arbitrary constants for this.
+Note that it is not possible to resize parallel arrays at the same
+time with this macro.  To do that, the original size would need to be
+saved, and the others resized if a change occurred.
 
 <<Convenience definitions for dealing with memory>>=
 /* arbitrary lower limit */
@@ -115,7 +124,7 @@ others resized if a change occurred.
 #endif
 /* max_len may be evaluated more than once */
 /* buf and max_len should be lvals */
-#define check_size(buf, max_len, new_len) do { \
+#define check_size_err(buf, max_len, new_len, err) do { \
   size_t _new_len = new_len; \
   size_t _cur_max = max_len; \
   if(_new_len <= _cur_max) \
@@ -123,21 +132,51 @@ others resized if a change occurred.
   if(!(max_len)) { \
     if(_new_len < MIN_MALLOC_SIZE) \
       _new_len = MIN_MALLOC_SIZE; \
-    inisize(buf, max_len = _new_len); \
+    inisize_err(buf, max_len = _new_len, err); \
   } else if(_new_len < MAX_MALLOC_DOUBLE) { \
     while(_new_len > _cur_max) \
       _cur_max *= 2; \
-    resize(buf, max_len = _cur_max); \
+    resize_err(buf, max_len = _cur_max, err); \
   } else { \
     _new_len = (_new_len + MAX_MALLOC_DOUBLE - 1) / MAX_MALLOC_DOUBLE; \
     if(_new_len * MAX_MALLOC_DOUBLE <= _cur_max) { \
       /* errno = ENOSPC; */ \
-      /* perror(#buf); */ \
-      exit(1); \
+      err; \
     } \
     resize(buf, max_len = _new_len * MAX_MALLOC_DOUBLE); \
   } \
 } while(0)
+#define check_size(buf, max_len, new_len) \
+  check_size_err(buf, max_len, new_len, err_buf(buf))
+@
+
+While the above is useful for arrays which may shrink as well expand,
+arrays that only expand only really need to track their length.
+
+<<Convenience definitions for dealing with memory>>=
+/* len may be evaluated more than once */
+/* buf and len should be lvals */
+#define grow_size_err(buf, len, new_len, err) do { \
+  size_t _new_len = new_len, _cur_len = len; \
+  size_t _max_len = MIN_MALLOC_SIZE; \
+  while(_max_len < _cur_len && _max_len < MAX_MALLOC_DOUBLE) \
+    _max_len *= 2; \
+  if(_max_len < _cur_len) \
+    _max_len = (_cur_len + MAX_MALLOC_DOUBLE - 1) / MAX_MALLOC_DOUBLE; \
+  if(_max_len >= _new_len) \
+    break; \
+  while(_max_len < _new_len && _max_len < MAX_MALLOC_DOUBLE) \
+    _max_len *= 2; \
+  if(_max_len < _new_len) \
+    _max_len = (_new_len + MAX_MALLOC_DOUBLE - 1) / MAX_MALLOC_DOUBLE; \
+  if(!_cur_len) \
+    inisize_err(buf, _max_len, err); \
+  else \
+    resize_err(buf, _max_len, err); \
+  len = new_len; \
+} while(0)
+#define grow_size(buf, len, new_len) \
+  grow_size_err(buf, len, new_len, err_buf(buf))
 @
 
 \section{Warnings}
@@ -577,6 +616,110 @@ static double tend(void)
   return ret + (double)(time1.ru_utime.tv_usec - time0.ru_utime.tv_usec);
 }
 #endif
+@
+
+\section{Variable-Length Values in Byte Arrays}
+
+This is mostly lifted from my pattern matcher (and is now used in it).
+The idea is simple:  bytes are commonly the most efficient way to
+store stuff.  However, bytes can't store values larger than 255.  To
+fix this, values can be encoded with continuation bits.  I support 3
+data types in byte arrays:  8-bit values (always stored raw), unsigned
+variable-length integers, and signed variable-length integers.  Signed
+variable-length integers are stored by shifting their absolute value
+left by one, and setting bit zero to the sign.
+
+Like the previous section, this is only available as a noweb macro.
+You must specify the size (usually 32 or 64) when expanding this.
+
+<<Support for Byte Array With Variable-Length (@sz)-bit Values>>=
+/* split is > 0 for positive split, < 0 for negative split */
+/* 0 = no split */
+static int ba_val_len(uint<<@sz>>_t val, int split)
+{
+  int vlen;
+  if(!split)
+    return 1;
+  else if(split > 0) {
+    uint<<@sz>>_t t;
+    for(t = val, vlen = 1; t > 0x7f; t >>= 7, vlen++);
+  } else {
+    int<<@sz>>_t sv = (int<<@sz>>_t)val;
+    uint<<@sz>>_t t = (uint<<@sz>>_t)(sv < 0 ? -sv : sv);
+    if(t <= 0x3f)
+      vlen = 1;
+    else {
+      t >>= 6;
+      for(vlen = 2; t > 0x7f; t >>= 7, vlen++);
+    }      
+  }
+  return vlen;
+}
+@
+
+<<Support for Byte Array With Variable-Length (@sz)-bit Values>>=
+#define ba_set_val(set_loc, loc0, split, val) do { \
+  uint<<@sz>>_t _t = val; \
+  unsigned long _loc = loc0; \
+  if(!split) { \
+    set_loc(loc, _t); \
+  } else { \
+    uint8_t _vb; \
+    if(split < 0) { \
+      _vb = (int<<@sz>>_t)_t < 0; \
+      if(_vb) \
+        _t = -(uint<<@sz>>_t)_t; \
+      _vb |= (_t & 0x3f) << 1; \
+    } else { \
+      _vb = _t & 0x7f; \
+      _t >>= 7; \
+    } \
+    while(1) { \
+      if(_t) \
+        _vb |= 0x80; \
+      set_loc(_loc, _vb); \
+      if(!_t) \
+        break; \
+      _vb = _t & 0x7f; \
+      _t >>= 7; \
+      ++_loc; \
+   } \
+  } \
+} while(0)
+@
+
+<<Support for Byte Array With Variable-Length (@sz)-bit Values>>=
+/* returns the value in val and its length in len; both must be lvals */
+#define ba_get_val(val, len, get_loc, loc0, split) do { \
+  unsigned long _loc = loc0; \
+  if(!split) { \
+    len = 1; \
+    val = get_loc(_loc); \
+    break; \
+  } \
+  uint<<@sz>>_t _ret = 0, _atloc = get_loc(_loc); \
+  unsigned int _shift, _rlen = 1; \
+  int _do_neg = 0; \
+  if(split < 0) { \
+    _do_neg = _atloc & 1; \
+    _ret = (_atloc >> 1) & 0x3f; \
+    _shift = 6; \
+  } else { \
+    _ret = _atloc & 0x7f; \
+    _shift = 7; \
+  } \
+  while(_atloc & 0x80) { \
+    _atloc = get_loc(_loc); \
+    _ret |= (_atloc & 0x7f) << _shift; \
+    ++_loc; \
+    ++_rlen; \
+    _shift += 7; \
+  } \
+  len = _rlen; \
+  if(_do_neg) \
+    _ret = (uint<<@sz>>_t)-(int<<@sz>>_t)_ret; \
+  val = _ret; \
+} while(0)
 @
 
 \section{Code Index}

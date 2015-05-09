@@ -689,7 +689,7 @@ and rules like this make some kinds of alterations impossible.
 check: $(NOWEB) $(NOTANGLE_DEP)
 	@# Print all roots to find misnamed/unreferenced chunks
 	@# At same time, untangle each to find undefined chunks
-	@ <<[[noroots]]>> $(NOWEB) | sed 's/@<<//;s/@>>//;' | sort | while read x; do \
+	@ <<[[noroots]]>> $(NOWEB) | sed 's/@<<//;s/@>>//;' | sort | while read -r x; do \
           echo "Root: $$x"; \
           $(call NOTANGLE_CHUNK,"$$x") >/dev/null; \
         done

@@ -158,12 +158,13 @@ arrays that only expand only really need to track their length.
 /* buf and len should be lvals */
 #define grow_size_err(buf, len, new_len, err) do { \
   size_t _new_len = new_len, _cur_len = len; \
+  len = _new_len; \
   size_t _max_len = MIN_MALLOC_SIZE; \
   while(_max_len < _cur_len && _max_len < MAX_MALLOC_DOUBLE) \
     _max_len *= 2; \
   if(_max_len < _cur_len) \
     _max_len = (_cur_len + MAX_MALLOC_DOUBLE - 1) / MAX_MALLOC_DOUBLE; \
-  if(_max_len >= _new_len) \
+  if(_cur_len && _max_len >= _new_len) \
     break; \
   while(_max_len < _new_len && _max_len < MAX_MALLOC_DOUBLE) \
     _max_len *= 2; \
@@ -173,7 +174,6 @@ arrays that only expand only really need to track their length.
     inisize_err(buf, _max_len, err); \
   else \
     resize_err(buf, _max_len, err); \
-  len = new_len; \
 } while(0)
 #define grow_size(buf, len, new_len) \
   grow_size_err(buf, len, new_len, err_buf(buf))

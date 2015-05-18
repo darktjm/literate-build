@@ -662,7 +662,7 @@ static int ba_val_len(uint<<@sz>>_t val, int split)
   uint<<@sz>>_t _t = val; \
   unsigned long _loc = loc0; \
   if(!split) { \
-    set_loc(loc, _t); \
+    set_loc(_loc, _t); \
   } else { \
     uint8_t _vb; \
     if(split < 0) { \

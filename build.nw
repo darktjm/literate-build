@@ -1083,7 +1083,7 @@ $(COFILES): $(HEADERS) cproto.h
 cproto.h: $(CFILES) $(HEADERS)
 	echo >$@
 	test -z "$(strip $(CFILES))" || ( \
-	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E" \
+	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPROTO_CFLAGS) -E" \
 	               $(CFILES) >$@.$$$$.h; then \
 	    sed -i <<Remove protos from cproto.h>>
 	              $@.$$$$.h; \
@@ -1118,7 +1118,7 @@ cproto.h: $(CFILES:%=%.static_proto)
 	( \
 	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
 	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
-	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -Icp.$$$$ -E" $<; \
+	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPROTO_CFLAGS) -Icp.$$$$ -E" $<; \
 	) >$@ || (rm -f $@; false)
 @
 
@@ -5479,6 +5479,8 @@ assignment and a function ignoring all arguments.
 \item The [[EXTRA_CFLAGS]] variable should be extended with required
 options; that way, the user can replace [[CFLAGS]] with just
 optimization and debugging flags.
+\item The [[CPROTO_CFLAGS]] variable should be extended with flags
+required to make [[cproto]] work.
 \item The [[EXTRA_LDFLAGS]] variable should be extended with required
 options; that way, the user can replace [[LDFLAGS]] with just
 optimization and debugging flags.

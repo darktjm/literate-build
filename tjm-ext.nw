@@ -91,6 +91,7 @@ macros that can do something different, instead.
 #define clearbuf(buf, len) memset(buf, 0, (len) * sizeof(*(buf)))
 #define movebuf(dst, src, len) memmove(dst, src, (len) * sizeof(*(dst)))
 #define cpybuf(dst, src, len) memcpy(dst, src, (len) * sizeof(*(dst)))
+#define cmpbuf(a, b, len) memcmp(a, b, (len) * sizeof(*(a)))
 @
 
 <<Common C Includes>>=

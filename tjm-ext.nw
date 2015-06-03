@@ -60,7 +60,7 @@ are a few macros.  My usual behavior with memory allocation failures
 is to print a message and exit the entire program, but I also provide
 macros that can do something different, instead.
 
-<<Headers to install>>=
+<<Headers to Install>>=
 tjm/mallocdef.h \
 @
 
@@ -278,11 +278,11 @@ g_string_fgets.o
 mfgets.o
 @
 
-<<Libraries to install>>=
+<<Libraries to Install>>=
 tjm-supt \
 @
 
-<<Headers to install>>=
+<<Headers to Install>>=
 tjm/mfgets.h \
 @
 
@@ -461,7 +461,7 @@ functions, but their existence cannot be relied on.  It doesn't hurt to
 combine this with the routines above into the same header and library.
 
 <<[[mfgets]] prototypes>>=
-#ifdef __GNUC__
+#ifdef __GLIBC__
 #include <unistd.h>
 #define getcwd_full() getcwd(NULL, 0)
 #else
@@ -470,7 +470,7 @@ char *getcwd_full(void);
 @
 
 <<mfgets.c>>=
-#ifndef __GNUC__
+#ifndef __GLIBC__
 #include <errno.h>
 char *getcwd_full(void)
 {
@@ -516,7 +516,7 @@ optimization.
 #include "btricks.h"
 @
 
-<<Headers to install>>=
+<<Headers to Install>>=
 tjm/btricks.h \
 @
 

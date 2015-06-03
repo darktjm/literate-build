@@ -60,10 +60,6 @@ are a few macros.  My usual behavior with memory allocation failures
 is to print a message and exit the entire program, but I also provide
 macros that can do something different, instead.
 
-<<Headers to Install>>=
-tjm/mallocdef.h \
-@
-
 <<mallocdef.h>>=
 <<Common C Warning>>
 #ifndef MALLOCDEF_H
@@ -276,14 +272,6 @@ this.
 <<Library [[tjm-supt]] Members>>=
 g_string_fgets.o
 mfgets.o
-@
-
-<<Libraries to Install>>=
-tjm-supt \
-@
-
-<<Headers to Install>>=
-tjm/mfgets.h \
 @
 
 <<mfgets.h>>=
@@ -514,10 +502,6 @@ optimization.
 
 <<Common C Includes>>=
 #include "btricks.h"
-@
-
-<<Headers to Install>>=
-tjm/btricks.h \
 @
 
 <<btricks.h>>=

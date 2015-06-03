@@ -272,11 +272,11 @@ $Id$
 <<makefile.rules>>=
 <<Common NoWeb Warning>>
 install: misc bin
-	mkdir -p $(DESTDIR)$(BIN_DIR)
-	for x in $(EXEC_FILES); do \
-           rm -f $(DESTDIR)$(BIN_DIR)/$$x; \
-           cp -p $$x $(DESTDIR)$(BIN_DIR); \
-         done
+	for x in $(EXEC_FILES); do set -e; \
+	  mkdir -p $(DESTDIR)$(BIN_DIR); \
+          rm -f $(DESTDIR)$(BIN_DIR)/$$x; \
+          cp -p $$x $(DESTDIR)$(BIN_DIR); \
+        done
 	<<Install other files>>
 
 clean:
@@ -297,11 +297,20 @@ distclean: clean
 # Better to copy to makefile.config.local and make changes there.
 # You can, of course, also specify overrides on the command line
 
+<<Installation Directory Configuration Options>>
+@
+
+<<Installation Directory Configuration Options>>=
 # Installation prefix to apply to all install locations
+# This is not applied to hard-coded paths within installed files
 DESTDIR:=
 
+# Installation prefix to apply to all install locations by default
+# This is applied after DESTDIR.
+prefix:=/usr/local
+
 # Installation directory for binaries
-BIN_DIR:=/usr/local/bin
+BIN_DIR:=$(prefix)/bin
 
 @
 
@@ -954,12 +963,77 @@ makefile.libs: makefile.rules
 rm -f $(LIB_OBJ)
 @
 
-Of course it might be useful to also provide installation rules for selected
-libraries, as well as their support files (header files and API
-documentation), but that is left for a future revision.
+Of course it might be useful to also provide installation rules for
+selected libraries, as well as their support files (header files and
+API documentation), but that is left for a future revision.  For now,
+a simplistic method is provided to add headers to an exported header
+list, and libraries to an exported library list.  Configuration files
+can be installed using an exported misc. file list.  If the libraries
+are converted into shared objects, they are not exported using this
+method.  As a special hack, a subdirectory may be prefixed to the
+include file and misc file names, and they may be exported either from
+the named subdirectory or from the current directory.  Also, the
+library names only need the base name; if this convention is followed,
+it may be easier to install shared libraries in the future.  In any
+case, no additional dependencies should be required for the
+[[install]] target, as everything here should have been built by the
+time [[bin]] and [[misc]] are made.
 
 <<Libraries>>=
 $(LOCAL_LIB_FILES) \
+@
+
+<<Installation Directory Configuration Options>>=
+# Installation directory for include files
+INCLUDE_DIR:=$(prefix)/include
+
+# Installation directory for libraries
+LIB_DIR:=$(prefix)/lib
+
+# Installation directory for other configuration files
+DATA_DIR:=$(prefix)/share
+
+@
+
+<<makefile.vars>>=
+INSTALLED_LIBS:=<<Libraries to Install>>
+
+INSTALLED_INCLUDES:=<<Headers to Install>>
+
+INSTALLED_MISC:=<<Plain Files to Install>>
+
+@
+
+<<Install other files>>=
+for x in $(INSTALLED_LIBS); do set -e; \
+  mkdir -p $(DESTDIR)$(LIB_DIR); \
+  test -f $$x || x=lib$${x}.a; \
+  cp -p $$x $(DESTDIR)$(LIB_DIR); \
+done
+for x in $(INSTALLED_INCLUDES); do set -e; \
+  mkdir -p $(DESTDIR)$(INCLUDE_DIR); \
+  y=$$x; test -f $$y || y=$${y##*/}; \
+  test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(INCLUDE_DIR)/$${x%/*}; \
+  cp $$y $(DESTDIR)$(INCLUDE_DIR)/$$x; \
+done
+for x in $(INSTALLED_MISC); do set -e; \
+  mkdir -p $(DESTDIR)$(DATA_DIR); \
+  y=$$x; test -f $$y || y=$${y##*/}; \
+  test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(DATA_DIR)$${x%/*}; \
+  cp $$y $(DESTDIR)$(DATA_DIR)/$$x; \
+done
+@
+
+<<Libraries to Install>>=
+\
+@
+
+<<Headers to Install>>=
+\
+@
+
+<<Plain Files to Install>>=
+\
 @
 
 In addition to distributed binaries, test binaries may be built and
@@ -5351,7 +5425,7 @@ assignment should be done using [[+=]] rather than [[=]] in order to
 allow previously defined filters to work.  For example:
 \begin{quote}
 [[<<makefile.vars>>=]]\\
-[[$(MY_FILES): NOTANGLE_POSTPROC+=|sed '1i\copyright blurb']]\\
+[[$(MY_FILES): NOTANGLE_POSTPROC+=|sed -e '1i\copyright blurb']]\\
 [[@]]
 \end{quote}
 \item [[NOTANGLE_DEP]] sets additional dependencies before tangling,
@@ -5495,7 +5569,9 @@ in \texttt{build.nw}):
 \paragraph{Basic build rules:}
 \begin{itemize}
 \item [[<<makefile.config>>]]: add user-configurable variables to the
-makefile.
+makefile.  [[<<Installation Directory Configuration Options>>]] is the
+first chunk expanded within this file in order to clump such options
+together.
 \item [[<<makefile.vars>>]]: add non-configurable variables to the makefile.
 \item [[<<makefile.rules>>]]: add rules to the makefile.
 \item [[<<Install other files>>]]: add installation commands.
@@ -5516,6 +5592,10 @@ added line.  This is not added to any explicit target.  It is merely a
 shorthand to create a rule for extracting it from NoWeb and cleaning
 it up afterwards.  It is intended for build support files that are not
 meant to be distributed.
+\item [[<<Plain Files to Install>>]]: add plain text files to install.
+These should already be added to [[<<Plain Files>>]].  They may be
+prefixed with an installation subdirectory, which will be stripped off
+to determine the source file name.  Each line must end in a backslash.
 \item [[<<Script Executables>>]]: add plain text files to build as
 executables; always add a backslash to the end of each added line.  Like
 [[<<Plain Files>>]], no processing is done by the default rules.
@@ -5568,6 +5648,15 @@ required by other dependencies.  See [[<<C Executables>>]] and
 built using objects listed in these chunks.  [[name]] can of course be
 anything appropriate.  Unlike the chunks which expand into specific [[make]]
 variables, no backslashes are required or allowed at the end of each line.
+\item [[<<Libraries to Install>>]]: A list of libraries to install.
+These must be built using the [[bin]] rule (e.g. via the Members
+chunks above).  Either [[name]] or [[libname.a]] may be used, although
+the former is recommended.  Unlike the Members chunks, backslashes are
+once again required after every line.
+\item [[<<Headers to Install>>]]: A list of header files to install.
+These may be prefixed with an installation subdirectory, which will be
+stripped to find the source file location.  End each line with a
+backslash.
 \item [[<<Remove protos from cproto.h>>]]: sed command-line options to
 strip prototypes from cproto.h.  End each line with a backslash.
 For example:

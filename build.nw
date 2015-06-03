@@ -272,7 +272,8 @@ $Id$
 <<makefile.rules>>=
 <<Common NoWeb Warning>>
 install: misc bin
-	for x in $(EXEC_FILES); do set -e; \
+	@for x in $(EXEC_FILES); do set -e; \
+	  echo "install $(DESTDIR)$(BIN_DIR)/$$x"; \
 	  mkdir -p $(DESTDIR)$(BIN_DIR); \
           rm -f $(DESTDIR)$(BIN_DIR)/$$x; \
           cp -p $$x $(DESTDIR)$(BIN_DIR); \
@@ -1005,21 +1006,24 @@ INSTALLED_MISC:=<<Plain Files to Install>>
 @
 
 <<Install other files>>=
-for x in $(INSTALLED_LIBS); do set -e; \
+@for x in $(INSTALLED_LIBS); do set -e; \
   mkdir -p $(DESTDIR)$(LIB_DIR); \
   test -f $$x || x=lib$${x}.a; \
+  echo "install $(DESTDIR)$(LIB_DIR)/$$x"; \
   cp -p $$x $(DESTDIR)$(LIB_DIR); \
 done
-for x in $(INSTALLED_INCLUDES); do set -e; \
+@for x in $(INSTALLED_INCLUDES); do set -e; \
+  echo "install $(DESTDIR)$(INCLUDE_DIR)/$$x"; \
   mkdir -p $(DESTDIR)$(INCLUDE_DIR); \
   y=$$x; test -f $$y || y=$${y##*/}; \
   test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(INCLUDE_DIR)/$${x%/*}; \
   cp $$y $(DESTDIR)$(INCLUDE_DIR)/$$x; \
 done
-for x in $(INSTALLED_MISC); do set -e; \
+@for x in $(INSTALLED_MISC); do set -e; \
+  echo "install $(DESTDIR)$(DATA_DIR)/$$x"; \
   mkdir -p $(DESTDIR)$(DATA_DIR); \
   y=$$x; test -f $$y || y=$${y##*/}; \
-  test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(DATA_DIR)$${x%/*}; \
+  test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(DATA_DIR)/$${x%/*}; \
   cp $$y $(DESTDIR)$(DATA_DIR)/$$x; \
 done
 @

@@ -682,12 +682,13 @@ requires human intervention, so all root chunks are printed out for
 review.  The list of missing chunks should always be accurate, though.
 The terminating [[@]] for code chunks isn't required by the NoWeb
 syntax when writing multiple consecutive code chunks, but it is
-required by some of the document converters.  The (obsolescent, but
-still necessary) [[%def]] directive is broken in that if the next
-non-blank text is another code chunk, it corrupts the header, so that
-is flagged as well.  The reinsertion code is stupid about unbalanced
-doc reinsertions, but instead of checking correctly there, it's
-flagged here.
+required by some of the document converters.  In addition, if it is
+not followed by a blank line, the weaver will likely produce invalid
+\LaTeX{}.  The (obsolescent, but still necessary) [[%def]] directive is
+broken in that if the next non-blank text is another code chunk, it
+corrupts the header, so that is flagged as well.  The reinsertion code
+is stupid about unbalanced doc reinsertions, but instead of checking
+correctly there, it's flagged here.
 
 Because this check is a separate rule, target-specific altering of the
 tangling process is not supported.  Making drastic changes to source
@@ -707,6 +708,8 @@ check: $(NOWEB) $(NOTANGLE_DEP)
 	@for f in $(NOWEB); do \
 	   lno=1 gotat=y gotdef=; \
            while IFS= read -r x; do \
+	     test -n "$${gotat#y}" -a -n "$$x" && echo "$$f: $${lno}: no blank line after @"; \
+	     gotat=$${gotat%x}; \
              case "$$x" in \
                 "@<<"*"@>>"=) \
 		   test "$$gotdef" && echo "$$f: $${lno}: %def w/o following text"; \
@@ -716,7 +719,7 @@ check: $(NOWEB) $(NOTANGLE_DEP)
 		"@@<<"*|"@@>>"*|"@[["|"@]]") ;; \
                 @|@[^@]*) \
 		   test "$$gotat" && echo "$$f: $${lno}: extra @"; \
-                   gotat=y; \
+                   gotat=yx; \
 		   case "$$x" in \
 		     "@ %def "*) gotdef=y ;; \
 		   esac;; \
@@ -1006,20 +1009,20 @@ INSTALLED_MISC:=<<Plain Files to Install>>
 @
 
 <<Install other files>>=
-@for x in $(INSTALLED_LIBS); do set -e; \
+@@for x in $(INSTALLED_LIBS); do set -e; \
   mkdir -p $(DESTDIR)$(LIB_DIR); \
   test -f $$x || x=lib$${x}.a; \
   echo "install $(DESTDIR)$(LIB_DIR)/$$x"; \
   cp -p $$x $(DESTDIR)$(LIB_DIR); \
 done
-@for x in $(INSTALLED_INCLUDES); do set -e; \
+@@for x in $(INSTALLED_INCLUDES); do set -e; \
   echo "install $(DESTDIR)$(INCLUDE_DIR)/$$x"; \
   mkdir -p $(DESTDIR)$(INCLUDE_DIR); \
   y=$$x; test -f $$y || y=$${y##*/}; \
   test $${x%/*} != $$x && mkdir -p $(DESTDIR)$(INCLUDE_DIR)/$${x%/*}; \
   cp $$y $(DESTDIR)$(INCLUDE_DIR)/$$x; \
 done
-@for x in $(INSTALLED_MISC); do set -e; \
+@@for x in $(INSTALLED_MISC); do set -e; \
   echo "install $(DESTDIR)$(DATA_DIR)/$$x"; \
   mkdir -p $(DESTDIR)$(DATA_DIR); \
   y=$$x; test -f $$y || y=$${y##*/}; \

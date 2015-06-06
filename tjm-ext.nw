@@ -63,10 +63,10 @@ macros that can do something different, instead.
 <<mallocdef.h>>=
 <<Common C Warning>>
 #ifndef MALLOCDEF_H
-#define MALLCDEF_H
+#define MALLOCDEF_H
 
 <<Convenience definitions for dealing with memory>>
-#endif
+#endif /* MALLOCDEF_H */
 @
 
 <<Convenience definitions for dealing with memory>>=
@@ -91,6 +91,7 @@ macros that can do something different, instead.
 #define clearbuf(buf, len) memset(buf, 0, (len) * sizeof(*(buf)))
 #define movebuf(dst, src, len) memmove(dst, src, (len) * sizeof(*(dst)))
 #define cpybuf(dst, src, len) memcpy(dst, src, (len) * sizeof(*(dst)))
+#define cmpbuf(a, b, len) memcmp(a, b, (len) * sizeof(*(a)))
 @
 
 <<Common C Includes>>=
@@ -227,6 +228,9 @@ GLIB_LDFLAGS:=$(shell pkg-config --silence-errors gthread-2.0 --libs || \
                       pkg-config glib-2.0 --libs)
 EXTRA_CFLAGS += $(GLIB_CFLAGS) -DUSES_GLIB
 EXTRA_LDFLAGS += $(GLIB_LDFLAGS)
+else
+# don't offer USES_GLIB if it's not supported in binary
+NOTANGLE_POSTPROC+=|sed -e 's/ifdef USES_GLIB/if 0/'
 endif
 @
 
@@ -265,7 +269,7 @@ In order to avoid the processing overhead for NULs for most reads, the
 wrapper has two names, and the generic function takes a parameter to enable
 this.
 
-<<Library [[supt]] Members>>=
+<<Library [[tjm-supt]] Members>>=
 g_string_fgets.o
 mfgets.o
 @
@@ -445,7 +449,7 @@ functions, but their existence cannot be relied on.  It doesn't hurt to
 combine this with the routines above into the same header and library.
 
 <<[[mfgets]] prototypes>>=
-#ifdef __GNUC__
+#ifdef __GLIBC__
 #include <unistd.h>
 #define getcwd_full() getcwd(NULL, 0)
 #else
@@ -454,7 +458,7 @@ char *getcwd_full(void);
 @
 
 <<mfgets.c>>=
-#ifndef __GNUC__
+#ifndef __GLIBC__
 #include <errno.h>
 char *getcwd_full(void)
 {
@@ -501,6 +505,7 @@ optimization.
 @
 
 <<btricks.h>>=
+<<Common C Warning>>
 #ifndef BTRICKS_H
 #define BTRICKS_H
 

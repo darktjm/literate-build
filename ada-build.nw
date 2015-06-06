@@ -1490,7 +1490,7 @@ different purpose.
   Null_S : YYSTYPE; -- initialized to defaults
 }
 @
- 
+
 <<Ada grammar start token>>=
 %start compilation
 @

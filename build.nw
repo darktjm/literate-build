@@ -2718,7 +2718,7 @@ my $lang = 'txt';
 
 <<Process lines from NoWeb token stream>>=
 # [^{] is to prevent self-match
-if(/lstset{language=(?:.*\])?([^}]*)[^{]*/) {
+if(/lstset\{language=(?:.*\])?([^}]*)[^{]*/) {
   $lang = lc $1;
 }
 @
@@ -3556,7 +3556,7 @@ for my $a (@ARGV) {
   while(<A>) {
     $disext = /^%%% no-ext-ref$/;
     last if $disext;
-    /^\\input{(.*\.nw)}$/ or next;
+    /^\\input\{(.*\.nw)\}$/ or next;
     $feqv{$1} = $a;
   }
 }

@@ -13,7 +13,7 @@
 
 \begin{document}
 
-\title{Syntax Highlighting Modular Build System for NoWeb}
+\title{Syntax Highlighting Modular Build System for noweb}
 \author{Thomas J. Moore}
 % Begin-doc build-ver
 \date{Version 3.15.\RCSRevision\\\RCSDate}
@@ -26,7 +26,7 @@ This document describes, implements, and is built using a modular ``literate
 programming%
 \footnote{\url{http://www.literateprogramming.com/articles.html}
 is a good starting point.}%
-'' build system with syntax highlighting, based on Norman Ramsey's NoWeb%
+'' build system with syntax highlighting, based on Norman Ramsey's noweb%
 \footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}}%
 , GNU%
 \footnote{\url{http://www.gnu.org}}%
@@ -108,7 +108,7 @@ source languages may increase as well.  Current common public
 documentation standards also require a system which produces at least
 HTML and PDF output.  After long searching, I have not found any
 systems which meet these requirements. Instead, the closest is the
-NoWeb package%
+noweb package%
 \footnote{In particular, version 2.  Version 3 is available and
 functional, but has been in ``alpha'' for many years, has a different
 command syntax, and is missing a few important bits (like the style
@@ -128,7 +128,7 @@ makefile is used instead.  This allows use of implicit rules and the
 system-wide [[CC]] and [[CFLAGS]] defaults.  The default chunk is set to the
 makefile, requiring no chunk name to extract.
 % Begin-doc build-doc
-To build, place the NoWeb source files into their own directory (optionally
+To build, place the noweb source files into their own directory (optionally
 extracting them from the document you are reading first), extract the
 makefile, and make using GNU make:
 
@@ -176,7 +176,7 @@ On the other hand, to avoid having to modify this file after cleaning,
 The makefile is for building the support files, executable binaries, and
 printable source code (HTML and PDF), maybe installing them, and cleaning up
 afterwards. Configuration information, variable definitions, and
-miscellaneous rules are extracted from not only this NoWeb file, but also
+miscellaneous rules are extracted from not only this noweb file, but also
 any others that use it. The makefile itself can be used to include that
 information, but to simplify makefile extraction, all of that information is
 kept in separate files.  Modules that wish to extend the makefile can do so
@@ -216,14 +216,14 @@ the existence of a non-empty [[$(MAKEPP_VERSION)]].
 <<makefile>>=
 # See makefile.config for variables to override
 # Put local config in makefile.config or makefile.config.local
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 # default rule
 all: misc bin doc
 
 ifneq ($(MAKEPP_VERSION),)
 # not much point, since it doesn't filter out #line directives
-# and therefore most changes to NoWeb source will result in file changes
+# and therefore most changes to noweb source will result in file changes
 signature c_compilation_md5
 endif
 
@@ -256,9 +256,9 @@ misc: $(MISC_FILES)
 -include makefile.rules
 @
 
-<<Common NoWeb Warning>>=
+<<Common noweb Warning>>=
 # GENERATED FILE:  DO NOT EDIT OR READ THIS FILE
-# Instead, read or edit the NoWeb file(s) from which this was generated,
+# Instead, read or edit the noweb file(s) from which this was generated,
 # listed below.  Copyright notice and license terms can be found there.
 # $Id$
 @
@@ -270,7 +270,7 @@ $Id$
 
 \lstset{language=make}
 <<makefile.rules>>=
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 install: misc bin
 	@for x in $(EXEC_FILES); do set -e; \
 	  echo "install $(DESTDIR)$(BIN_DIR)/$$x"; \
@@ -294,7 +294,7 @@ distclean: clean
 # Configuration parameters
 # Change here only if:
 #  - you do not use makepp (makepp will overwrite on every make)
-#  - you do not modify the NoWeb sources (otherwise even GNU make overwrites)
+#  - you do not modify the noweb sources (otherwise even GNU make overwrites)
 # Better to copy to makefile.config.local and make changes there.
 # You can, of course, also specify overrides on the command line
 
@@ -316,7 +316,7 @@ BIN_DIR:=$(prefix)/bin
 @
 
 <<makefile.vars>>=
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 MAKEFILES = makefile makefile.config makefile.vars makefile.rules
 EXEC_FILES = <<Executables>>
 
@@ -385,7 +385,7 @@ rm -f makefile
 @
 
 Generating the other files requires the ability to correctly assemble them
-from all the other NoWeb files.
+from all the other noweb files.
 
 <<makefile.config>>=
 # The name of the source files
@@ -406,7 +406,7 @@ From these files, an order of building must be derived.  This is done using
 a dependency tree created from special comments in the source files.  These
 comments are at the beginning of a line, and are of the form
 \texttt{\%\%\% requires \emph{X}}, where \emph{X} is either the name of a
-NoWeb file or the name with the \texttt{.nw} removed.  An explicit
+noweb file or the name with the \texttt{.nw} removed.  An explicit
 \verb|\input{|\emph{X}\verb|.nw| creates a dependency as well.
 Top-level build files are those on which no others depend.  The tree
 order consists of the top-level files, followed by their direct
@@ -505,7 +505,7 @@ prtree:
 	@echo Order: $(NOWEB_ORDER)
 @
 
-So, to generate a file, all of these NoWeb files are concatenated, in
+So, to generate a file, all of these noweb files are concatenated, in
 reverse order, and passed into [[notangle]].  The makefile components in
 particular need to be checked for errors in mostly the same way as the main
 makefile.
@@ -619,7 +619,7 @@ NOROOTS=noroots
 @
 
 In fact, when building just the code, it is likely that the only part
-of NoWeb required is [[notangle]].  However, with the extensions of
+of noweb required is [[notangle]].  However, with the extensions of
 the next section (in particular parameterized chunks), a simple
 replacement (as provided in previous versions of this document) is not
 possible.
@@ -627,11 +627,11 @@ possible.
 \subsection{Additional Features}
 
 It may also be useful to build a tar file for building on systems where
-NoWeb is not present.  This is meant to be a convenience, for building
+noweb is not present.  This is meant to be a convenience, for building
 binaries only, and not for distribution.  That means neither the source
 documentation nor any means to build the source documentation will be
 included.  Since it is not possible to distinguish between soft links
-created for building and soft links to other NoWeb files, no attempt will be
+created for building and soft links to other noweb files, no attempt will be
 made to force link dereferencing, either.
 
 <<makefile.rules>>=
@@ -676,11 +676,11 @@ echo " Lines: $$tl:"; \
 echo "  $$cl code, $$((tl-bl-hl-cl)) doc, $$hl hidden, $$bl blank";
 @
 
-Finally, there is a rule to check the consistency of the NoWeb source.
+Finally, there is a rule to check the consistency of the noweb source.
 Checking the list of chunks which are not specifically referenced
 requires human intervention, so all root chunks are printed out for
 review.  The list of missing chunks should always be accurate, though.
-The terminating [[@]] for code chunks isn't required by the NoWeb
+The terminating [[@]] for code chunks isn't required by the noweb
 syntax when writing multiple consecutive code chunks, but it is
 required by some of the document converters.  In addition, if it is
 not followed by a blank line, the weaver will likely produce invalid
@@ -1281,7 +1281,7 @@ really need to come last.
 
 <<Common C Warning>>=
 /*
-  <<Common NoWeb Warning>>
+  <<Common noweb Warning>>
 */
 @
 
@@ -1347,9 +1347,9 @@ __declspec(selectany) const char *global_version_id_string = version_id;
 "$Id$\n"
 @
 
-\section{NoWeb Enhancements}
+\section{noweb Enhancements}
 
-NoWeb's tangler has a simple syntax and usage, but suffers from the
+noweb's tangler has a simple syntax and usage, but suffers from the
 lack of a few features.  Sometimes, files should not end in a newline,
 but notangle always adds one.  Also, sometimes, consecutive chunks
 should not be separated by newlines, but again, notangle always adds
@@ -1399,8 +1399,8 @@ newline (due to the final star), and there will be no newline between
 \item A chunk name used in a chunk definition line may contain
 parameter definitions in parentheses.  All parameter names begin with
 an at-sign (@).  The only characters forbidden in parameter names are
-close-parentheses and invalid NoWeb syntax.  Thus the parameter name
-is terminated by its closing parenthesis.  parameter definition syntax
+close-parentheses and invalid noweb syntax.  Thus the parameter name
+is terminated by its closing parenthesis.  Parameter definition syntax
 within in-line code is ignored.
 
 For example:
@@ -1446,7 +1446,7 @@ expand to [[macro]]'s argument.  When expanded within [[macro2]], both
 [[@arg]] and [[other]] will expand to [[macro2]]'s argument.
 
 \item A chunk reference consisting of the name of a chunk taking
-parameters, with all parameter references replaced by NoWeb in-line
+parameters, with all parameter references replaced by noweb in-line
 code segments, represents an expansion of the reference with the
 parameters taking the value of the code within the in-line code
 segments in their respective positions.  No expansion is done within
@@ -1526,7 +1526,7 @@ For example:
 1 z
 @@
 @<<macro2 (@arg)>>=
-@<<macro [[x @<<@arg>>]]>>
+@<<macro @[[x @<<@arg>>]]>>
 @@
 @<<*>>=
 @<<macro2 @[[x]]>> -- 1 x x
@@ -1540,8 +1540,8 @@ For example:
 
 \subsection{Tangling}
 
-Rather than create a new tangler, the NoWeb pipeline is used.  Also,
-rather than modifying the NoWeb tangler, a new one is developed from
+Rather than create a new tangler, the noweb pipeline is used.  Also,
+rather than modifying the noweb tangler, a new one is developed from
 scratch.  While it is possible to write this as a filter, doing so is
 extremely expensive and only buys the ability to use the standard
 pipeline of both version 2 and 3.  Since 3 is permanently alpha, I
@@ -1562,17 +1562,17 @@ consistently easy to find (e.g. [[pkg-config]] is not universally
 available, and the token for [[GLib]] is inconsistent), and requires
 work to ensure that the correct versions are available.  In contrast,
 as long as I do not use any esoteric libraries or advanced features,
-perl should word with most installations without too much trouble.  A
+perl should work with most installations without too much trouble.  A
 simple tangler was already developed in a previous section, but that
 tangler did not support any of the extensions, or the [[-L]] option.
-It also parsed the file directly, rather than using the NoWeb pipeline
+It also parsed the file directly, rather than using the noweb pipeline
 format.
 
 \lstset{language=perl}
 <<Common Perl Prefix>>=
 #!/bin/sh
 #!perl
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 eval 'exec perl -x -f "$0" "$@"'
   if 0;
 
@@ -1584,7 +1584,7 @@ use strict;
 
 <<Parse [[nt-enh]] options>>
 
-<<Gather code chunks from NoWeb pipeline>>
+<<Gather code chunks from noweb pipeline>>
 
 <<Expand and output requested chunk with extensions>>
 @
@@ -1627,7 +1627,7 @@ hash, whose index name is [[text]], [[ref]], [[file]], [[line]], and
 [[nonl]], respectively.  Since the reference, if present, is at the
 end of the text, the end position is saved as well ([[refline]]).
 
-<<Gather code chunks from NoWeb pipeline>>=
+<<Gather code chunks from noweb pipeline>>=
 my $lineno = 1; my $file = '<stdin>';
 <<Other code chunk gathering globals>>
 while(<>) {
@@ -2161,9 +2161,9 @@ print $lp . $lt;
 @
 
 To actually use this back end, a new wrapper script is provided.  It
-assumes that [[notangle]] is the NoWeb version, copies it, and
+assumes that [[notangle]] is the noweb version, copies it, and
 replaces [[nt]] with [[nt-enh]].  This is not done because the wrapper
-is complex, but because there is no way to locate the NoWeb
+is complex, but because there is no way to locate the noweb
 executables other than to copy them from the existing script.
 Retaining the ability to use other filter hooks seemed like a good
 idea.
@@ -2511,7 +2511,7 @@ using [[noweave]], and then convert to PDF using [[pdflatex]] or
 cross references (and other things, such as [[longtable]]
 measurements) settle down.  Of course the figures need to be 
 converted to the appropriate format, too. Rules are provided for EPS,
-xfig, and dia diagrams, since they can be stored in-line in the NoWeb
+xfig, and dia diagrams, since they can be stored in-line in the noweb
 source; additional rules can be provided for other image formats.
 Once again, the use of [[$(eval)]] requires special processing for
 Makepp.
@@ -2536,7 +2536,7 @@ system, and may work on any TeX distribution which uses kpathsea.
 
 \lstset{language=make}
 <<makefile.config>>=
-# Set to non-blank if NoWeb files are UTF-8.
+# Set to non-blank if noweb files are UTF-8.
 NW_UTF8=
 
 # The LaTeX-to-PDF command to use: must be pdflatex or xelatex.
@@ -2683,11 +2683,11 @@ fi; \
 \subsection{Pretty Printing Wrapper}
 
 Or at least it should be simple, but some additional adjustments of the
-standard NoWeb process need to be made.  For one thing, NoWeb does not
+standard noweb process need to be made.  For one thing, noweb does not
 pretty-print code chunks natively, so pretty-printing the code chunks
-requires a bit of work.  A generic code chunk formatter filter for NoWeb is
+requires a bit of work.  A generic code chunk formatter filter for noweb is
 used for this.  Like all noweb filters, it just sucks in the marked up form
-of the NoWeb source and spits out the same, with modifications.  The
+of the noweb source and spits out the same, with modifications.  The
 language is tracked so that the formatter can behave differently depending
 on language.
 
@@ -2702,9 +2702,9 @@ nwweavefilt \
 <<Initialize [[nwweavefilt]]>>
 
 while(<STDIN>) {
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   print $_; # print most lines
-  <<Process lines from NoWeb token stream>>
+  <<Process lines from noweb token stream>>
 }
 @
 
@@ -2716,7 +2716,7 @@ being used.
 my $lang = 'txt';
 @
 
-<<Process lines from NoWeb token stream>>=
+<<Process lines from noweb token stream>>=
 # [^{] is to prevent self-match
 if(/lstset\{language=(?:.*\])?([^}]*)[^{]*/) {
   $lang = lc $1;
@@ -2726,11 +2726,11 @@ if(/lstset\{language=(?:.*\])?([^}]*)[^{]*/) {
 A code chunk begins with the chunk name, which can be ignored.  After that,
 all lines are sucked in as part of the code, until the end of the chunk.
 
-<<Process lines from NoWeb token stream>>=
+<<Process lines from noweb token stream>>=
 if(/^\@defn/) {
   # skip @nl
   $_ = <STDIN> or last;
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   print $_;
   # accumulate code in $code
   my $code = '';
@@ -2760,7 +2760,7 @@ my @use;
 # accumulate index defns in $end
 my $end = '';
 while(<STDIN>) {
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   if(/^\@text/) {
     s/^\@text //;
     s/\n//;
@@ -2788,7 +2788,7 @@ The prettifier is passed in on the command line; it takes one (additional)
 argument - the name of the current language.  It takes raw code (with
 markers for chunk references), and returns pretty code.  Steps must be taken
 by the prettifier to ensure that the markers remain intact.  The output of
-the prettifier is placed in the NoWeb stream as [[@literal]]
+the prettifier is placed in the noweb stream as [[@literal]]
 lines%
 \footnote{Ramsey says I should write a new back end for this purpose,
 and has deprecated the [[@literal]] directive for this reason. 
@@ -2879,7 +2879,7 @@ latexhl \
 
 <<latexhl>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 @
 
 Since multiple highlighters are supported, the first thing to do is
@@ -3407,7 +3407,7 @@ addlistings \
 
 <<addlistings>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 # use the ctrl-g escape (\a = ann = bell)
 sed -e 's/\^\^\^/\a&\a/g
@@ -3523,7 +3523,7 @@ filter, which has the chunk names separated out already.  For maximum
 flexibility, this is done in a perl script.
 
 \lstset{language=perl}
-<<Filter lines from NoWeb token stream>>=
+<<Filter lines from noweb token stream>>=
 if(/^\@use / or /^\@defn / or /^\@nwenh/) {
   s/_/\\_/g unless /\[\[/;
 }
@@ -3577,14 +3577,14 @@ unless($disext) {
 }
 @
 
-<<Filter lines from NoWeb token stream>>=
+<<Filter lines from noweb token stream>>=
 if(!$disext and (/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
   $_ = "$1($ch{$2}) $2\n";
 }
 @
 
 There is little point in separating consecutive code chunks with a lot of
-white space, so the excess whitespace added by NoWeb needs to be removed.
+white space, so the excess whitespace added by noweb needs to be removed.
 
 \lstset{language=sed}
 <<Reduce interchunk whitespace>>=
@@ -3615,7 +3615,7 @@ package versus an external highlighter is done by prefixing the
 highlight theme name with [[list:]].
 
 While most processing is identical for Latin-1 encoding and UTF-8
-encoding, NoWeb's markup processor strips tabs from input, converting
+encoding, noweb's markup processor strips tabs from input, converting
 them to spaces.  This does not work in UTF-8 when there are multi-byte
 characters, so it is disabled.
 
@@ -3663,7 +3663,7 @@ latexhl nwweavefilt addlistings nw-enh-preidx nw-enh-postidx \
 \lstset{language=sh}
 <<nw2latex>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 noweb="$1"
 outf="$2"
@@ -3715,7 +3715,7 @@ The \LaTeX{} preamble is fairly straightforward.  The [[fontenc]],
 [[inputenc]], [[fontspec]] and [[babel]] packages are pretty much
 required anywhere.  The input encoding is forced to latin1 for
 [[pdflatex]]; it is expected that [[xelatex]] be used for Unicode. 
-The [[noweb]] package is obviously needed for the NoWeb output.  The
+The [[noweb]] package is obviously needed for the noweb output.  The
 [[rcs]] package is included to easily incorporate those nasty \$-heavy
 RCS/CVS/SVN keywords.  The [[ifpdf]] and [[ifxetex]] packages are
 needed for using this \LaTeX{} source with non-PDF output and
@@ -3805,11 +3805,11 @@ once again is to reduce the number of pages a bit.
 %\@savsf=1
 %\makeatother
 
-Then, some adjustments need to be made for NoWeb.  NoWeb's [[\setupcode]]
+Then, some adjustments need to be made for noweb.  noweb's [[\setupcode]]
 does some adjustments to \LaTeX{} layout that override the code
-highlighting, so that is disabled.  NoWeb tries too hard to keep code chunks
+highlighting, so that is disabled.  noweb tries too hard to keep code chunks
 on one page, so some adjustments are made to those parameters.  Finally, the
-NoWeb cross reference listings are adjusted a bit and the code size is made
+noweb cross reference listings are adjusted a bit and the code size is made
 smaller.  Also, the ``never defined'' message should probably be
 changed for imported symbols, and in fact all imported symbols should
 be shown identically.  It is not currently possible to remove the
@@ -3959,7 +3959,7 @@ error log (and cause an error abort) upon weaving.
 done
 @
 
-The reinsertion is done before weaving so that NoWeb formatting can be
+The reinsertion is done before weaving so that noweb formatting can be
 done on this, as well.  A sed script is generated to convert all of
 the [[\input]] commands to their associated text, and then that script
 is applied in the pre-processing pipeline.  It requires multiple
@@ -4014,7 +4014,7 @@ sed -f /tmp/latexhl.doc.$$ | \
 One problem with reinsertion is that labels are duplicated.  While
 leaving the labels out manually works, it is cumbersome and may not be
 what is wanted.  For example, one way to split the user documentation
-into a separate file is to reinsert it into an otherwise empty NoWeb
+into a separate file is to reinsert it into an otherwise empty noweb
 source file.  Stripping the labels out manually means that the labels
 will be undefined in the fresh document.  A better way is to have them
 automatically filtered out.
@@ -4070,14 +4070,14 @@ Another problem is that there is more than one way to create a label.
 For example, the sectioning commands may be redefined to automatically
 create a label based on the section name.  This document defines no
 such things%
-\footnote{Actually, the hyperref package, the NoWeb HTML filter, and
-NoWeb code chunks all create automatic labels, but they are based on
+\footnote{Actually, the hyperref package, the noweb HTML filter, and
+noweb code chunks all create automatic labels, but they are based on
 file location rather than the text at the label location, so they will
 never conflict.}%
 , but as implemented above, more awk code can be added to
 [[<<Remove duplicate labels from \LaTeX{} source>>]].
 
-One other problem peculiar to NoWeb text is that chunk references are
+One other problem peculiar to noweb text is that chunk references are
 reformatted in a way that assumes the chunk is defined in the same
 document.  When documenting chunk names themselves, like this document
 does, this will clutter up the text with useless undefined chunk
@@ -4108,7 +4108,7 @@ replaced with what would have been the contents of that file.  This also
 allows the file to only contain contents given the source and any
 dependencies, rather than also including contents from sources which extend
 the contents.  This is done after weaving, since the text is always literal,
-but a preprocessing step is required to avoid NoWeb substitutions during the
+but a preprocessing step is required to avoid noweb substitutions during the
 weave.  The sed script to generate the sed script cannot be done in a
 backtick expression, because the argument list may overflow.  Generating the
 script to a file also reduces the number of backslash escapes required.
@@ -4298,7 +4298,7 @@ done >> /tmp/latexhl.fmt.$$
 
 \subsection{Include Directive Processing}
 
-Finally, a method to include an arbitrary NoWeb file is provided.  The only
+Finally, a method to include an arbitrary noweb file is provided.  The only
 way to weave and tangle such files correctly is to insert the contents of
 the file in place of the include directive.  Since [[\include]] has other
 side effects (it forces a page break), only [[\input]] is supported.  The
@@ -4306,12 +4306,12 @@ syntax is very specifically defined in order to avoid conflicts with other
 [[\input]] directives.  Namely, it must not have any following text, and the
 file name must end in \texttt{.nw}.
 
-<<Insert included NoWeb files>>=
-awk '<<Insert included NoWeb files with [[awk]]>>'
+<<Insert included noweb files>>=
+awk '<<Insert included noweb files with [[awk]]>>'
 @
 
 \lstset{language=awk}
-<<Insert included NoWeb files with [[awk]]>>=
+<<Insert included noweb files with [[awk]]>>=
 function readfile(f) {
   while(getline < f) {
     if($0 ~ /^\\input{[^}]*\.nw}$/) {
@@ -4333,17 +4333,17 @@ BEGIN { readfile("-") }
 
 \lstset{language=sh}
 <<Pre-process before weave>>=
-<<Insert included NoWeb files>> | \
+<<Insert included noweb files>> | \
 @
 
 %tangle needs more thought - need to incorporate into docs
 %< <Pre-process before tangle> >=
-%< <Insert included NoWeb files> >
+%< <Insert included noweb files> >
 %@
 
 \section{HTML Code Documentation}
 
-The NoWeb file is intended to be written in \LaTeX{}, and converted to HTML
+The noweb file is intended to be written in \LaTeX{}, and converted to HTML
 after and/or during the weave process.
 
 \subsection{HTML from TeX4ht}
@@ -4442,7 +4442,7 @@ esac
 
 The script just calls [[htlatex]] in its own directory (because it generates
 a lot of the same aux files as [[pdflatex]]), cleans up the HTML a bit, and
-tacks on the NoWeb source in compressed, uuencoded form.  It depends on a
+tacks on the noweb source in compressed, uuencoded form.  It depends on a
 working TeX4ht configuration, which is unfortunately mostly undocumented and
 easily broken.  Configuring TeX4ht is beyond the scope of this document.
 
@@ -4453,7 +4453,7 @@ nwtex2html \
 
 <<nwtex2html>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 tex="$1"
 base="${1%.tex}"
@@ -4655,7 +4655,7 @@ s/ *$//;
 
 \subsection{HTML from [[l2h]]}
 
-Another way is to use NoWeb's included [[l2h]] filter.  This once again
+Another way is to use noweb's included [[l2h]] filter.  This once again
 requires some filtering, which is complicated enough that it's done in a
 separate script ([[nw2html]]) instead of inline in the makefile.  In
 addition, highlighting of chunks must produce HTML, so a small conversion
@@ -4671,7 +4671,7 @@ htmlhl \
 
 <<htmlhl>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 case $HLPROG_TYPE in
   highlight-[23]) echo '<ol class="code">' ;;
@@ -4724,7 +4724,7 @@ PDF.
 \lstset{language=sh}
 <<nw2html>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 noweb="$1"
 outf="$2"
@@ -5207,7 +5207,7 @@ directly would have worked as well.
 \subsection{Method Selection}
 
 Unfortunately, neither formatter is obviously better.  TeX4ht mangles its
-output a bit (color in particular) and takes forever to run.  NoWeb's l2h
+output a bit (color in particular) and takes forever to run.  noweb's l2h
 filter is quicker, but is pretty stupid and unconfigurable for things like
 tables and footnotes.  For now, I prefer the speed and accuracy of l2h.
 
@@ -5256,7 +5256,7 @@ targets are \texttt{all} (the default), \texttt{bin},
 ensure that changes to a source file will not result in weird errors
 due to lost chunks or mistyped chunk names.
 
-The first few lines of a NoWeb file are \LaTeX{} code.  This must at least
+The first few lines of a noweb file are \LaTeX{} code.  This must at least
 include the \verb|\documentclass| directive.  It can also include the build
 system's preamble in the place marked by \verb!%%% latex preamble!. Copying
 the beginning of this document to start with would not be a bad idea:
@@ -5316,7 +5316,7 @@ language for any subsequent code chunks.  The default language is C.
 
 \item Hidden sections: any figures or other files which are normally
 included in the document in a processed form can be stored in-line in the
-NoWeb document in their raw form in hidden sections.  Each hidden section is
+noweb document in their raw form in hidden sections.  Each hidden section is
 delimited by \verb|<!-->| on its own line at the start, and \verb!<-->! on
 its own line at the end.  This is intended to be used as follows:
 
@@ -5361,8 +5361,8 @@ following is equivalent:
 \end{rawhtml}
 % End-doc end-hidden
 
-NoWeb doesn't actually strip these out --- iffalse does that.  Because
-NoWeb generates cross-reference information and the chunk index after
+noweb doesn't actually strip these out --- iffalse does that.  Because
+noweb generates cross-reference information and the chunk index after
 the last chunk, the last chunk may not be commented out in this way.
 If you see a message like ``LaTeX Warning: The are no
 \textbackslash{}nowebchunks on input line \ldots{}'', there are eiher
@@ -5392,9 +5392,9 @@ attached to the original electronic forms of this document:\\
 \verb!\input{Sources.tex} % txt!
 \end{quote}
 
-\item NoWeb extensions:  by default, an extended version of the NoWeb
+\item noweb extensions:  by default, an extended version of the noweb
 tools is used, collectively known as noweb-enhanced.  They consist of
-the following executables, which still depend on NoWeb 2.x being
+the following executables, which still depend on noweb 2.x being
 installed:
 \begin{itemize}
 \item [[notangle-enh]] is a replacement for [[notangle]].  It is, in
@@ -5406,7 +5406,7 @@ extensions.
 the extensions.
 \item [[nw-enh-preidx]] is a filter to be added to [[noweave]] using
 its [[-filter]] option before indexing options.  It takes an optional
-list of NoWeb files as its argument; this should be the full list of
+list of noweb files as its argument; this should be the full list of
 files (optionally excluding the one being weaved) used for tangling.
 \item [[nw-enh-postidx]] is a filter to be added to [[noweave]] using
 its [[-filter]] option after indexing options.
@@ -5425,7 +5425,7 @@ these may be set on a per-target basis in GNU make.
 is the enhanced version described above.
 \item [[NOTANGLE_OPTS]] sets additional command-line options.
 Normally, this would be used to set [[-t8]] for files needing tabs.
-This can also be used to add more filters to the NoWeb pipeline.
+This can also be used to add more filters to the noweb pipeline.
 \item [[NOTANGLE_POSTPROC]] is a shell pipeline to be appended to the
 tangle process.  It must begin with the pipe symbol (|).  Generally,
 assignment should be done using [[+=]] rather than [[=]] in order to
@@ -5454,7 +5454,7 @@ $(MY_SUID_SCRIPTS): $(NOWEB) $(NOTANGLE_DEP)
 @@]]
 \end{quote}
 \end{itemize}
-\item Repeated documentation: a separate NoWeb-like macro facility which
+\item Repeated documentation: a separate noweb-like macro facility which
 only does substitutions can be used to repeat documentation in e.g. a users'
 guide in an appendix.  Such documentation chunks are delimited by
 \verb!% Begin-doc !\emph{chunk-name} and \verb!% End-doc !\emph{chunk-name}
@@ -5588,7 +5588,7 @@ together.
 to the end of each added line.  If additional processing other than simple
 extraction is required for any file, it should instead be added to
 [[<<makefile.rules>>]] as a separate rule and a dependency for the
-\texttt{misc} target.  If any plain files are not in the NoWeb source, but
+\texttt{misc} target.  If any plain files are not in the noweb source, but
 instead are distributed separately, they should instead be added to the
 [[ATTACH_EXTRA]] variable, to be attached to the documentation.  That
 variable can also be a make function taking the name of the file being
@@ -5596,7 +5596,7 @@ attached to as an argument.
 \item [[<<Plain Build Files>>]]: add plain text files to be built when
 required as a dependency; always add a backslash to the end of each
 added line.  This is not added to any explicit target.  It is merely a
-shorthand to create a rule for extracting it from NoWeb and cleaning
+shorthand to create a rule for extracting it from noweb and cleaning
 it up afterwards.  It is intended for build support files that are not
 meant to be distributed.
 \item [[<<Plain Files to Install>>]]: add plain text files to install.
@@ -5609,7 +5609,7 @@ executables; always add a backslash to the end of each added line.  Like
 \item [[<<Build Script Executables>>]]: add plain text files to build as
 executables when required; always add a backslash to the end of each
 added line.  This is not added to any explicit target.  It is merely a
-shorthand to create a rule for extracting it from NoWeb and cleaning
+shorthand to create a rule for extracting it from noweb and cleaning
 it up afterwards.  It is intended for build support files that are not
 meant to be distributed.
 \item [[<<Test Scripts>>]]: add plain text files to build as executables,
@@ -5621,7 +5621,7 @@ build for the [[test-bin]] target.  These scripts are not run, but are
 guaranteed to be built before running any tests.
 \item [[<<Additional Tests>>]]: tests that are more complicated to run
 than simple scripts.  These are makefile actions.
-\item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
+\item [[<<Build Source>>]]: add files to the noweb-free tar distribution;
 always add a backslash to the end of each added line.  In particular, any
 specially processed plain files with their own rules should be added to this
 list.
@@ -5633,7 +5633,7 @@ than scripts and C executables.
 \end{itemize}
 \paragraph{C-Specific rules}
 \begin{itemize}
-\item [[<<C Files>>]], [[<<C Headers>>]]: C files which are NoWeb
+\item [[<<C Files>>]], [[<<C Headers>>]]: C files which are noweb
 roots are automatically found, but generated files are not.  Add these
 with these chunks, terminated by a backslash.
 \item [[<<C Executables>>]]: C files are either the name of an executable
@@ -5688,7 +5688,7 @@ followed by the function name.  For example:
 \end{itemize}
 \paragraph{Boilerplate}
 \begin{itemize}
-\item [[<<Common NoWeb Warning>>]]: a boilerplate comment for the top of
+\item [[<<Common noweb Warning>>]]: a boilerplate comment for the top of
 script files; extend with [[# $]][[Id$]].
 \item [[<<Version Strings>>]]: A C string containing the version ID of all
 contributing source files; extend with [["$]][[Id$\n"]].
@@ -5705,7 +5705,7 @@ for the file are included as well, unless a comment of the form
 [[// static_proto]] is found on a line by itself; in that case, the
 static prototypes will be included there instead.
 \item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
-executables.  This includes the NoWeb warning, a portable hash-bang
+executables.  This includes the noweb warning, a portable hash-bang
 prefix, and [[use strict]].
 \end{itemize}
 \paragraph{Highlighting Assistance}
@@ -5783,7 +5783,7 @@ only; primarily for result reinsertions; not really literate despite
 claims:
 \url{http://www.stat.uiowa.edu/~rlenth/StatWeave/}).
 
-\item Plain \TeX{}: not really an option, even though NoWeb supports
+\item Plain \TeX{}: not really an option, even though noweb supports
 it.  Porting framed and listings from \LaTeX{} is beyond the scope of
 this project.  Most of the highlighters I find also expect to be used
 with \LaTeX{}.
@@ -5817,7 +5817,7 @@ bibtex once, and makeindex requires running latex and makeindex and
 also providing support for reading the .ind and formatting it correctly.
 
 \item optional automatic symbol index (requires a lot of work; the
-symbol extractor for NoWeb is way too simplistic and in fact anything
+symbol extractor for noweb is way too simplistic and in fact anything
 short of a compiler can't deal with scoping, name spaces, preprocessor
 name mangling and other issues).
 
@@ -5868,7 +5868,7 @@ documentation should have an index pointing to the API documentation,
 and code usually has an index pointing to code chunk(s).  Both types
 should be supported.  Second, the anchors should point to the
 beginning of the documentation, not the code chunk, prototype, or
-whatever.  NoWeb's rule of placing them 10 lines up is error-prone and
+whatever.  noweb's rule of placing them 10 lines up is error-prone and
 insufficient.  Implementing this makes the previous item less
 pressing, although really they are separate issues.
 
@@ -6160,7 +6160,7 @@ separate trees for each present file.  When doing tangling (and
 noroots), consider each tree separately until a result is found.  For
 weaving, use the tree containing the file being weaved.
 
-\item Generate [[<<Common NoWeb Warning>>]] and [[<<Version Strings>>]]
+\item Generate [[<<Common noweb Warning>>]] and [[<<Version Strings>>]]
 from [[<<Sources>>]].
 
 \item Generate exported prototypes into an exportable header

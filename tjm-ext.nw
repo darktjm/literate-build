@@ -38,7 +38,7 @@ are attached to the original electronic forms of this document:
 \tableofcontents
 
 \lstset{language=sed}
-<<Common NoWeb Warning>>=
+<<Common noweb Warning>>=
 # $Id$
 @
 
@@ -276,7 +276,7 @@ mfgets.o
 
 <<mfgets.h>>=
 /*
-  <<Common NoWeb Warning>>
+  <<Common noweb Warning>>
 */
 #ifndef _MFGETS_H
 #define _MFGETS_H

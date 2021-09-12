@@ -46,7 +46,7 @@ $Id$
 "$Id$\n"
 @
 
-<<Common NoWeb Warning>>=
+<<Common noweb Warning>>=
 # $Id$
 @
 
@@ -67,7 +67,7 @@ shell script and support tools.  Just before abandoning the project
 again, I was in the process of developing a second version of the
 build system which no longer used LyX (LyX was not designed as a
 programmer's editor, and it shows) but instead used a makefile and raw
-NoWeb source files.  This system still used the same support tools.
+noweb source files.  This system still used the same support tools.
 
 One of these support tools was a pretty-printer based on
 pretzel\footnote{\url{http://www.informatik.tu-darmstadt.de/BS/Gaertner/pretzel}}.
@@ -120,7 +120,7 @@ nonetheless have decided to make my own.  This is mainly because my
 own is more easily integrated into my documents.
 
 Parsing Ada code out of literate programs would require a combination Ada
-parser and NoWeb parser, making things much more complicated than necessary.
+parser and noweb parser, making things much more complicated than necessary.
 Instead, the Ada code must be extracted and passed in to the parser.
 
 This is my documentation comment extractor for ADA to \LaTeX, used by my

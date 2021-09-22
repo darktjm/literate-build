@@ -12,11 +12,12 @@
 \input{build-rcs.tex} %%% doc
 
 %%% requires build
+%%% requires parm
 %%% no-ext-ref
 
 \begin{document}
 
-\title{Syntax Highlighting Modular Build System for NoWeb (Users' Guide)}
+\title{Syntax Highlighting Modular Build System for noweb (Users' Guide)}
 \author{Thomas J. Moore}
 \input{build-ver.tex} %%% doc
 \maketitle
@@ -86,9 +87,9 @@ as well.
 others.  The only non-standard tool is tac, which can be replaced (see
 makefile.config).
 \item Perl.  Any version will probably do.
-\item Norman Ramsey's NoWeb
+\item Norman Ramsey's noweb
 (\url{http://www.eecs.harvard.edu/~nr/noweb/}).  If you wish to develop
-code using this system, you will need to understand NoWeb as well
+code using this system, you will need to understand noweb as well
 (it's not difficult).  If you don't want to generate documentation,
 you can replace the noroots command using makefile.config; a
 replacement for notangle is given below.
@@ -98,9 +99,9 @@ everything you'll ever need.  In particular, the framed package must
 be up-to-date.  Note that XeTeX is supported as well.  For PDF
 syntax highlighting, the listings package may be used.
 \item For HTML output, you can either use the simple \LaTeX{}-to-HTML
-converter included with NoWeb, or you can use tex4ht
+converter included with noweb, or you can use tex4ht
 (\url{http://www.cse.ohio-state.edu/~gurari/TeX4ht/}).
-\item For syntax highlighting in HTML using NoWeb's \LaTeX{}-to-HTML
+\item For syntax highlighting in HTML using noweb's \LaTeX{}-to-HTML
 converter, or if you are dissatisfied with the listings package, you
 will need a separate highlighter command.  Currently, GNU
 source-highlight (\url{http://www.gnu.org/software/src-highlite/})
@@ -110,7 +111,7 @@ For the latter, version 2 or version 3 is supported.
 \end{itemize}
 
 You may have been provided with a source tarball, in which case that
-should eliminate the need for NoWeb, Perl, awk, GNU sed, and others.
+should eliminate the need for noweb, Perl, awk, GNU sed, and others.
 You simply need to view and edit \texttt{makefile.config}, and then
 type \texttt{make} or \texttt{make~install}.
 

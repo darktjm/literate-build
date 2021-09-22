@@ -13,10 +13,10 @@
 
 \begin{document}
 
-\title{Syntax Highlighting Modular Build System for NoWeb}
+\title{Syntax Highlighting Modular Build System for noweb}
 \author{Thomas J. Moore}
 % Begin-doc build-ver
-\date{Version 3.15.\RCSRevision\\\RCSDate}
+\date{Version 3.16.\RCSRevision\\\RCSDate}
 % End-doc build-ver
 \maketitle
 
@@ -26,22 +26,15 @@ This document describes, implements, and is built using a modular ``literate
 programming%
 \footnote{\url{http://www.literateprogramming.com/articles.html}
 is a good starting point.}%
-'' build system with syntax highlighting, based on Norman Ramsey's NoWeb%
+'' build system with syntax highlighting, based on Norman Ramsey's noweb%
 \footnote{\url{http://www.eecs.harvard.edu/~nr/noweb/}}%
 , GNU%
 \footnote{\url{http://www.gnu.org}}%
  make, and a number of other freely available support tools.
 
-This document is \copyright{} 2003--2013 Thomas J. Moore.  This
-document is licensed under the Apache License, Version 2.0 (the
-``License''); you may not use this document except in compliance with
-the License. You may obtain a copy of the License at
-\url{http://www.apache.org/licenses/LICENSE-2.0}.  Unless required by
-applicable law or agreed to in writing, software distributed under the
-License is distributed on an ``AS IS'' BASIS, WITHOUT WARRANTIES OR
-CONDITIONS OF ANY KIND, either express or implied. See the License for
-the specific language governing permissions and limitations under the
-License. 
+This document, its contents and all prior versions published by the
+same author are granted to the Public Domain in 2021 by Thomas J.
+Moore.
 
 \end{abstract}
 
@@ -108,7 +101,7 @@ source languages may increase as well.  Current common public
 documentation standards also require a system which produces at least
 HTML and PDF output.  After long searching, I have not found any
 systems which meet these requirements. Instead, the closest is the
-NoWeb package%
+noweb package%
 \footnote{In particular, version 2.  Version 3 is available and
 functional, but has been in ``alpha'' for many years, has a different
 command syntax, and is missing a few important bits (like the style
@@ -128,7 +121,7 @@ makefile is used instead.  This allows use of implicit rules and the
 system-wide [[CC]] and [[CFLAGS]] defaults.  The default chunk is set to the
 makefile, requiring no chunk name to extract.
 % Begin-doc build-doc
-To build, place the NoWeb source files into their own directory (optionally
+To build, place the noweb source files into their own directory (optionally
 extracting them from the document you are reading first), extract the
 makefile, and make using GNU make:
 
@@ -176,7 +169,7 @@ On the other hand, to avoid having to modify this file after cleaning,
 The makefile is for building the support files, executable binaries, and
 printable source code (HTML and PDF), maybe installing them, and cleaning up
 afterwards. Configuration information, variable definitions, and
-miscellaneous rules are extracted from not only this NoWeb file, but also
+miscellaneous rules are extracted from not only this noweb file, but also
 any others that use it. The makefile itself can be used to include that
 information, but to simplify makefile extraction, all of that information is
 kept in separate files.  Modules that wish to extend the makefile can do so
@@ -216,14 +209,14 @@ the existence of a non-empty [[$(MAKEPP_VERSION)]].
 <<makefile>>=
 # See makefile.config for variables to override
 # Put local config in makefile.config or makefile.config.local
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 # default rule
 all: misc bin doc
 
 ifneq ($(MAKEPP_VERSION),)
 # not much point, since it doesn't filter out #line directives
-# and therefore most changes to NoWeb source will result in file changes
+# and therefore most changes to noweb source will result in file changes
 signature c_compilation_md5
 endif
 
@@ -256,9 +249,9 @@ misc: $(MISC_FILES)
 -include makefile.rules
 @
 
-<<Common NoWeb Warning>>=
+<<Common noweb Warning>>=
 # GENERATED FILE:  DO NOT EDIT OR READ THIS FILE
-# Instead, read or edit the NoWeb file(s) from which this was generated,
+# Instead, read or edit the noweb file(s) from which this was generated,
 # listed below.  Copyright notice and license terms can be found there.
 # $Id$
 @
@@ -270,7 +263,7 @@ $Id$
 
 \lstset{language=make}
 <<makefile.rules>>=
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 install: misc bin
 	@for x in $(EXEC_FILES); do set -e; \
 	  echo "install $(DESTDIR)$(BIN_DIR)/$$x"; \
@@ -294,7 +287,7 @@ distclean: clean
 # Configuration parameters
 # Change here only if:
 #  - you do not use makepp (makepp will overwrite on every make)
-#  - you do not modify the NoWeb sources (otherwise even GNU make overwrites)
+#  - you do not modify the noweb sources (otherwise even GNU make overwrites)
 # Better to copy to makefile.config.local and make changes there.
 # You can, of course, also specify overrides on the command line
 
@@ -316,7 +309,7 @@ BIN_DIR:=$(prefix)/bin
 @
 
 <<makefile.vars>>=
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 MAKEFILES = makefile makefile.config makefile.vars makefile.rules
 EXEC_FILES = <<Executables>>
 
@@ -385,7 +378,7 @@ rm -f makefile
 @
 
 Generating the other files requires the ability to correctly assemble them
-from all the other NoWeb files.
+from all the other noweb files.
 
 <<makefile.config>>=
 # The name of the source files
@@ -406,7 +399,7 @@ From these files, an order of building must be derived.  This is done using
 a dependency tree created from special comments in the source files.  These
 comments are at the beginning of a line, and are of the form
 \texttt{\%\%\% requires \emph{X}}, where \emph{X} is either the name of a
-NoWeb file or the name with the \texttt{.nw} removed.  An explicit
+noweb file or the name with the \texttt{.nw} removed.  An explicit
 \verb|\input{|\emph{X}\verb|.nw| creates a dependency as well.
 Top-level build files are those on which no others depend.  The tree
 order consists of the top-level files, followed by their direct
@@ -505,7 +498,7 @@ prtree:
 	@echo Order: $(NOWEB_ORDER)
 @
 
-So, to generate a file, all of these NoWeb files are concatenated, in
+So, to generate a file, all of these noweb files are concatenated, in
 reverse order, and passed into [[notangle]].  The makefile components in
 particular need to be checked for errors in mostly the same way as the main
 makefile.
@@ -619,7 +612,7 @@ NOROOTS=noroots
 @
 
 In fact, when building just the code, it is likely that the only part
-of NoWeb required is [[notangle]].  However, with the extensions of
+of noweb required is [[notangle]].  However, with the extensions of
 the next section (in particular parameterized chunks), a simple
 replacement (as provided in previous versions of this document) is not
 possible.
@@ -627,11 +620,11 @@ possible.
 \subsection{Additional Features}
 
 It may also be useful to build a tar file for building on systems where
-NoWeb is not present.  This is meant to be a convenience, for building
+noweb is not present.  This is meant to be a convenience, for building
 binaries only, and not for distribution.  That means neither the source
 documentation nor any means to build the source documentation will be
 included.  Since it is not possible to distinguish between soft links
-created for building and soft links to other NoWeb files, no attempt will be
+created for building and soft links to other noweb files, no attempt will be
 made to force link dereferencing, either.
 
 <<makefile.rules>>=
@@ -676,11 +669,11 @@ echo " Lines: $$tl:"; \
 echo "  $$cl code, $$((tl-bl-hl-cl)) doc, $$hl hidden, $$bl blank";
 @
 
-Finally, there is a rule to check the consistency of the NoWeb source.
+Finally, there is a rule to check the consistency of the noweb source.
 Checking the list of chunks which are not specifically referenced
 requires human intervention, so all root chunks are printed out for
 review.  The list of missing chunks should always be accurate, though.
-The terminating [[@]] for code chunks isn't required by the NoWeb
+The terminating [[@]] for code chunks isn't required by the noweb
 syntax when writing multiple consecutive code chunks, but it is
 required by some of the document converters.  In addition, if it is
 not followed by a blank line, the weaver will likely produce invalid
@@ -1281,7 +1274,7 @@ really need to come last.
 
 <<Common C Warning>>=
 /*
-  <<Common NoWeb Warning>>
+  <<Common noweb Warning>>
 */
 @
 
@@ -1347,9 +1340,9 @@ __declspec(selectany) const char *global_version_id_string = version_id;
 "$Id$\n"
 @
 
-\section{NoWeb Enhancements}
+\section{noweb Enhancements}
 
-NoWeb's tangler has a simple syntax and usage, but suffers from the
+noweb's tangler has a simple syntax and usage, but suffers from the
 lack of a few features.  Sometimes, files should not end in a newline,
 but notangle always adds one.  Also, sometimes, consecutive chunks
 should not be separated by newlines, but again, notangle always adds
@@ -1367,1126 +1360,142 @@ addition, there are some languages which lack a preprocessor.  As
 such, the original Web system had macros with arguments, and I would
 like something similar.
 
-I propose the following syntax changes:
+I used to provide both enhancements here, in the form of a tangler, a
+weaving filter, and a [[noroots]] replacement.  I then adapted the
+tangler as a filter, as well, and distributed that part separately.  I
+have made some major changes, and do not wish to develop this in two
+different places and slightly differently in each any more, so I now
+defer to [[parms.nw]] for documentation and development of the
+parameterized chunks, and only develop the rather simple no-newline
+filter here.
 
 % Begin-doc nw-enh-syntax
-\begin{itemize}
-
-\item A star (*) at the start of the name used in a chunk definition
-line indicates trailing newline suppression, if the chunk name is not
-identical to star (i.e., the default chunk).  This star is removed to
-obtain the real chunk name being defined.  The final newline of a
-chunk reference expansion is always suppressed, so this only affects
-the final newline of a file and the newline between chunk extensions.
-For example:
-\begin{quote}
-\begin{verbatim}
-@<<*chunk>>=
-text
-@@
-@<<chunk>>=
-text2
-@@
-@<<*chunk>>=
-text3
-@@
-\end{verbatim}
-\end{quote}
-When \texttt{chunk} is extracted, the text will not have a trailing
-newline (due to the final star), and there will be no newline between
-[[text]] and [[text2]] (due to the first star).
-
-\item A chunk name used in a chunk definition line may contain
-parameter definitions in parentheses.  All parameter names begin with
-an at-sign (@).  The only characters forbidden in parameter names are
-close-parentheses and invalid NoWeb syntax.  Thus the parameter name
-is terminated by its closing parenthesis.  parameter definition syntax
-within in-line code is ignored.
-
-For example:
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg1) with -(@arg2)- (but not @[[(@arg3)]])>>=
-text
-@@
-\end{verbatim}
-\end{quote}
-
-The parameters are [[@arg1]] and [[@arg2]].
-
-\item No chunk name may begin with an at-sign (@).  That is, the names
-starting with an at-sign are reserved for parameter names.
-
-\item Chunk references beginning with an at-sign (@) expand to the
-parameter with that name, as defined by the closest parent taking a
-parameter of that name.  When weaved, such references are not linked
-anywhere, and they are not added to the index.  When tangled, the
-[[-L]] option is ignored.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-text @<<@arg>>
-@<<other>>
-@@
-@<<macro2 (@arg)>>=
-text2 @<<@arg>>
-@<<other>>
-@@
-@<<other>>=
-@<<@arg>>
-@@
-\end{verbatim}
-\end{quote}
-
-When expanded within [[macro]], both [[@arg]] and [[other]] will
-expand to [[macro]]'s argument.  When expanded within [[macro2]], both
-[[@arg]] and [[other]] will expand to [[macro2]]'s argument.
-
-\item A chunk reference consisting of the name of a chunk taking
-parameters, with all parameter references replaced by NoWeb in-line
-code segments, represents an expansion of the reference with the
-parameters taking the value of the code within the in-line code
-segments in their respective positions.  No expansion is done within
-the code segments except for parameter references; these may be used
-to pass parameters on to another chunk.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-text @<<@arg>>
-@@
-@<<macro2 (@arg)>>=
-@<<macro @[[and @<<@arg>>]]>>
-@@
-@<<macro3 (@arg)>>=
-@<<macro4>>
-@@
-@<<macro4>>=
-can reference @<<@arg>> of macro3.
-@@
-@<<caller>>=
-text @<<macro @[[text2]]>> @<<macro2 @[[text3]]>>
-@<<macro3 @[[text4]]>>
-@@
-\end{verbatim}
-\end{quote}
-
-The [[caller]] chunk expands to
-
-\begin{quote}
-\begin{verbatim}
-text text text2 text and text3
-can reference text4 of macro3. &text1
-\end{verbatim}
-\end{quote}
-
-\item When more than one parameterized chunk could be used to replace
-a reference, the one with the least parameter replacements is chosen.
-For equal numbers, the one which does not contain the earliest
-parameter replacement is chosen.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg1) and (@arg2)>>=
-text @<<@arg1>> blah @<<@arg2>>
-@@
-@<<macro @[[1]] and (@arg)>>=
-text blah blah @<<@arg>>
-@@
-@<<macro (@arg) and @[[2]]>>=
-text blah blah blah @<<@arg>>
-@@
-@<<*>>=
-@<<macro @[[a]] and @[[b]]>> -- one blah
-@<<macro @[[1]] and @[[b]]>> -- two blahs
-@<<macro @[[a]] and @[[2]]>> -- three blahs
-@<<macro @[[1]] and @[[2]]>> -- two blahs and a warning
-@@
-\end{verbatim}
-\end{quote}
-
-\item For literal text matching, all passed-on variable references are
-expanded first.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-1 @<<@arg>>
-@@
-@<<macro @[[x y]]>>=
-1 z
-@@
-@<<macro2 (@arg)>>=
-@<<macro [[x @<<@arg>>]]>>
-@@
-@<<*>>=
-@<<macro2 @[[x]]>> -- 1 x x
-@<<macro2 @[[y]]>> -- 1 z
-@@
-\end{verbatim}
-\end{quote}
-
-\end{itemize}
+My proposed syntax for suppressing newlines at the end of a chunk
+expansion is to prefix the chunk name with a star (*).  This of course
+excludes a star by itself (the default chunk).
 % End-doc nw-enh-syntax
 
 \subsection{Tangling}
 
-Rather than create a new tangler, the NoWeb pipeline is used.  Also,
-rather than modifying the NoWeb tangler, a new one is developed from
-scratch.  While it is possible to write this as a filter, doing so is
-extremely expensive and only buys the ability to use the standard
-pipeline of both version 2 and 3.  Since 3 is permanently alpha, I
-don't really care about that.
+The newline removal filter is simple: look for definitions with
+leading stars, strip the star, and then also strip the final [[@nl]]
+directive just before the [[@end code]] which terminates the chunk
+definition.  In order to keep line numbers accurate, the [[@nl]] is
+re-inserted after the chunk.  Since it's so simple, I just use [[sed]]
+for now.
 
-While I would prefer to write this in C, there are valid arguments for
-writing this in perl instead%
-\footnote{On the other hand, C++ provides most of the needed functionality in
-the standard template library, so perhaps one day I will rewrite this
-in C++.}%
-.  If I use C, I will either have to develop some string processing
-and hash table routines, or I will have to use an existing library,
-such as GLib.  While I am not too concerned about non-POSIX systems,
-regular expression support is not necessarily present on non-POSIX
-systems, either, unless something like GLib is used.  The problem with
-GLib is that it is not as commonly available as perl, and is also not
-consistently easy to find (e.g. [[pkg-config]] is not universally
-available, and the token for [[GLib]] is inconsistent), and requires
-work to ensure that the correct versions are available.  In contrast,
-as long as I do not use any esoteric libraries or advanced features,
-perl should word with most installations without too much trouble.  A
-simple tangler was already developed in a previous section, but that
-tangler did not support any of the extensions, or the [[-L]] option.
-It also parsed the file directly, rather than using the NoWeb pipeline
-format.
-
-\lstset{language=perl}
-<<Common Perl Prefix>>=
+\lstset{language=sh}
+<<nt-nonl>>=
 #!/bin/sh
-#!perl
-<<Common NoWeb Warning>>
-eval 'exec perl -x -f "$0" "$@"'
-  if 0;
-
-use strict;
+<<Common noweb Warning>>
+sed -e '
+  /^@defn \*./ {
+    s/\*//
+   :a
+    n
+    /^@end code$/b
+    /^@nl$/!ba
+   :b
+    N
+    /\n@nl$/bb
+    /\n@end code /!ba
+    s/@nl\n//;s/$/\n@nl/
+  }'
 @
 
-<<nt-enh>>=
-<<Common Perl Prefix>>
-
-<<Parse [[nt-enh]] options>>
-
-<<Gather code chunks from NoWeb pipeline>>
-
-<<Expand and output requested chunk with extensions>>
-@
-
-The only possible arguments are the option flags.  These are [[-R]]
-(the chunk to extract), [[-t]] (tab expansion), and [[-L]] (line
-directive insertion).
-
-<<Parse [[nt-enh]] options>>=
-my $chunk = '*'; my $tab = 0; my $line;
-
-while($#ARGV >= 0) {
-  if($ARGV[0] =~ /^-R(.*)/) {
-    $chunk = $1;
-  } elsif($ARGV[0] =~ /^-t(.*)/) {
-    $tab = $1;
-    $tab = 0 if $tab eq "";
-  } elsif($ARGV[0] =~ /^-L(.*)/) {
-    $line = $1 eq '' ? '#line %L "%F"%N' : $1;
-  } else {
-    print STDERR "Unknown option $ARGV[0]\n";
-    exit 1;
-  }
-  shift @ARGV;
-}
-@
-
-Gathering code chunks is completely different from the raw
-[[notangle]] replacement.  Basically, it is a duplication of the
-original notangle code, converted to perl.  The only change (other
-than the internal representation) is that the initial star is stripped
-and stored separately.
-
-The internal representation is as follows:  [[%chunks]] is a hash
-whose index is the chunk name.  Each entry in [[%chunks]] is an array.
-Each array element is corresponds to (possibly empty) text followed by
-a (possibly empty) chunk reference.  The file and line number are
-stored as well, along with the no-newline flag.  These are stored in a
-hash, whose index name is [[text]], [[ref]], [[file]], [[line]], and
-[[nonl]], respectively.  Since the reference, if present, is at the
-end of the text, the end position is saved as well ([[refline]]).
-
-<<Gather code chunks from NoWeb pipeline>>=
-my $lineno = 1; my $file = '<stdin>';
-<<Other code chunk gathering globals>>
-while(<>) {
-  OUT: {
-    do {
-      <<Skip over non-code, counting lines>>
-    } while(<>);
-  }
-  last if eof;
-  <<Read chunk into hash table>>
-}
-@
-
-<<Skip over non-code, counting lines>>=
-if(/^\@fatal( |$)/) {
-  exit 1;
-} elsif(/^\@(index |)nl( |$)/) {
-  $lineno++;
-<<Adjust code chunk line/file based on directives>>
-} elsif(/^\@begin code( |$)/) {
-  last OUT;
-}
-@
-
-<<Adjust code chunk line/file based on directives>>=
-} elsif(/^\@file (.*)$/) {
-  $file = $1;
-  $lineno = 1;
-} elsif(/^\@line (.*)$/) {
-  $lineno = $1 - 1;
-@
-
-<<Other code chunk gathering globals>>=
-my (%chunks, %parmchunks);
-@
-
-<<Read chunk into hash table>>=
-while(<>) {
-  if(/^\@text( |$)/) {
-    print STDERR "Invalid pipeline (defn) $_\n";
-    exit 1;
-  }
-  last if(/^\@defn /)
-}
-last if eof;
-m/^\@defn (\*)?(.*)/;
-my $chunkname = $2; my $hasstar = $1;
-if($hasstar and $chunkname eq '') {
-  $hasstar = undef;
-  $chunkname = '*';
-}
-if(/^\@defn (\*)?\@/) {
-  print STDERR "$file:$lineno: initial \@ is reserved for parameter names\n";
-  exit 1;
-}
-if(<> !~ /^\@nl( |$)/) {
-  print STDERR "Invalid pipeline (defn nl) $_\n";
-  exit 1;
-}
-++$lineno;
-my %curchunk;
-<<Clear [[%curchunk]]>>
-while(<>) {
-  last if(/^\@end code( |$)/);
-  if(/^\@nl( |$)/) {
-    $curchunk{'text'} .= "\n";
-    $lineno++;
-  } elsif(/^\@index nl( |$)/) {
-    $lineno++;
-  } elsif(/^\@text ?(.*)$/) {
-    $curchunk{'text'} .= $1;
-  } elsif(/^\@use (.*)$/) {
-    $curchunk{'ref'} = $1;
-    $curchunk{'refline'} = $lineno;
-    <<Add [[$chunkname]] to chunk table>>
-    <<Clear [[%curchunk]]>>
-  <<Adjust code chunk line/file based on directives>>
-  } elsif(!/^\@index( |$)/) {
-    print STDERR "$file:$lineno:  Invalid code chunk\n";
-    exit 1;
-  }
-}
-<<Add [[$chunkname]] to chunk table>>
-@
-
-<<Add [[$chunkname]] to chunk table>>=
-$chunks{$chunkname} = [] unless(@chunks{$chunkname});      
-push @{$chunks{$chunkname}}, {%curchunk};
-@
-
-<<Clear [[%curchunk]]>>=
-%curchunk = (text => "", file => $file, line => $lineno, nonl => $hasstar);
-@
-
-In order to make matching parameterized expansions with the
-appropriate definition easier, a separate hash which associates a
-stripped version of the name with all unstripped versions that might
-match is built as well.
-
-The stripping converts all potential in-line code in a reference to
-the same string ([[(@)]]).  In-line code may match in-line code in the
-definition name, or parameter definitions in the in-line name. While I
-would normally use a simple loop with bracket tracking to determine
-the in-line code boundaries and whether or not the brackets are
-correct, a single recursive regular expression is used instead.
-
-References are stripped the same way, even though parameter
-definitions are technically not allowed.  This supports any legacy
-chunks that have syntax that looks like parameterization.  Literal
-matches at any position are considered good, but do not cause any
-parameter assignment.
-
-The [[%parmchunks]] hash is indexed on the stripped name, and each
-element is a hash indexed on every chunk name that strips to the
-index.  The element need not necessarily be a hash; the hash is just
-an easy way to maintain a list without duplicates. [[keys %parmchunks]]
-is actually the array we're interested in.
-
-<<[[strip_chunkname]]>>=
-# note: $parm_re's first capture group is the parameter
-#       $parm_re's second cpature group is for recursion (ignore!)
-my $parm_re = '(\(\@[^)]*\)|(?<!@)\[\[((?:[^][]|\[(?-1)\])*)\]\])';
-sub strip_chunkname($)
-{
-  my $n = shift;
-  $n =~ s/$parm_re/(@)/g;
-  return $n;
-}
-@
-
-<<Other code chunk gathering globals>>=
-<<[[strip_chunkname]]>>
-@
-
-<<Add [[$chunkname]] to chunk table>>=
-my $strip = strip_chunkname $chunkname;
-$parmchunks{$strip} = {} if not $parmchunks{$strip};
-${$parmchunks{$strip}}{$chunkname} = 1;
-@
-
-The expansion of a chunk simply outputs the text portions, and
-recursively expands the reference portions.  It would be possible to
-do this all in one loop, like was done with the simpler notangle
-replacement, but there is little advantage:  the stack required for
-recursion would simply be emulated by the array of text and
-references.  In order to prevent infinite recursion, a hash of
-in-progress expansions is kept; an attempt to expand something already
-in the array raises an error.
-
-The final newline of every expansion but the last is suppressed.  I
-believe notangle actually strips out every last newline, but then
-forcibly adds one to the root node.  This is not a bad policy; the
-only modification is to retain the starred flag of the last chunk of
-the root node, so the final newline can be suppressed as well.
-
-The expansion routine only needs to know what chunk reference to
-expand, and how much to indent it.  The chunk reference may or may not
-include actual parameters for a parameterized chunk.  It needs to
-return the last no-newline flag in case it's the root node.
-
-<<Expand and output requested chunk with extensions>>=
-$file='cmdline';
-$lineno = 0;
-expand_chunk($chunk, '') or print "\n";
-@
-
-<<Expand and output requested chunk with extensions>>=
-my %in_progress;
-sub expand_chunk($$) {
-  my ($name, $indent) = @_;
-  my $nonl;
-  <<Expand chunk [[$name]] and indent it by [[$indent]]>>
-  return $nonl;
-}
-@
-
-The name of the chunk to expand is either identical to an existing
-definition, or it might be a parameter expansion, or it might be a
-parameterized expansion.  The parameter expansions can most easily be
-dealt with by adding them to the [[%chunks]] table, so both of the
-first two cases can be checked the same way.  A lookup failure then
-causes the third case to be considered.  The third case actually
-searches for the \emph{best} parameter expansion, as defined by the
-rules.  Since the chunk name needs to be parsed in order to match
-potential definitions anyway, the argument associations can be
-extracted at the same time.
-
-<<Other code chunk gathering globals>>=
-<<[[find_best_def]]>>
-@
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my ($basename, %argv);
-my $chunk = $chunks{$basename = $name};
-unless($chunk) {
-  # parameters cannot have parameters, so error out immediately
-  if($name =~ /^\@/) {
-    print STDERR "$file:$lineno: undefined parameter: $name\n";
-    return 1; # nothin generated; suppress newline
-  }
-  ($basename, %argv) = find_best_def("$file:$lineno: ", $basename);
-  $chunk = $chunks{$basename} if $basename;
-}
-unless($chunk) {
-  print STDERR "$file:$lineno: undefined chunk name: @<<$name@>>\n";
-  return 1; # nothing generated; suppress newline
-}
-if($in_progress{$basename}) {
-  print STDERR "$file:$lineno: cyclic expansion $basename\n";
-    exit 1;
-}
-@
-
-To find out if this is a parameterized chunk reference, all
-definitions are searched for possible matches.  The stripping function
-actually limits the search to definitions which allow in-line code
-in the same positions as the in-line code of the reference.
-
-<<[[find_best_def]]>>=
-sub find_best_def($$) {
-  my ($loc, $curchunk) = @_;
-  my $pchunks = $parmchunks{strip_chunkname $curchunk};
-  return if not $pchunks;
-  <<Find best definition match for [[$curchunk]]>>
-}
-@
-
-Each possible expansion is checked, keeping the best.  As mentioned
-above, the parameter symbol definitions are extracted at the same time.
-
-<<Find best definition match for [[$curchunk]]>>=
-my ($best, %best_parms);
-<<Prepare for finding best definition match>>
-PCHUNK: foreach my $may (keys %$pchunks) {
-  my %may_parms;
-  <<Check [[$may]] and collect parameter defs into [[%may_parms]]>>
-  <<[[next PCHUNK]] if [[$may]] is not best>>
-  $best = $may;
-  %best_parms = (%may_parms);
-  <<Save additional best info about [[$may]]>>
-}
-<<Finish up after finding best definition match>>
-return ($best, %best_parms);
-@
-
-Checking for a match involves simultaneously iterating over the replaced
-portions of the names.  If the replaced portion of both names matches,
-it's considered a match (even if both are in the parameter definition
-form, although perhaps that should be an error).  If they do not
-match exactly, they still match if the definition side is in parameter
-definition form, and the usage side is in literal code text form.
-
-<<Check [[$may]] and collect parameter defs into [[%may_parms]]>>=
-<<Prepare to check if definition matches>>
-my $mayrest = $may;
-my $currest = $curchunk;
-while($mayrest =~ /$parm_re(.*)/) {
-  <<Prepare for resolving ambiguity per match>>
-  my $mayp = $1;
-  $mayrest = $3;
-  $currest =~ /$parm_re(.*)/;
-  my $curp = $1;
-  $currest = $3;
-  next if $curp eq $mayp;
-  next PCHUNK if substr($mayp, 0, 1) eq "[" ||
-                 substr($curp, 0, 1) eq "(";
-  <<Store parameter [[$curp]] in [[$mayp]]>>
-}
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-$may_parms{substr($mayp, 1, -1)} = substr($curp, 2, -2);
-@
-
-To resolve ambiguity, the name with the fewest substitutions is
-retained.
-
-<<Prepare for finding best definition match>>=
-my $best_len = length $curchunk; # larger than all possible lengths
-@
-
-<<Prepare to check if definition matches>>=
-my $len = 0;
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-$len++;
-@
-
-<<[[next PCHUNK]] if [[$may]] is not best>>=
-next PCHUNK if $len > $best_len;
-@
-
-<<Save additional best info about [[$may]]>>=
-$best_len = $len;
-@
-
-If two names have an equal number of substitutions, the one which has
-in-line code at the first position where the two differ is chosen, and
-a warning is issued.  If two names have an equal number of
-substitutions, and all are in the same places, then there is an
-unresolvable ambiguity, leading to error exit.
-
-<<Prepare for finding best definition match>>=
-my @best_parms_loc;
-my (@ambig, $bad_ambig);
-@
-
-<<Prepare to check if definition matches>>=
-my @may_parms_loc;
-my $parm_loc = 0;
-@
-
-<<Prepare for resolving ambiguity per match>>=
-$parm_loc++;
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-push @may_parms_loc, $parm_loc;
-@
-
-<<[[next PCHUNK]] if [[$may]] is not best>>=
-if($len == $best_len) {
-  $ambig[0] = $best if $#ambig == 0;
-  push @ambig, $may;
-  my $i;
-  for($i = 0; $i <= $#may_parms_loc; $i++) {
-    next PCHUNK if $may_parms_loc[$i] < $best_parms_loc[$i];
-    last if $may_parms_loc[$i] > $best_parms_loc[$i];
-  }
-  $bad_ambig = 1 if $i == $#may_parms_loc + 1;
-  if($bad_ambig) {
-    $best = undef;
-    next PCHUNK;
-  }
-} else {
-  @ambig = undef;
-  $bad_ambig = undef;
-}
-@
-
-<<Save additional best info about [[$may]]>>=
-@@best_parms_loc = (@may_parms_loc);
-@
-
-<<Finish up after finding best definition match>>=
-if($#ambig > 0) {
-  print STDERR $loc;
-  print STDERR "fatal: unresolvable " if $bad_ambig;
-  print STDERR "ambiguous expansion of @<<$curchunk@>>:\n";
-  foreach my $may (@ambig) {
-    print STDERR "  @<<$may@>>";
-    print STDERR " (chosen)" if $may eq $best;
-    print STDERR "\n";
-  }
-  exit 1 if $bad_ambig;
-}
-@
-
-Parameter substitution supports parameter references in values, as
-well.  Rather than deal with this at every expansion time, the
-parameters are substituted immediately.  As mentioned above, the
-[[%chunks]] table is used to store parameter values as well.  This
-could be expanded with a recursive call to full reference expansion,
-but since parameters are always nothing more than a single, simple
-text string, and I don't want to do [[#line]] processing on that
-string, it is expanded directly.  This needs to be done before the new
-symbol values are placed in [[%chunks]].
-
-In fact, it is possible that [[$basename]] is not yet the best choice
-for a chunk.  If a parameter substitution becomes literal text that
-matches a different chunk name, [[$basename]] may need to be switched.
-This check is only performed if any changes were made due to parameter
-substitution.
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my $changed_name;
-my $new_name = $name;
-foreach my $arg (keys %argv) {
-  my $v = '';
-  my $vrest = $argv{$arg};
-  while($vrest =~ /(.*?)@<<(@.*?)(?<!@)@>>(.*)/) {
-    my $pv = $chunks{$2};
-    $v .= $1 . ${$$pv[0]}{'text'};
-    $vrest = $3;
-  }
-  $v .= $vrest;
-  if($v ne $argv{$arg}) {
-    # $argv{$arg} = $v; # reset by find_best_def anyway
-    $new_name =~ s/(?<!@)\[\[\Q$argv{$arg}\E\]\]/[[$v]]/;
-    $changed_name = 1;
-  }
-}
-if($changed_name) {
-  # find better match if var replacements were made
-  ($basename, %argv) = find_best_def("$file:$lineno: ", $new_name);
-  $chunk = $chunks{$basename} if $basename;
-  if($in_progress{$basename}) {
-    print STDERR "$file:$lineno: cyclic expansion $basename\n";
-      exit 1;
-  }
-}
-@
-
-Now that there is a valid chunk name and parameter list, formal
-parameters can be assigned values.  Since the values need to be
-restored after this chunk has been expanded, the old values are
-retained in [[%revert]].
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my %revert;
-foreach my $arg (keys %argv) {
-  $revert{$arg} = $chunks{$arg};
-  my %v = (file => $file, line => $lineno, text => $argv{$arg});
-  $chunks{$arg} = [\%v];
-}
-<<Perform chunk reference expansion using new parameter values>>
-my ($v, $old);
-$chunks{$v} = $old while(($v, $old) = each %revert);
-@
-
-Next, the text is written to the output, and any references are
-recursively expanded.  Before printing any non-blannk text, a line
-directive is printed, if enabled.  The end of any chunk piece is
-indicated by the lack of a reference (there is always at least a
-trailing newline, even if the last text in the piece was a reference).
-These ends are the places to honor the no-newline flag.  The very last
-one must be detected using an index loop (there doesn't appear to be a
-way to detect the last array element when using a [[foreach]]-style
-iterator); this last piece of text always has its trailing newline
-stripped.
-
-Indentation is performed by finding the current column at expansion:
-take the text of the line to date and convert non-space characters to
-spaces.  This is suppressed when line directives are generated, just
-like notangle.  Ramsey states that when line directives are generated,
-column numbers match the original code.  In order for the first line
-after a reference expansion to meet this requirement, it has to be
-indented to the column after the chunk reference text.  This
-indentation is built into [[$tindent]], which is always reset to
-empty after indenting.
-
-<<Perform chunk reference expansion using new parameter values>>=
-$in_progress{$basename} = 1;
-my $tindent = '';
-my $l = $line;
-my $was_parmref;
-for(my $i = 0; $i <= $#$chunk; $i++) {
-  my $piece = $$chunk[$i];
-  my $text = $$piece{'text'};
-  if($line and $text ne '') {
-    <<Print notangle line directive>>
-  }
-  $line = $l;
-  my $ref = $$piece{'ref'};
-  if($ref) {
-    my $rindent = $indent;
-    unless($line) {
-      my $lastnl = rindex($text, "\n");
-      if($lastnl >= 0) {
-        $rindent .= substr($text, $lastnl + 1);
-      } else {
-        $rindent .= $text;
-      }
-      $rindent =~ s/\S/ /g;
-    }
-    <<Adjust chunk indentation and print [[$text]]>>
-    # assume @x is short, and avoid #line mangling
-    $was_parmref = (substr($ref, 0, 1) eq '@');
-    $line = undef if $was_parmref;
-    print "\n" if($line and $text ne "" and substr($text, 1) ne "\n");
-    $file = $$piece{'file'};
-    $lineno = $$piece{'refline'};
-    expand_chunk($ref, $rindent);
-    if($line) {
-      $tindent .= ' ' x (length($ref) + 4);
-      print "\n";
-    }
-  } else {
-    $nonl = $$piece{'nonl'};
-    # last chunk always has trailing NL suppressed
-    $text =~ s/\n\Z// if($nonl or $i == $#$chunk);
-    <<Adjust chunk indentation and print [[$text]]>>
-    $tindent = '';
-  }
-}
-$in_progress{$basename} = undef;
-@
-
-<<Adjust chunk indentation and print [[$text]]>>=
-$text =~ s/\n/\n$indent/gm;
-$text = $tindent . $text unless $was_parmref;
-if($tab > 0) {
-  if($indent ne "" or ($tindent ne "" and not $was_parmref)) {
-    while($text =~ s/^(\t*) {$tab}/$1\t/) {}
-  }
-  while($text =~ s/(\n\t*) {$tab}/$1\t/gm) {}
-}
-print $text;
-@
-
-Ramsey puts a lot more effort into managing whitespace and line
-directives, but really, this is generated code, not meant to be read
-or used directly by anyone.  As long as the line numbers are correct,
-who cares?  The main issue with not doing it exactly the same way is
-that it becomes more difficult to verify identical operation when the
-enhancements are unused.
-
-<<Print notangle line directive>>=
-my $lp; my $lt = $line;
-while($lt =~ /(.*?)%(([+-])([0-9]+)L|[%FLN])(.*)/) {
-  $lp .= $1;
-  $lt = $5;
-  if($2 eq '%') {
-    $lp .= '%';
-  } elsif($2 eq 'N') {
-    $lp .= "\n";
-  } elsif($2 eq 'F') {
-    $lp .= $$piece{'file'};
-  } else { # L
-    my $l = $$piece{'line'};
-    if($3 eq '+') {
-      $lp += $4;
-    } elsif($3 eq '-') {
-      $lp -= $4;
-    }
-    $lp .= $l;
-  }
-}
-print $lp . $lt;
-@
-
-To actually use this back end, a new wrapper script is provided.  It
-assumes that [[notangle]] is the NoWeb version, copies it, and
-replaces [[nt]] with [[nt-enh]].  This is not done because the wrapper
-is complex, but because there is no way to locate the NoWeb
-executables other than to copy them from the existing script.
-Retaining the ability to use other filter hooks seemed like a good
-idea.
-
-\lstset{language=make}
-<<Build Source>>=
-notangle-enh \
-@
-
-<<Clean temporary files>>=
-rm notangle-enh \
-@
-
-<<makefile.rules>>=
-notangle-enh: nt-enh
-	sed 's%$$LIB/nt%nt-enh%' < `which notangle` >notangle-enh
-	chmod +x notangle-enh
-@
-
-To use this with the build system everywhere except building the
+To use these with the build system everywhere except building the
 makefiles and tangling within scripts, [[$(NOTANGLE)]] should be set
 globally, except of course when building itself.  The current
 directory needs to be added first in the path in order to pick up
-[[nt-enh]].  Note that the [[nt-enh]] rule must be explicit;
+the filters.  Note that the [[nt-nonl]] rule must be explicit;
 per-target variables do not work on dependencies.
 
+\lstset{language=make}
 <<Build Source>>=
-nt-enh \
+nt-nonl <<Filters from [[parm.nw]]>>
 @
 
-<<Clean temporary files>>=
-rm nt-enh \
+<<Filters from [[parm.nw]]>>=
+nt-parm \
 @
 
 <<makefile.vars>>=
-NOTANGLE:=PATH=".:$$PATH" ./notangle-enh
-NOTANGLE_DEP:=notangle-enh
-nt-enh: NOTANGLE:=notangle
-#nt-enh: NOTANGLE_DEP:=
-nt-enh: $(NOWEB)
+NOTANGLE:=PATH=".:$$PATH" notangle -filter nt-parm -filter nt-nonl
+NOTANGLE_DEP:=nt-parm nt-nonl
+nt-nonl nt-parm: NOTANGLE:=notangle
+#nt-nonl nt-parm: NOTANGLE_DEP:=
+PARM_NOWEB = $(if $(wildcard parm.nw),parm.nw,\
+               $(patsubst %/$(BUILD_NOWEB), %/parm.nw, \
+	          $(realpath $(BUILD_NOWEB))))
+PARM_EXEC = <<Filters from [[parm.nw]]>>
+
+PARM_CPP = $(patsubst %, %.cpp, $(PARM_EXEC))
+@
+
+<<Clean temporary files>>=
+rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.cpp, $(PARM_EXEC))
+@
+
+<<makefile.rules>>=
+nt-nonl: $(NOWEB)
 	$(call NOTANGLE_CHUNK,$@) >$@
-	chmod +x nt-enh
+	chmod +x $@
+$(PARM_CPP): %.cpp: $(PARM_NOWEB)
+	notangle -R$@ $< >$@
 @
 
 \subsection{Weaving}
 
-These enhancements also require changes to the weavers.  No particular
-effort will be made to typeset things nicely.  Parameter references
-should be typeset as chunk references, but without the links (where
-would they link to?).  To do that, they need to be hidden from the
-indexer, and unhidden after the indexer.  Likewise, to get cross
-references right, references to parameterized chunks with actual
-parameters need to be converted to the definition format for the
-indexer, and then changed back afterwards.  The star prefix
-requires stripping the star before indexing, and re-adding it
-afterwards.  These tasks can be accomplished by two filters: one for
-before indexing, and one for after.
+The star prefix requires stripping the star before indexing, and
+re-adding it afterwards.  These tasks can be accomplished by two
+filters: one for before indexing, and one for after.  It hides the
+star using a new keyword.  A similar set of filters is used for
+parameter processing.
+
+<<Filters from [[parm.nw]]>>=
+nw-parm-preidx nw-parm-postidx \
+@
 
 <<Build Script Executables>>=
-nw-enh-preidx nw-enh-postidx \
+nw-nonl-preidx nw-nonl-postidx \
 @
 
-\lstset{language=perl}
-<<nw-enh-preidx>>=
-<<Common Perl Prefix>>
-
+\lstset{language=sh}
+<<nw-nonl-preidx>>=
+#!/bin/sh
+<<Common noweb Warning>>
+sed -e '
+  /^@defn \*./ {
+    s/\*//
+    s/^/@nonlstar\n/
+  }'
 @
 
-<<nw-enh-postidx>>=
-<<Common Perl Prefix>>
-
-@
-
-The pre-index filter needs to know how to interpret chunk references
-with in-line code:  either as in-line code, or as macro parameters.
-The only way to do this is to know the names of all chunks.  Since
-weaving does not require all tangling inputs, but this particular task
-does require them, any inputs not included in the weaving process must
-be specified on the filter's command line.  While it might be nice to
-use the standard markup tool for this, it is not present in noweb 3.
-Instead, the file is parsed directly, with a very limited view of what
-constitutes the start of a chunk.  This probably needs improvement.
-
-Much like the tangler's reader, each definition is placed into two
-arrays:  one indexed by its real name, and one indexed by its name
-with all parameter definitions and references stripped out.  That way,
-finding the actual chunk to use for a macro reference is easier.
-
-<<nw-enh-preidx>>=
-<<[[strip_chunkname]]>>
-
-my (%chunks, %parmchunks);
-
-foreach my $a (@ARGV) {
-#  open(my $fh, "markup $a|");
-  open(my $fh, "$a");
-  while(<$fh>) {
-#    next unless(m/^\@defn (\*)?(.*)$/);
-    next unless(m/^@<<(\*)?(.*)@>>=$/);
-    # note: don't care if '*' gets flagged correctly or not
-    $chunks{$2} = 1;
-    my $s = strip_chunkname($1);
-    $parmchunks{$s} = {} if not $parmchunks{$s};
-    ${$parmchunks{$s}}{$1} = 1;
-  }
-  close $fh;
-}
-@
-
-The filter process needs to scan the file more than once.  The first
-time, it gathers definitions just like it did for the command-line
-arguments.  For convenience, the file is just read into an array of
-plain text lines for processing.
-
-<<nw-enh-preidx>>=
-my @file = <STDIN>;
-foreach my $l (@file) {
-  next unless($l =~ m/^\@defn (\*)?(.*)$/);
-  $chunks{$2} = 1;
-  my $s = strip_chunkname($2);
-  $parmchunks{$s} = {} if not $parmchunks{$s};
-  ${$parmchunks{$s}}{$2} = 1;
-}
-@
-
-For the second pass, an attempt is made to match a chunk reference
-with a definition.  If it matches, and requires parameter expansion to
-do so, it will replace its name with the parameterized definition, and
-save its old name using [[@nwenhcall]].  The matching method is
-copied from the tangler, with minor differences.  File and line
-information are not tracked by this filter, so the location string is
-always blank.  Also, since a standalone chunk does not have parameter
-values, the specialization performed after parameter expansion in chunk
-names can't be done.  Unfortunately, there is also no special link
-between a parameterized chunk and all of its potential specializations.
-
-A leading star in an [[@defn]] is removed the same way.
-
-Parameter references are simply hidden by renaming them to
-[[@nwenhuse]].
-
-As a special hack, in order to highlight parameters better, an extra
-set of square brackets is placed around them.  This repeats some of
-the work that [[find_best_def]] does, but that's not too terrible.
-
-<<nw-enh-preidx>>=
-<<[[find_best_def]]>>
-
-foreach my $l (@file) {
-  if($l =~ /^\@use ([^@].*\[\[.*\]\].*)$/) {
-    my ($best,) = find_best_def('', $1);
-    if($best and $best ne $1) {
-      my $cur = '';
-      my ($b, $c) = ($best, $1);
-      while($b =~  /$parm_re(.*)/) {
-        my $bp = $1;
-        $b = $3;
-        $c =~ /^(.*?)$parm_re(.*)/;
-        my $cp = $2;
-        $c = $4;
-	$cur .= $1;
-	if($cp eq $bp) {
-	  $cur .= $cp;
-	} else {
-	  $cur .= '[[' . $cp . ']]';
-	}
-      }
-      $cur .= $c;
-      print "\@nwenhcall $cur\n\@use $best\n";
-    } else {
-      print $l;
-    }
-  } elsif($l =~ /^\@defn \*(.+)$/) {
-    print "\@nwenhcall *$1\n\@defn $1\n";
-  } else {
-    $l =~ s/^\@use \@/\@nwenhuse \@/;
-    print $l;
-  }
-}
-@
-
-For the third pass, done after the index, the above-added tags are
-reverted.
-
-<<nw-enh-postidx>>=
-my $nwenhcall;
-
-while(<STDIN>) {
-  if(/^\@nwenhcall (.*)$/) {
-    $nwenhcall = $1;
-  } elsif(/^\@(defn|use) / and $nwenhcall) {
-    print "\@$1 $nwenhcall\n";
-    $nwenhcall = undef;
-  } else {
-    s/^\@nwenhuse /\@use /;
-    print "$_";
-  }
-}
+<<nw-nonl-postidx>>=
+#!/bin/sh
+<<Common noweb Warning>>
+sed -e '
+  /^@nonlstar/ {
+    d
+    s/ / */
+  }'
 @
 
 \subsection{Other}
 
 This is not the end of it:  [[noroots]] (noweb-2 only) needs changes
-as well.  There is no reason to retain the pipeline for this tool, so
-it could be standalone and not depend on the markup parser.  However,
-keeping the parsing to the one official parser might be a good idea.
-The [[noroots]] script is not a simple pipeline, though:  it includes
-the entire ``backend'' in-line.  To make a replacement script, the
-library location is lifted using a trick filter in notangle.
+as well.  Rather than re-implement this from scratch, as I did in
+previous versions of this document, I simply copy the standard script
+and insert the tangling filters into the pipeline.
 
-The procedure is the same as standard [[noroots]], except that after
-collecting all usages, a pass is made over the usage array to add
-parameterized usages.
-
-<<Build Script Executables>>=
+<<Build Source>>=
 noroots-enh \
 @
 
-<<noroots-enh>>=
-<<Common Perl Prefix>>
-
-my $LIB = `notangle -filter 'echo \$LIB >&3' /dev/null 2>/dev/null 3>&1`;
-chomp $LIB;
-
-my (%chunks, %parmchunks, %use);
-
-open(my $f, "-|", "$LIB/markup", @ARGV);
-
-<<[[strip_chunkname]]>>
-
-while(<$f>) {
-  if(/^\@quote$/) {
-    while(<$f>) {
-      last if(/\@endquote$/);
-    }
-  } elsif(/^\@defn (.*)$/) {
-    $chunks{$1} = 1;
-    my $s = strip_chunkname($1);
-    $parmchunks{$s} = {} if not $parmchunks{$s};
-    ${$parmchunks{$s}}{$1} = 1;
-  } elsif(/^\@use (.*)$/) {
-    $use{$1} = 1;
-  }
-}
-
-<<[[find_best_def]]>>
-
-for my $u (keys %use) {
-  if(substr($b, 0, 1) ne '@') {
-    my ($b,) = find_best_def('', $u);
-    $use{$b} = 1 if $b;
-  }
-}
-@
-
-One major problem is that finding a new match after parameter
-expansion is no longer done.  The only way to check for these is to
-check each root, expanding any parameter references, and marking any
-newly used definitions.  This would need to be done in two passes:
-first to cover unparameterized roots, and then to cover any remaining
-parameterized roots.  Thus the entire code above would need to be
-rewritten.  Instead, a simple hack is performed: for any usage of a
-parameterizable chunk with a passed-on parameter, all possible
-specializations of that parameter are marked used as well.  This
-(along with the previous loop) may end up marking more than necessary,
-but it's probably good enough for a program that isn't really
-officially supported, anyway.
-
-<<noroots-enh>>=
-for my $u (keys %use) {
-  next if rindex($u, '@<<@') < 2;  # needs at least one parm ref in code
-  my $pchunks = $parmchunks{strip_chunkname $u};
-  next if not $pchunks ||
-       (scalar keys %$pchunks) == 0 ; # needs possible resolutions
-  my ($b, %bp) = find_best_def('', $u);
-  next if $b eq $u; # needs to resolve without specialization
-  # find possible parameters with parameter expansion
-  my %vars;
-  foreach my $v (keys %bp) {
-    $vars{$v} = 1 if index($bp{$v}, '@<<@') >= 0;
-  }
-  next if (scalar keys %vars) == 0;
-  # map vars to var positions
-  my @vpos;
-  my $brest = $b;
-  while($brest =~ /$parm_re(.*)/) {
-    my $bp = $1;
-    $brest = $3;
-    push @vpos, substr($bp, 0, 1) eq '(' && $vars{substr($bp, 1, -1)};
-  }
-  # for each possible resolution, allow anything at $u's var positions
-  # also, allow mapping of any parm to any code text
-  foreach my $pc (keys %$pchunks) {
-    next if $pc eq $b;
-    my $i = 0;
-    my $urest = $u;
-    my $prest = $pc;
-    my $matched = 1;
-    while($prest =~ /$parm_re(.*)/) {
-      my $bp = $1;
-      $prest = $3;
-      $urest =~ /$parm_re(.*)/;
-      my $up = $1;
-      $urest = $3;
-      if(substr($bp, 0, 1) eq '[') {
-        $matched = $vpos[$i] || $bp eq $up;
-      } else {
-        $matched = substr($up, 0, 1) eq '[' || $bp eq $up;
-      }
-      last if not $matched;
-      $i++;
-    }
-    $use{$pc} = 1 if $matched;
-  }
-}
-@
-
-Once that's been taken care of, the roots can be printed.
-
-<<noroots-enh>>=
-for my $d (keys %chunks) {
-  print "@<<$d@>>\n" unless $use{$d};
-}
+<<makefile.rules>>=
+noroots-enh: $(BUILD_NOWEB) nt-parm nt-nonl
+	sed 's%| awk%| ./nt-parm | ./nt-nonl &%' <`which noroots` >./noroots-enh
+	chmod +x ./noroots-enh
 @
 
 The use of [[noroots]] within the build system is pretty much limited
@@ -2511,7 +1520,7 @@ using [[noweave]], and then convert to PDF using [[pdflatex]] or
 cross references (and other things, such as [[longtable]]
 measurements) settle down.  Of course the figures need to be 
 converted to the appropriate format, too. Rules are provided for EPS,
-xfig, and dia diagrams, since they can be stored in-line in the NoWeb
+xfig, and dia diagrams, since they can be stored in-line in the noweb
 source; additional rules can be provided for other image formats.
 Once again, the use of [[$(eval)]] requires special processing for
 Makepp.
@@ -2536,7 +1545,7 @@ system, and may work on any TeX distribution which uses kpathsea.
 
 \lstset{language=make}
 <<makefile.config>>=
-# Set to non-blank if NoWeb files are UTF-8.
+# Set to non-blank if noweb files are UTF-8.
 NW_UTF8=
 
 # The LaTeX-to-PDF command to use: must be pdflatex or xelatex.
@@ -2683,13 +1692,23 @@ fi; \
 \subsection{Pretty Printing Wrapper}
 
 Or at least it should be simple, but some additional adjustments of the
-standard NoWeb process need to be made.  For one thing, NoWeb does not
+standard noweb process need to be made.  For one thing, noweb does not
 pretty-print code chunks natively, so pretty-printing the code chunks
-requires a bit of work.  A generic code chunk formatter filter for NoWeb is
+requires a bit of work.  A generic code chunk formatter filter for noweb is
 used for this.  Like all noweb filters, it just sucks in the marked up form
-of the NoWeb source and spits out the same, with modifications.  The
+of the noweb source and spits out the same, with modifications.  The
 language is tracked so that the formatter can behave differently depending
 on language.
+
+<<Common Perl Prefix>>=
+#!/bin/sh
+#!perl
+<<Common noweb Warning>>
+eval 'exec perl -x -f "$0" "$@"'
+  if 0;
+
+use strict;
+@
 
 <<Build Script Executables>>=
 nwweavefilt \
@@ -2702,9 +1721,9 @@ nwweavefilt \
 <<Initialize [[nwweavefilt]]>>
 
 while(<STDIN>) {
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   print $_; # print most lines
-  <<Process lines from NoWeb token stream>>
+  <<Process lines from noweb token stream>>
 }
 @
 
@@ -2716,9 +1735,9 @@ being used.
 my $lang = 'txt';
 @
 
-<<Process lines from NoWeb token stream>>=
+<<Process lines from noweb token stream>>=
 # [^{] is to prevent self-match
-if(/lstset{language=(?:.*\])?([^}]*)[^{]*/) {
+if(/lstset\{language=(?:.*\])?([^}]*)[^{]*/) {
   $lang = lc $1;
 }
 @
@@ -2726,11 +1745,11 @@ if(/lstset{language=(?:.*\])?([^}]*)[^{]*/) {
 A code chunk begins with the chunk name, which can be ignored.  After that,
 all lines are sucked in as part of the code, until the end of the chunk.
 
-<<Process lines from NoWeb token stream>>=
+<<Process lines from noweb token stream>>=
 if(/^\@defn/) {
   # skip @nl
   $_ = <STDIN> or last;
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   print $_;
   # accumulate code in $code
   my $code = '';
@@ -2760,7 +1779,7 @@ my @use;
 # accumulate index defns in $end
 my $end = '';
 while(<STDIN>) {
-  <<Filter lines from NoWeb token stream>>
+  <<Filter lines from noweb token stream>>
   if(/^\@text/) {
     s/^\@text //;
     s/\n//;
@@ -2788,7 +1807,7 @@ The prettifier is passed in on the command line; it takes one (additional)
 argument - the name of the current language.  It takes raw code (with
 markers for chunk references), and returns pretty code.  Steps must be taken
 by the prettifier to ensure that the markers remain intact.  The output of
-the prettifier is placed in the NoWeb stream as [[@literal]]
+the prettifier is placed in the noweb stream as [[@literal]]
 lines%
 \footnote{Ramsey says I should write a new back end for this purpose,
 and has deprecated the [[@literal]] directive for this reason. 
@@ -2879,7 +1898,7 @@ latexhl \
 
 <<latexhl>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 @
 
 Since multiple highlighters are supported, the first thing to do is
@@ -2960,7 +1979,7 @@ case $HLPROG_TYPE in
     highlight <<[[highlight]]-3 options for [[latexhl]]>> | \
       sed -n -e '<<Adjust [[highlight]]-3 \LaTeX{}>>' ;;
   source-highlight)
-    cd $HLDIR
+    <<Enter [[source-highlight]] data dir>>
     source-highlight <<[[source-highlight]] options for [[latexhl]]>> | \
       sed -n -e '<<Adjust [[source-highlight]] \LaTeX{}>>' ;;
 esac
@@ -3214,18 +2233,23 @@ case "$HLPROG_TYPE" in
     # sed language only supports comments
     # #include supported for HDF
     echo "comment start '#(?!include\\W)'" > $HLDIR/sed.lang
-    # c language needs a lot of help
-    cat <<"EOF" > $HLDIR/myc.lang
-      include "c.lang"
+    # c/c++ language needs a lot of help
+    cat <<"EOF" >$HLDIR/cmods.lang
       subst number =
 '\<[+-]?((0x[[:xdigit:]]+)|(([[:digit:]]*\.)?
 [[:digit:]]+([eE][+-]?[[:digit:]]+)?))[uUlL]*\>'
-type =
+      type =
 EOF
     printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
       sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' \
-           >>$HLDIR/myc.lang
-    # I want decls highlighted properly.
+           >>$HLDIR/cmods.lang
+    for x in c cpp; do
+      cat <<EOF >$HLDIR/my$x.lang
+        include "$x.lang"
+	include "cmods.lang"
+EOF
+    done
+    # don't override keywords & types with this broken regex
     touch $HLDIR/clike_vardeclaration.lang
     ;;
   highlight-2)
@@ -3258,7 +2282,7 @@ EOF
           Comments={
             {Block=false, Delimiter={[[^\s*(#(?!include\W))]]}}
 	  }' > $HLDIR/sed.lang
-    # c language needs a lot of help
+    # c/c++ language needs a lot of help
     # note that hl_lang_dir (actually HL_LANG_DIR) just points
     # to the dir the config file is in (useless)
     langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
@@ -3279,6 +2303,26 @@ EOF
 EOF
     ;;
 esac
+@
+
+Note that in order to suppress [[source-highlight]]'s
+[[clike_vardeclaration.lang]], the data library directory needs to be
+changed to [[$HLDIR]], and the current directory needs to be the old
+data dirctory.  There is no way to actually determine the latter, so
+I'll just guess for now.  I should probably add a configuration
+parameter for that.
+
+<<Enter [[source-highlight]] data dir>>=
+d="`which source-highlight`"
+d="${d%/source-highlight}"
+d="${d%/bin}"
+cd "$d"/share/source-highlight 2>/dev/null || \
+cd /usr/local/share/source-highlight 2>/dev/null || \
+cd /usr/share/source-highlight
+@
+
+<<[[source-highlight]] options for [[latexhl]]>>=
+--data-dir=$HLDIR \
 @
 
 To actually invoke the highlighter, the language specified on the
@@ -3307,6 +2351,7 @@ fi
 
 <<Translate listings source type to source-highlight source type>>=
 [cC]) larg="--lang-def=myc.lang" ;;
+[cC]++) larg="--lang-def=mycpp.lang" ;;
 sed) larg="--lang-def=sed.lang" ;;
 make) larg="-s makefile" ;;
 @
@@ -3329,7 +2374,7 @@ fi
 @
 
 <<Translate listings source type to highlight-3 source type>>=
-[cC]) larg="--config-file=$HLDIR/myc.lang" ;;
+[cC]|C++) larg="--config-file=$HLDIR/myc.lang" ;;
 sed) larg="--config-file=$HLDIR/sed.lang" ;;
 @
 
@@ -3407,7 +2452,7 @@ addlistings \
 
 <<addlistings>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 # use the ctrl-g escape (\a = ann = bell)
 sed -e 's/\^\^\^/\a&\a/g
@@ -3523,7 +2568,7 @@ filter, which has the chunk names separated out already.  For maximum
 flexibility, this is done in a perl script.
 
 \lstset{language=perl}
-<<Filter lines from NoWeb token stream>>=
+<<Filter lines from noweb token stream>>=
 if(/^\@use / or /^\@defn / or /^\@nwenh/) {
   s/_/\\_/g unless /\[\[/;
 }
@@ -3556,7 +2601,7 @@ for my $a (@ARGV) {
   while(<A>) {
     $disext = /^%%% no-ext-ref$/;
     last if $disext;
-    /^\\input{(.*\.nw)}$/ or next;
+    /^\\input\{(.*\.nw)\}$/ or next;
     $feqv{$1} = $a;
   }
 }
@@ -3577,14 +2622,14 @@ unless($disext) {
 }
 @
 
-<<Filter lines from NoWeb token stream>>=
+<<Filter lines from noweb token stream>>=
 if(!$disext and (/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
   $_ = "$1($ch{$2}) $2\n";
 }
 @
 
 There is little point in separating consecutive code chunks with a lot of
-white space, so the excess whitespace added by NoWeb needs to be removed.
+white space, so the excess whitespace added by noweb needs to be removed.
 
 \lstset{language=sed}
 <<Reduce interchunk whitespace>>=
@@ -3615,7 +2660,7 @@ package versus an external highlighter is done by prefixing the
 highlight theme name with [[list:]].
 
 While most processing is identical for Latin-1 encoding and UTF-8
-encoding, NoWeb's markup processor strips tabs from input, converting
+encoding, noweb's markup processor strips tabs from input, converting
 them to spaces.  This does not work in UTF-8 when there are multi-byte
 characters, so it is disabled.
 
@@ -3657,13 +2702,14 @@ nw2latex: <<[[nw2latex]] deps>>
 @
 
 <<[[nw2latex]] deps>>=
-latexhl nwweavefilt addlistings nw-enh-preidx nw-enh-postidx \
+latexhl nwweavefilt addlistings nw-nonl-preidx nw-nonl-postidx \
+nw-parm-preidx nw-parm-postidx \
 @
 
 \lstset{language=sh}
 <<nw2latex>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 noweb="$1"
 outf="$2"
@@ -3692,8 +2738,9 @@ mkdir -p $HLDIR
 EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
-          -delay -indexfrom /dev/null -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
+  noweave -filter "./nw-parm-preidx $noweb_order | ./nw-nonl-preidx |
+                   ./nwweavefilt $filt $noweb_order" -delay -indexfrom /dev/null \
+	  -filter "./nw-nonl-postidx | ./nw-parm-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -3715,7 +2762,7 @@ The \LaTeX{} preamble is fairly straightforward.  The [[fontenc]],
 [[inputenc]], [[fontspec]] and [[babel]] packages are pretty much
 required anywhere.  The input encoding is forced to latin1 for
 [[pdflatex]]; it is expected that [[xelatex]] be used for Unicode. 
-The [[noweb]] package is obviously needed for the NoWeb output.  The
+The [[noweb]] package is obviously needed for the noweb output.  The
 [[rcs]] package is included to easily incorporate those nasty \$-heavy
 RCS/CVS/SVN keywords.  The [[ifpdf]] and [[ifxetex]] packages are
 needed for using this \LaTeX{} source with non-PDF output and
@@ -3805,11 +2852,11 @@ once again is to reduce the number of pages a bit.
 %\@savsf=1
 %\makeatother
 
-Then, some adjustments need to be made for NoWeb.  NoWeb's [[\setupcode]]
+Then, some adjustments need to be made for noweb.  noweb's [[\setupcode]]
 does some adjustments to \LaTeX{} layout that override the code
-highlighting, so that is disabled.  NoWeb tries too hard to keep code chunks
+highlighting, so that is disabled.  noweb tries too hard to keep code chunks
 on one page, so some adjustments are made to those parameters.  Finally, the
-NoWeb cross reference listings are adjusted a bit and the code size is made
+noweb cross reference listings are adjusted a bit and the code size is made
 smaller.  Also, the ``never defined'' message should probably be
 changed for imported symbols, and in fact all imported symbols should
 be shown identically.  It is not currently possible to remove the
@@ -3959,7 +3006,7 @@ error log (and cause an error abort) upon weaving.
 done
 @
 
-The reinsertion is done before weaving so that NoWeb formatting can be
+The reinsertion is done before weaving so that noweb formatting can be
 done on this, as well.  A sed script is generated to convert all of
 the [[\input]] commands to their associated text, and then that script
 is applied in the pre-processing pipeline.  It requires multiple
@@ -4014,7 +3061,7 @@ sed -f /tmp/latexhl.doc.$$ | \
 One problem with reinsertion is that labels are duplicated.  While
 leaving the labels out manually works, it is cumbersome and may not be
 what is wanted.  For example, one way to split the user documentation
-into a separate file is to reinsert it into an otherwise empty NoWeb
+into a separate file is to reinsert it into an otherwise empty noweb
 source file.  Stripping the labels out manually means that the labels
 will be undefined in the fresh document.  A better way is to have them
 automatically filtered out.
@@ -4070,14 +3117,14 @@ Another problem is that there is more than one way to create a label.
 For example, the sectioning commands may be redefined to automatically
 create a label based on the section name.  This document defines no
 such things%
-\footnote{Actually, the hyperref package, the NoWeb HTML filter, and
-NoWeb code chunks all create automatic labels, but they are based on
+\footnote{Actually, the hyperref package, the noweb HTML filter, and
+noweb code chunks all create automatic labels, but they are based on
 file location rather than the text at the label location, so they will
 never conflict.}%
 , but as implemented above, more awk code can be added to
 [[<<Remove duplicate labels from \LaTeX{} source>>]].
 
-One other problem peculiar to NoWeb text is that chunk references are
+One other problem peculiar to noweb text is that chunk references are
 reformatted in a way that assumes the chunk is defined in the same
 document.  When documenting chunk names themselves, like this document
 does, this will clutter up the text with useless undefined chunk
@@ -4108,7 +3155,7 @@ replaced with what would have been the contents of that file.  This also
 allows the file to only contain contents given the source and any
 dependencies, rather than also including contents from sources which extend
 the contents.  This is done after weaving, since the text is always literal,
-but a preprocessing step is required to avoid NoWeb substitutions during the
+but a preprocessing step is required to avoid noweb substitutions during the
 weave.  The sed script to generate the sed script cannot be done in a
 backtick expression, because the argument list may overflow.  Generating the
 script to a file also reduces the number of backslash escapes required.
@@ -4254,7 +3301,7 @@ overrides are ignored.  However, the enhanced tangler is used instead
 of plain [[notangle]].
 
 <<[[nw2latex]] deps>>=
-notangle-enh \
+nt-parm nt-nonl \
 @
 
 <<makefile.vars>>=
@@ -4262,7 +3309,7 @@ export HEADERS
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-./notangle-enh -R"C Prototypes" $noweb_order 2>/dev/null | \
+notangle -filter "./nt-parm | ./nt-nonl" -R"C Prototypes" $noweb_order 2>/dev/null | \
   eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
      sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
@@ -4298,7 +3345,7 @@ done >> /tmp/latexhl.fmt.$$
 
 \subsection{Include Directive Processing}
 
-Finally, a method to include an arbitrary NoWeb file is provided.  The only
+Finally, a method to include an arbitrary noweb file is provided.  The only
 way to weave and tangle such files correctly is to insert the contents of
 the file in place of the include directive.  Since [[\include]] has other
 side effects (it forces a page break), only [[\input]] is supported.  The
@@ -4306,12 +3353,12 @@ syntax is very specifically defined in order to avoid conflicts with other
 [[\input]] directives.  Namely, it must not have any following text, and the
 file name must end in \texttt{.nw}.
 
-<<Insert included NoWeb files>>=
-awk '<<Insert included NoWeb files with [[awk]]>>'
+<<Insert included noweb files>>=
+awk '<<Insert included noweb files with [[awk]]>>'
 @
 
 \lstset{language=awk}
-<<Insert included NoWeb files with [[awk]]>>=
+<<Insert included noweb files with [[awk]]>>=
 function readfile(f) {
   while(getline < f) {
     if($0 ~ /^\\input{[^}]*\.nw}$/) {
@@ -4333,17 +3380,17 @@ BEGIN { readfile("-") }
 
 \lstset{language=sh}
 <<Pre-process before weave>>=
-<<Insert included NoWeb files>> | \
+<<Insert included noweb files>> | \
 @
 
 %tangle needs more thought - need to incorporate into docs
 %< <Pre-process before tangle> >=
-%< <Insert included NoWeb files> >
+%< <Insert included noweb files> >
 %@
 
 \section{HTML Code Documentation}
 
-The NoWeb file is intended to be written in \LaTeX{}, and converted to HTML
+The noweb file is intended to be written in \LaTeX{}, and converted to HTML
 after and/or during the weave process.
 
 \subsection{HTML from TeX4ht}
@@ -4442,7 +3489,7 @@ esac
 
 The script just calls [[htlatex]] in its own directory (because it generates
 a lot of the same aux files as [[pdflatex]]), cleans up the HTML a bit, and
-tacks on the NoWeb source in compressed, uuencoded form.  It depends on a
+tacks on the noweb source in compressed, uuencoded form.  It depends on a
 working TeX4ht configuration, which is unfortunately mostly undocumented and
 easily broken.  Configuring TeX4ht is beyond the scope of this document.
 
@@ -4453,7 +3500,7 @@ nwtex2html \
 
 <<nwtex2html>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 tex="$1"
 base="${1%.tex}"
@@ -4655,7 +3702,7 @@ s/ *$//;
 
 \subsection{HTML from [[l2h]]}
 
-Another way is to use NoWeb's included [[l2h]] filter.  This once again
+Another way is to use noweb's included [[l2h]] filter.  This once again
 requires some filtering, which is complicated enough that it's done in a
 separate script ([[nw2html]]) instead of inline in the makefile.  In
 addition, highlighting of chunks must produce HTML, so a small conversion
@@ -4671,7 +3718,7 @@ htmlhl \
 
 <<htmlhl>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 case $HLPROG_TYPE in
   highlight-[23]) echo '<ol class="code">' ;;
@@ -4685,10 +3732,10 @@ case $HLPROG_TYPE in
     highlight -l --ordered-list -f $larg | \
       <<Filter [[highlight]] HTML output>> ;;
   source-highlight)
-    cd $HLDIR
+    <<Enter [[source-highlight]] data dir>>
     # remove last line and move /pre up
     # should probably retain one line if empty
-    source-highlight -f xhtml-css $larg | \
+    source-highlight --data-dir=$HLDIR -f xhtml-css $larg | \
       sed -n -e 's/<pre><tt>/<pre class="code">/;x;$s%$%</pre>%;1!p'
 esac
 case $HLPROG_TYPE in
@@ -4706,7 +3753,8 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 @
 
 <<makefile.rules l2h>>=
-nw2html:  htmlhl nwweavefilt notangle-enh nw-enh-preidx nw-enh-postidx
+nw2html:  htmlhl nwweavefilt nt-nonl nt-parm nw-nonl-preidx nw-nonl-postidx \
+          nw-parm-preidx nw-parm-postidx
 
 %.html: %.nw $(FIGS_PNG) nw2html
 	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
@@ -4724,7 +3772,7 @@ PDF.
 \lstset{language=sh}
 <<nw2html>>=
 #!/bin/sh
-<<Common NoWeb Warning>>
+<<Common noweb Warning>>
 
 noweb="$1"
 outf="$2"
@@ -4835,10 +3883,13 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave ${NW_UTF8:+-t} -html -filter "./nw-enh-preidx $noweb_order" \
-          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
-          -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
-	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
+  noweave ${NW_UTF8:+-t} -html \
+          -filter "./nw-parm-preidx $noweb_order |
+	     ./nw-nonl-preidx $noweb_order |
+             ./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
+          -filter 'sed -n "<<Filter out noidx results>>" | noidx |
+	           ./nw-nonl-postidx | ./nw-parm-postidx' \
+	       | <<Post-process HTML after weave>>
          cat
 
 <<Print attachments as HTML comment>>
@@ -5207,7 +4258,7 @@ directly would have worked as well.
 \subsection{Method Selection}
 
 Unfortunately, neither formatter is obviously better.  TeX4ht mangles its
-output a bit (color in particular) and takes forever to run.  NoWeb's l2h
+output a bit (color in particular) and takes forever to run.  noweb's l2h
 filter is quicker, but is pretty stupid and unconfigurable for things like
 tables and footnotes.  For now, I prefer the speed and accuracy of l2h.
 
@@ -5256,7 +4307,7 @@ targets are \texttt{all} (the default), \texttt{bin},
 ensure that changes to a source file will not result in weird errors
 due to lost chunks or mistyped chunk names.
 
-The first few lines of a NoWeb file are \LaTeX{} code.  This must at least
+The first few lines of a noweb file are \LaTeX{} code.  This must at least
 include the \verb|\documentclass| directive.  It can also include the build
 system's preamble in the place marked by \verb!%%% latex preamble!. Copying
 the beginning of this document to start with would not be a bad idea:
@@ -5316,7 +4367,7 @@ language for any subsequent code chunks.  The default language is C.
 
 \item Hidden sections: any figures or other files which are normally
 included in the document in a processed form can be stored in-line in the
-NoWeb document in their raw form in hidden sections.  Each hidden section is
+noweb document in their raw form in hidden sections.  Each hidden section is
 delimited by \verb|<!-->| on its own line at the start, and \verb!<-->! on
 its own line at the end.  This is intended to be used as follows:
 
@@ -5361,8 +4412,8 @@ following is equivalent:
 \end{rawhtml}
 % End-doc end-hidden
 
-NoWeb doesn't actually strip these out --- iffalse does that.  Because
-NoWeb generates cross-reference information and the chunk index after
+noweb doesn't actually strip these out --- iffalse does that.  Because
+noweb generates cross-reference information and the chunk index after
 the last chunk, the last chunk may not be commented out in this way.
 If you see a message like ``LaTeX Warning: The are no
 \textbackslash{}nowebchunks on input line \ldots{}'', there are eiher
@@ -5392,24 +4443,25 @@ attached to the original electronic forms of this document:\\
 \verb!\input{Sources.tex} % txt!
 \end{quote}
 
-\item NoWeb extensions:  by default, an extended version of the NoWeb
-tools is used, collectively known as noweb-enhanced.  They consist of
-the following executables, which still depend on NoWeb 2.x being
-installed:
+\item noweb extensions:  by default, filters are used to enhance the
+noweb tools, collectively known as noweb-enhanced.  The parameter
+substitution filters are described and implemented in a separate
+document, [[parm.nw]].  The enhancements consist of the following
+executables, the last of which requires noweb 2.x:
 \begin{itemize}
-\item [[notangle-enh]] is a replacement for [[notangle]].  It is, in
-fact, a copy of [[notangle]] which replaces the back end with
-[[nt-enh]].
-\item [[nt-enh]] is a markup back end which tangles using the
-extensions.
+\item [[nt-parm]] and [[nt-monl]] are filters to be added to
+[[notangle]] using its [[-filter]] option.
+\item [[nw-parm-preidx]] and [[nw-nonl-preidx]] are filters to be
+added to [[noweave]] using its [[-filter]] option before indexing
+options.  They take an optional list of noweb files as their
+arguments; this should be the full list of files (optionally excluding
+the one being weaved) used for tangling.
+\item [[nw-parm-postidx]] and [[nw-nonl-postidx]] are filters to be
+added to [[noweave]] using its [[-filter]] option after indexing options.
 \item [[noroots-enh]] is a replacement for [[noroots]] which supports
-the extensions.
-\item [[nw-enh-preidx]] is a filter to be added to [[noweave]] using
-its [[-filter]] option before indexing options.  It takes an optional
-list of NoWeb files as its argument; this should be the full list of
-files (optionally excluding the one being weaved) used for tangling.
-\item [[nw-enh-postidx]] is a filter to be added to [[noweave]] using
-its [[-filter]] option after indexing options.
+the extensions.  This requires noweb 2.x, as it is a copy of that
+version's [[noroots]] which simply inserts the [[nt-parm]] and
+[[nt-nonl]] filters into the pipeline.
 \end{itemize}
 
 These provide the following extensions:
@@ -5425,7 +4477,7 @@ these may be set on a per-target basis in GNU make.
 is the enhanced version described above.
 \item [[NOTANGLE_OPTS]] sets additional command-line options.
 Normally, this would be used to set [[-t8]] for files needing tabs.
-This can also be used to add more filters to the NoWeb pipeline.
+This can also be used to add more filters to the noweb pipeline.
 \item [[NOTANGLE_POSTPROC]] is a shell pipeline to be appended to the
 tangle process.  It must begin with the pipe symbol (|).  Generally,
 assignment should be done using [[+=]] rather than [[=]] in order to
@@ -5454,7 +4506,7 @@ $(MY_SUID_SCRIPTS): $(NOWEB) $(NOTANGLE_DEP)
 @@]]
 \end{quote}
 \end{itemize}
-\item Repeated documentation: a separate NoWeb-like macro facility which
+\item Repeated documentation: a separate noweb-like macro facility which
 only does substitutions can be used to repeat documentation in e.g. a users'
 guide in an appendix.  Such documentation chunks are delimited by
 \verb!% Begin-doc !\emph{chunk-name} and \verb!% End-doc !\emph{chunk-name}
@@ -5588,7 +4640,7 @@ together.
 to the end of each added line.  If additional processing other than simple
 extraction is required for any file, it should instead be added to
 [[<<makefile.rules>>]] as a separate rule and a dependency for the
-\texttt{misc} target.  If any plain files are not in the NoWeb source, but
+\texttt{misc} target.  If any plain files are not in the noweb source, but
 instead are distributed separately, they should instead be added to the
 [[ATTACH_EXTRA]] variable, to be attached to the documentation.  That
 variable can also be a make function taking the name of the file being
@@ -5596,7 +4648,7 @@ attached to as an argument.
 \item [[<<Plain Build Files>>]]: add plain text files to be built when
 required as a dependency; always add a backslash to the end of each
 added line.  This is not added to any explicit target.  It is merely a
-shorthand to create a rule for extracting it from NoWeb and cleaning
+shorthand to create a rule for extracting it from noweb and cleaning
 it up afterwards.  It is intended for build support files that are not
 meant to be distributed.
 \item [[<<Plain Files to Install>>]]: add plain text files to install.
@@ -5609,7 +4661,7 @@ executables; always add a backslash to the end of each added line.  Like
 \item [[<<Build Script Executables>>]]: add plain text files to build as
 executables when required; always add a backslash to the end of each
 added line.  This is not added to any explicit target.  It is merely a
-shorthand to create a rule for extracting it from NoWeb and cleaning
+shorthand to create a rule for extracting it from noweb and cleaning
 it up afterwards.  It is intended for build support files that are not
 meant to be distributed.
 \item [[<<Test Scripts>>]]: add plain text files to build as executables,
@@ -5621,7 +4673,7 @@ build for the [[test-bin]] target.  These scripts are not run, but are
 guaranteed to be built before running any tests.
 \item [[<<Additional Tests>>]]: tests that are more complicated to run
 than simple scripts.  These are makefile actions.
-\item [[<<Build Source>>]]: add files to the NoWeb-free tar distribution;
+\item [[<<Build Source>>]]: add files to the noweb-free tar distribution;
 always add a backslash to the end of each added line.  In particular, any
 specially processed plain files with their own rules should be added to this
 list.
@@ -5633,7 +4685,7 @@ than scripts and C executables.
 \end{itemize}
 \paragraph{C-Specific rules}
 \begin{itemize}
-\item [[<<C Files>>]], [[<<C Headers>>]]: C files which are NoWeb
+\item [[<<C Files>>]], [[<<C Headers>>]]: C files which are noweb
 roots are automatically found, but generated files are not.  Add these
 with these chunks, terminated by a backslash.
 \item [[<<C Executables>>]]: C files are either the name of an executable
@@ -5688,7 +4740,7 @@ followed by the function name.  For example:
 \end{itemize}
 \paragraph{Boilerplate}
 \begin{itemize}
-\item [[<<Common NoWeb Warning>>]]: a boilerplate comment for the top of
+\item [[<<Common noweb Warning>>]]: a boilerplate comment for the top of
 script files; extend with [[# $]][[Id$]].
 \item [[<<Version Strings>>]]: A C string containing the version ID of all
 contributing source files; extend with [["$]][[Id$\n"]].
@@ -5705,7 +4757,7 @@ for the file are included as well, unless a comment of the form
 [[// static_proto]] is found on a line by itself; in that case, the
 static prototypes will be included there instead.
 \item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
-executables.  This includes the NoWeb warning, a portable hash-bang
+executables.  This includes the noweb warning, a portable hash-bang
 prefix, and [[use strict]].
 \end{itemize}
 \paragraph{Highlighting Assistance}
@@ -5783,7 +4835,7 @@ only; primarily for result reinsertions; not really literate despite
 claims:
 \url{http://www.stat.uiowa.edu/~rlenth/StatWeave/}).
 
-\item Plain \TeX{}: not really an option, even though NoWeb supports
+\item Plain \TeX{}: not really an option, even though noweb supports
 it.  Porting framed and listings from \LaTeX{} is beyond the scope of
 this project.  Most of the highlighters I find also expect to be used
 with \LaTeX{}.
@@ -5817,7 +4869,7 @@ bibtex once, and makeindex requires running latex and makeindex and
 also providing support for reading the .ind and formatting it correctly.
 
 \item optional automatic symbol index (requires a lot of work; the
-symbol extractor for NoWeb is way too simplistic and in fact anything
+symbol extractor for noweb is way too simplistic and in fact anything
 short of a compiler can't deal with scoping, name spaces, preprocessor
 name mangling and other issues).
 
@@ -5868,7 +4920,7 @@ documentation should have an index pointing to the API documentation,
 and code usually has an index pointing to code chunk(s).  Both types
 should be supported.  Second, the anchors should point to the
 beginning of the documentation, not the code chunk, prototype, or
-whatever.  NoWeb's rule of placing them 10 lines up is error-prone and
+whatever.  noweb's rule of placing them 10 lines up is error-prone and
 insufficient.  Implementing this makes the previous item less
 pressing, although really they are separate issues.
 
@@ -6160,7 +5212,7 @@ separate trees for each present file.  When doing tangling (and
 noroots), consider each tree separately until a result is found.  For
 weaving, use the tree containing the file being weaved.
 
-\item Generate [[<<Common NoWeb Warning>>]] and [[<<Version Strings>>]]
+\item Generate [[<<Common noweb Warning>>]] and [[<<Version Strings>>]]
 from [[<<Sources>>]].
 
 \item Generate exported prototypes into an exportable header

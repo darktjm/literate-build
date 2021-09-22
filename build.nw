@@ -1412,7 +1412,7 @@ per-target variables do not work on dependencies.
 
 \lstset{language=make}
 <<Build Source>>=
-nt-nonl <<Filters from [[parm.nw]]>> \
+nt-nonl <<Filters from [[parm.nw]]>>
 @
 
 <<Filters from [[parm.nw]]>>=

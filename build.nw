@@ -2953,7 +2953,7 @@ case $HLPROG_TYPE in
     highlight <<[[highlight]]-3 options for [[latexhl]]>> | \
       sed -n -e '<<Adjust [[highlight]]-3 \LaTeX{}>>' ;;
   source-highlight)
-    cd $HLDIR
+    <<Enter [[source-highlight]] data dir>>
     source-highlight <<[[source-highlight]] options for [[latexhl]]>> | \
       sed -n -e '<<Adjust [[source-highlight]] \LaTeX{}>>' ;;
 esac
@@ -3207,18 +3207,23 @@ case "$HLPROG_TYPE" in
     # sed language only supports comments
     # #include supported for HDF
     echo "comment start '#(?!include\\W)'" > $HLDIR/sed.lang
-    # c language needs a lot of help
-    cat <<"EOF" > $HLDIR/myc.lang
-      include "c.lang"
+    # c/c++ language needs a lot of help
+    cat <<"EOF" >$HLDIR/cmods.lang
       subst number =
 '\<[+-]?((0x[[:xdigit:]]+)|(([[:digit:]]*\.)?
 [[:digit:]]+([eE][+-]?[[:digit:]]+)?))[uUlL]*\>'
-type =
+      type =
 EOF
     printf %s '<<Known Data Types>>' | egrep -v '^[[:space:]]*(%|$)' | \
       sed -e 's/[[:space:]]//g;s/,/|/g;s/%.*//;s/^/"/;s/|$/"/;$!s/$/,/' \
-           >>$HLDIR/myc.lang
-    # I want decls highlighted properly.
+           >>$HLDIR/cmods.lang
+    for x in c cpp; do
+      cat <<EOF >$HLDIR/my$x.lang
+        include "$x.lang"
+	include "cmods.lang"
+EOF
+    done
+    # don't override keywords & types with this broken regex
     touch $HLDIR/clike_vardeclaration.lang
     ;;
   highlight-2)
@@ -3251,7 +3256,7 @@ EOF
           Comments={
             {Block=false, Delimiter={[[^\s*(#(?!include\W))]]}}
 	  }' > $HLDIR/sed.lang
-    # c language needs a lot of help
+    # c/c++ language needs a lot of help
     # note that hl_lang_dir (actually HL_LANG_DIR) just points
     # to the dir the config file is in (useless)
     langdir=`highlight --print-config | sed -n '/Language def/s/.*: *//p'`
@@ -3272,6 +3277,26 @@ EOF
 EOF
     ;;
 esac
+@
+
+Note that in order to suppress [[source-highlight]]'s
+[[clike_vardeclaration.lang]], the data library directory needs to be
+changed to [[$HLDIR]], and the current directory needs to be the old
+data dirctory.  There is no way to actually determine the latter, so
+I'll just guess for now.  I should probably add a configuration
+parameter for that.
+
+<<Enter [[source-highlight]] data dir>>=
+d="`which source-highlight`"
+d="${d%/source-highlight}"
+d="${d%/bin}"
+cd "$d"/share/source-highlight 2>/dev/null || \
+cd /usr/local/share/source-highlight 2>/dev/null || \
+cd /usr/share/source-highlight
+@
+
+<<[[source-highlight]] options for [[latexhl]]>>=
+--data-dir=$HLDIR \
 @
 
 To actually invoke the highlighter, the language specified on the
@@ -3300,6 +3325,7 @@ fi
 
 <<Translate listings source type to source-highlight source type>>=
 [cC]) larg="--lang-def=myc.lang" ;;
+[cC]++) larg="--lang-def=mycpp.lang" ;;
 sed) larg="--lang-def=sed.lang" ;;
 make) larg="-s makefile" ;;
 @
@@ -3322,7 +3348,7 @@ fi
 @
 
 <<Translate listings source type to highlight-3 source type>>=
-[cC]) larg="--config-file=$HLDIR/myc.lang" ;;
+[cC]|C++) larg="--config-file=$HLDIR/myc.lang" ;;
 sed) larg="--config-file=$HLDIR/sed.lang" ;;
 @
 
@@ -4678,10 +4704,10 @@ case $HLPROG_TYPE in
     highlight -l --ordered-list -f $larg | \
       <<Filter [[highlight]] HTML output>> ;;
   source-highlight)
-    cd $HLDIR
+    <<Enter [[source-highlight]] data dir>>
     # remove last line and move /pre up
     # should probably retain one line if empty
-    source-highlight -f xhtml-css $larg | \
+    source-highlight --data-dir=$HLDIR -f xhtml-css $larg | \
       sed -n -e 's/<pre><tt>/<pre class="code">/;x;$s%$%</pre>%;1!p'
 esac
 case $HLPROG_TYPE in

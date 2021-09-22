@@ -1489,7 +1489,7 @@ previous versions of this document, I simply copy the standard script
 and insert the tangling filters into the pipeline.
 
 <<Build Source>>=
-notangle-enh \
+noroots-enh \
 @
 
 <<makefile.rules>>=
@@ -3301,7 +3301,7 @@ overrides are ignored.  However, the enhanced tangler is used instead
 of plain [[notangle]].
 
 <<[[nw2latex]] deps>>=
-notangle-enh \
+nt-parm nt-nonl \
 @
 
 <<makefile.vars>>=
@@ -3309,7 +3309,7 @@ export HEADERS
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-./notangle-enh -R"C Prototypes" $noweb_order 2>/dev/null | \
+notangle -filter "./nt-parm | ./nt-nonl" -R"C Prototypes" $noweb_order 2>/dev/null | \
   eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
      sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'
@@ -3753,7 +3753,7 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 @
 
 <<makefile.rules l2h>>=
-nw2html:  htmlhl nwweavefilt notangle-enh nw-nonl-preidx nw-nonl-postidx \
+nw2html:  htmlhl nwweavefilt nt-nonl nt-parm nw-nonl-preidx nw-nonl-postidx \
           nw-parm-preidx nw-parm-postidx
 
 %.html: %.nw $(FIGS_PNG) nw2html

@@ -1360,1126 +1360,142 @@ addition, there are some languages which lack a preprocessor.  As
 such, the original Web system had macros with arguments, and I would
 like something similar.
 
-I propose the following syntax changes:
+I used to provide both enhancements here, in the form of a tangler, a
+weaving filter, and a [[noroots]] replacement.  I then adapted the
+tangler as a filter, as well, and distributed that part separately.  I
+have made some major changes, and do not wish to develop this in two
+different places and slightly differently in each any more, so I now
+defer to [[parms.nw]] for documentation and development of the
+parameterized chunks, and only develop the rather simple no-newline
+filter here.
 
 % Begin-doc nw-enh-syntax
-\begin{itemize}
-
-\item A star (*) at the start of the name used in a chunk definition
-line indicates trailing newline suppression, if the chunk name is not
-identical to star (i.e., the default chunk).  This star is removed to
-obtain the real chunk name being defined.  The final newline of a
-chunk reference expansion is always suppressed, so this only affects
-the final newline of a file and the newline between chunk extensions.
-For example:
-\begin{quote}
-\begin{verbatim}
-@<<*chunk>>=
-text
-@@
-@<<chunk>>=
-text2
-@@
-@<<*chunk>>=
-text3
-@@
-\end{verbatim}
-\end{quote}
-When \texttt{chunk} is extracted, the text will not have a trailing
-newline (due to the final star), and there will be no newline between
-[[text]] and [[text2]] (due to the first star).
-
-\item A chunk name used in a chunk definition line may contain
-parameter definitions in parentheses.  All parameter names begin with
-an at-sign (@).  The only characters forbidden in parameter names are
-close-parentheses and invalid noweb syntax.  Thus the parameter name
-is terminated by its closing parenthesis.  Parameter definition syntax
-within in-line code is ignored.
-
-For example:
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg1) with -(@arg2)- (but not @[[(@arg3)]])>>=
-text
-@@
-\end{verbatim}
-\end{quote}
-
-The parameters are [[@arg1]] and [[@arg2]].
-
-\item No chunk name may begin with an at-sign (@).  That is, the names
-starting with an at-sign are reserved for parameter names.
-
-\item Chunk references beginning with an at-sign (@) expand to the
-parameter with that name, as defined by the closest parent taking a
-parameter of that name.  When weaved, such references are not linked
-anywhere, and they are not added to the index.  When tangled, the
-[[-L]] option is ignored.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-text @<<@arg>>
-@<<other>>
-@@
-@<<macro2 (@arg)>>=
-text2 @<<@arg>>
-@<<other>>
-@@
-@<<other>>=
-@<<@arg>>
-@@
-\end{verbatim}
-\end{quote}
-
-When expanded within [[macro]], both [[@arg]] and [[other]] will
-expand to [[macro]]'s argument.  When expanded within [[macro2]], both
-[[@arg]] and [[other]] will expand to [[macro2]]'s argument.
-
-\item A chunk reference consisting of the name of a chunk taking
-parameters, with all parameter references replaced by noweb in-line
-code segments, represents an expansion of the reference with the
-parameters taking the value of the code within the in-line code
-segments in their respective positions.  No expansion is done within
-the code segments except for parameter references; these may be used
-to pass parameters on to another chunk.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-text @<<@arg>>
-@@
-@<<macro2 (@arg)>>=
-@<<macro @[[and @<<@arg>>]]>>
-@@
-@<<macro3 (@arg)>>=
-@<<macro4>>
-@@
-@<<macro4>>=
-can reference @<<@arg>> of macro3.
-@@
-@<<caller>>=
-text @<<macro @[[text2]]>> @<<macro2 @[[text3]]>>
-@<<macro3 @[[text4]]>>
-@@
-\end{verbatim}
-\end{quote}
-
-The [[caller]] chunk expands to
-
-\begin{quote}
-\begin{verbatim}
-text text text2 text and text3
-can reference text4 of macro3. &text1
-\end{verbatim}
-\end{quote}
-
-\item When more than one parameterized chunk could be used to replace
-a reference, the one with the least parameter replacements is chosen.
-For equal numbers, the one which does not contain the earliest
-parameter replacement is chosen.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg1) and (@arg2)>>=
-text @<<@arg1>> blah @<<@arg2>>
-@@
-@<<macro @[[1]] and (@arg)>>=
-text blah blah @<<@arg>>
-@@
-@<<macro (@arg) and @[[2]]>>=
-text blah blah blah @<<@arg>>
-@@
-@<<*>>=
-@<<macro @[[a]] and @[[b]]>> -- one blah
-@<<macro @[[1]] and @[[b]]>> -- two blahs
-@<<macro @[[a]] and @[[2]]>> -- three blahs
-@<<macro @[[1]] and @[[2]]>> -- two blahs and a warning
-@@
-\end{verbatim}
-\end{quote}
-
-\item For literal text matching, all passed-on variable references are
-expanded first.
-
-For example:
-
-\begin{quote}
-\begin{verbatim}
-@<<macro (@arg)>>=
-1 @<<@arg>>
-@@
-@<<macro @[[x y]]>>=
-1 z
-@@
-@<<macro2 (@arg)>>=
-@<<macro @[[x @<<@arg>>]]>>
-@@
-@<<*>>=
-@<<macro2 @[[x]]>> -- 1 x x
-@<<macro2 @[[y]]>> -- 1 z
-@@
-\end{verbatim}
-\end{quote}
-
-\end{itemize}
+My proposed syntax for suppressing newlines at the end of a chunk
+expansion is to prefix the chunk name with a star (*).  This of course
+excludes a star by itself (the default chunk).
 % End-doc nw-enh-syntax
 
 \subsection{Tangling}
 
-Rather than create a new tangler, the noweb pipeline is used.  Also,
-rather than modifying the noweb tangler, a new one is developed from
-scratch.  While it is possible to write this as a filter, doing so is
-extremely expensive and only buys the ability to use the standard
-pipeline of both version 2 and 3.  Since 3 is permanently alpha, I
-don't really care about that.
+The newline removal filter is simple: look for definitions with
+leading stars, strip the star, and then also strip the final [[@nl]]
+directive just before the [[@end code]] which terminates the chunk
+definition.  In order to keep line numbers accurate, the [[@nl]] is
+re-inserted after the chunk.  Since it's so simple, I just use [[sed]]
+for now.
 
-While I would prefer to write this in C, there are valid arguments for
-writing this in perl instead%
-\footnote{On the other hand, C++ provides most of the needed functionality in
-the standard template library, so perhaps one day I will rewrite this
-in C++.}%
-.  If I use C, I will either have to develop some string processing
-and hash table routines, or I will have to use an existing library,
-such as GLib.  While I am not too concerned about non-POSIX systems,
-regular expression support is not necessarily present on non-POSIX
-systems, either, unless something like GLib is used.  The problem with
-GLib is that it is not as commonly available as perl, and is also not
-consistently easy to find (e.g. [[pkg-config]] is not universally
-available, and the token for [[GLib]] is inconsistent), and requires
-work to ensure that the correct versions are available.  In contrast,
-as long as I do not use any esoteric libraries or advanced features,
-perl should work with most installations without too much trouble.  A
-simple tangler was already developed in a previous section, but that
-tangler did not support any of the extensions, or the [[-L]] option.
-It also parsed the file directly, rather than using the noweb pipeline
-format.
-
-\lstset{language=perl}
-<<Common Perl Prefix>>=
+\lstset{language=sh}
+<<nt-nonl>>=
 #!/bin/sh
-#!perl
 <<Common noweb Warning>>
-eval 'exec perl -x -f "$0" "$@"'
-  if 0;
-
-use strict;
+sed -e '
+  /^@defn \*./ {
+    s/\*//
+   :a
+    n
+    /^@end code$/b
+    /^@nl$/!ba
+   :b
+    N
+    /\n@nl$/bb
+    /\n@end code /!ba
+    s/@nl\n//;s/$/\n@nl/
+  }'
 @
 
-<<nt-enh>>=
-<<Common Perl Prefix>>
-
-<<Parse [[nt-enh]] options>>
-
-<<Gather code chunks from noweb pipeline>>
-
-<<Expand and output requested chunk with extensions>>
-@
-
-The only possible arguments are the option flags.  These are [[-R]]
-(the chunk to extract), [[-t]] (tab expansion), and [[-L]] (line
-directive insertion).
-
-<<Parse [[nt-enh]] options>>=
-my $chunk = '*'; my $tab = 0; my $line;
-
-while($#ARGV >= 0) {
-  if($ARGV[0] =~ /^-R(.*)/) {
-    $chunk = $1;
-  } elsif($ARGV[0] =~ /^-t(.*)/) {
-    $tab = $1;
-    $tab = 0 if $tab eq "";
-  } elsif($ARGV[0] =~ /^-L(.*)/) {
-    $line = $1 eq '' ? '#line %L "%F"%N' : $1;
-  } else {
-    print STDERR "Unknown option $ARGV[0]\n";
-    exit 1;
-  }
-  shift @ARGV;
-}
-@
-
-Gathering code chunks is completely different from the raw
-[[notangle]] replacement.  Basically, it is a duplication of the
-original notangle code, converted to perl.  The only change (other
-than the internal representation) is that the initial star is stripped
-and stored separately.
-
-The internal representation is as follows:  [[%chunks]] is a hash
-whose index is the chunk name.  Each entry in [[%chunks]] is an array.
-Each array element is corresponds to (possibly empty) text followed by
-a (possibly empty) chunk reference.  The file and line number are
-stored as well, along with the no-newline flag.  These are stored in a
-hash, whose index name is [[text]], [[ref]], [[file]], [[line]], and
-[[nonl]], respectively.  Since the reference, if present, is at the
-end of the text, the end position is saved as well ([[refline]]).
-
-<<Gather code chunks from noweb pipeline>>=
-my $lineno = 1; my $file = '<stdin>';
-<<Other code chunk gathering globals>>
-while(<>) {
-  OUT: {
-    do {
-      <<Skip over non-code, counting lines>>
-    } while(<>);
-  }
-  last if eof;
-  <<Read chunk into hash table>>
-}
-@
-
-<<Skip over non-code, counting lines>>=
-if(/^\@fatal( |$)/) {
-  exit 1;
-} elsif(/^\@(index |)nl( |$)/) {
-  $lineno++;
-<<Adjust code chunk line/file based on directives>>
-} elsif(/^\@begin code( |$)/) {
-  last OUT;
-}
-@
-
-<<Adjust code chunk line/file based on directives>>=
-} elsif(/^\@file (.*)$/) {
-  $file = $1;
-  $lineno = 1;
-} elsif(/^\@line (.*)$/) {
-  $lineno = $1 - 1;
-@
-
-<<Other code chunk gathering globals>>=
-my (%chunks, %parmchunks);
-@
-
-<<Read chunk into hash table>>=
-while(<>) {
-  if(/^\@text( |$)/) {
-    print STDERR "Invalid pipeline (defn) $_\n";
-    exit 1;
-  }
-  last if(/^\@defn /)
-}
-last if eof;
-m/^\@defn (\*)?(.*)/;
-my $chunkname = $2; my $hasstar = $1;
-if($hasstar and $chunkname eq '') {
-  $hasstar = undef;
-  $chunkname = '*';
-}
-if(/^\@defn (\*)?\@/) {
-  print STDERR "$file:$lineno: initial \@ is reserved for parameter names\n";
-  exit 1;
-}
-if(<> !~ /^\@nl( |$)/) {
-  print STDERR "Invalid pipeline (defn nl) $_\n";
-  exit 1;
-}
-++$lineno;
-my %curchunk;
-<<Clear [[%curchunk]]>>
-while(<>) {
-  last if(/^\@end code( |$)/);
-  if(/^\@nl( |$)/) {
-    $curchunk{'text'} .= "\n";
-    $lineno++;
-  } elsif(/^\@index nl( |$)/) {
-    $lineno++;
-  } elsif(/^\@text ?(.*)$/) {
-    $curchunk{'text'} .= $1;
-  } elsif(/^\@use (.*)$/) {
-    $curchunk{'ref'} = $1;
-    $curchunk{'refline'} = $lineno;
-    <<Add [[$chunkname]] to chunk table>>
-    <<Clear [[%curchunk]]>>
-  <<Adjust code chunk line/file based on directives>>
-  } elsif(!/^\@index( |$)/) {
-    print STDERR "$file:$lineno:  Invalid code chunk\n";
-    exit 1;
-  }
-}
-<<Add [[$chunkname]] to chunk table>>
-@
-
-<<Add [[$chunkname]] to chunk table>>=
-$chunks{$chunkname} = [] unless(@chunks{$chunkname});      
-push @{$chunks{$chunkname}}, {%curchunk};
-@
-
-<<Clear [[%curchunk]]>>=
-%curchunk = (text => "", file => $file, line => $lineno, nonl => $hasstar);
-@
-
-In order to make matching parameterized expansions with the
-appropriate definition easier, a separate hash which associates a
-stripped version of the name with all unstripped versions that might
-match is built as well.
-
-The stripping converts all potential in-line code in a reference to
-the same string ([[(@)]]).  In-line code may match in-line code in the
-definition name, or parameter definitions in the in-line name. While I
-would normally use a simple loop with bracket tracking to determine
-the in-line code boundaries and whether or not the brackets are
-correct, a single recursive regular expression is used instead.
-
-References are stripped the same way, even though parameter
-definitions are technically not allowed.  This supports any legacy
-chunks that have syntax that looks like parameterization.  Literal
-matches at any position are considered good, but do not cause any
-parameter assignment.
-
-The [[%parmchunks]] hash is indexed on the stripped name, and each
-element is a hash indexed on every chunk name that strips to the
-index.  The element need not necessarily be a hash; the hash is just
-an easy way to maintain a list without duplicates. [[keys %parmchunks]]
-is actually the array we're interested in.
-
-<<[[strip_chunkname]]>>=
-# note: $parm_re's first capture group is the parameter
-#       $parm_re's second cpature group is for recursion (ignore!)
-my $parm_re = '(\(\@[^)]*\)|(?<!@)\[\[((?:[^][]|\[(?-1)\])*)\]\])';
-sub strip_chunkname($)
-{
-  my $n = shift;
-  $n =~ s/$parm_re/(@)/g;
-  return $n;
-}
-@
-
-<<Other code chunk gathering globals>>=
-<<[[strip_chunkname]]>>
-@
-
-<<Add [[$chunkname]] to chunk table>>=
-my $strip = strip_chunkname $chunkname;
-$parmchunks{$strip} = {} if not $parmchunks{$strip};
-${$parmchunks{$strip}}{$chunkname} = 1;
-@
-
-The expansion of a chunk simply outputs the text portions, and
-recursively expands the reference portions.  It would be possible to
-do this all in one loop, like was done with the simpler notangle
-replacement, but there is little advantage:  the stack required for
-recursion would simply be emulated by the array of text and
-references.  In order to prevent infinite recursion, a hash of
-in-progress expansions is kept; an attempt to expand something already
-in the array raises an error.
-
-The final newline of every expansion but the last is suppressed.  I
-believe notangle actually strips out every last newline, but then
-forcibly adds one to the root node.  This is not a bad policy; the
-only modification is to retain the starred flag of the last chunk of
-the root node, so the final newline can be suppressed as well.
-
-The expansion routine only needs to know what chunk reference to
-expand, and how much to indent it.  The chunk reference may or may not
-include actual parameters for a parameterized chunk.  It needs to
-return the last no-newline flag in case it's the root node.
-
-<<Expand and output requested chunk with extensions>>=
-$file='cmdline';
-$lineno = 0;
-expand_chunk($chunk, '') or print "\n";
-@
-
-<<Expand and output requested chunk with extensions>>=
-my %in_progress;
-sub expand_chunk($$) {
-  my ($name, $indent) = @_;
-  my $nonl;
-  <<Expand chunk [[$name]] and indent it by [[$indent]]>>
-  return $nonl;
-}
-@
-
-The name of the chunk to expand is either identical to an existing
-definition, or it might be a parameter expansion, or it might be a
-parameterized expansion.  The parameter expansions can most easily be
-dealt with by adding them to the [[%chunks]] table, so both of the
-first two cases can be checked the same way.  A lookup failure then
-causes the third case to be considered.  The third case actually
-searches for the \emph{best} parameter expansion, as defined by the
-rules.  Since the chunk name needs to be parsed in order to match
-potential definitions anyway, the argument associations can be
-extracted at the same time.
-
-<<Other code chunk gathering globals>>=
-<<[[find_best_def]]>>
-@
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my ($basename, %argv);
-my $chunk = $chunks{$basename = $name};
-unless($chunk) {
-  # parameters cannot have parameters, so error out immediately
-  if($name =~ /^\@/) {
-    print STDERR "$file:$lineno: undefined parameter: $name\n";
-    return 1; # nothin generated; suppress newline
-  }
-  ($basename, %argv) = find_best_def("$file:$lineno: ", $basename);
-  $chunk = $chunks{$basename} if $basename;
-}
-unless($chunk) {
-  print STDERR "$file:$lineno: undefined chunk name: @<<$name@>>\n";
-  return 1; # nothing generated; suppress newline
-}
-if($in_progress{$basename}) {
-  print STDERR "$file:$lineno: cyclic expansion $basename\n";
-    exit 1;
-}
-@
-
-To find out if this is a parameterized chunk reference, all
-definitions are searched for possible matches.  The stripping function
-actually limits the search to definitions which allow in-line code
-in the same positions as the in-line code of the reference.
-
-<<[[find_best_def]]>>=
-sub find_best_def($$) {
-  my ($loc, $curchunk) = @_;
-  my $pchunks = $parmchunks{strip_chunkname $curchunk};
-  return if not $pchunks;
-  <<Find best definition match for [[$curchunk]]>>
-}
-@
-
-Each possible expansion is checked, keeping the best.  As mentioned
-above, the parameter symbol definitions are extracted at the same time.
-
-<<Find best definition match for [[$curchunk]]>>=
-my ($best, %best_parms);
-<<Prepare for finding best definition match>>
-PCHUNK: foreach my $may (keys %$pchunks) {
-  my %may_parms;
-  <<Check [[$may]] and collect parameter defs into [[%may_parms]]>>
-  <<[[next PCHUNK]] if [[$may]] is not best>>
-  $best = $may;
-  %best_parms = (%may_parms);
-  <<Save additional best info about [[$may]]>>
-}
-<<Finish up after finding best definition match>>
-return ($best, %best_parms);
-@
-
-Checking for a match involves simultaneously iterating over the replaced
-portions of the names.  If the replaced portion of both names matches,
-it's considered a match (even if both are in the parameter definition
-form, although perhaps that should be an error).  If they do not
-match exactly, they still match if the definition side is in parameter
-definition form, and the usage side is in literal code text form.
-
-<<Check [[$may]] and collect parameter defs into [[%may_parms]]>>=
-<<Prepare to check if definition matches>>
-my $mayrest = $may;
-my $currest = $curchunk;
-while($mayrest =~ /$parm_re(.*)/) {
-  <<Prepare for resolving ambiguity per match>>
-  my $mayp = $1;
-  $mayrest = $3;
-  $currest =~ /$parm_re(.*)/;
-  my $curp = $1;
-  $currest = $3;
-  next if $curp eq $mayp;
-  next PCHUNK if substr($mayp, 0, 1) eq "[" ||
-                 substr($curp, 0, 1) eq "(";
-  <<Store parameter [[$curp]] in [[$mayp]]>>
-}
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-$may_parms{substr($mayp, 1, -1)} = substr($curp, 2, -2);
-@
-
-To resolve ambiguity, the name with the fewest substitutions is
-retained.
-
-<<Prepare for finding best definition match>>=
-my $best_len = length $curchunk; # larger than all possible lengths
-@
-
-<<Prepare to check if definition matches>>=
-my $len = 0;
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-$len++;
-@
-
-<<[[next PCHUNK]] if [[$may]] is not best>>=
-next PCHUNK if $len > $best_len;
-@
-
-<<Save additional best info about [[$may]]>>=
-$best_len = $len;
-@
-
-If two names have an equal number of substitutions, the one which has
-in-line code at the first position where the two differ is chosen, and
-a warning is issued.  If two names have an equal number of
-substitutions, and all are in the same places, then there is an
-unresolvable ambiguity, leading to error exit.
-
-<<Prepare for finding best definition match>>=
-my @best_parms_loc;
-my (@ambig, $bad_ambig);
-@
-
-<<Prepare to check if definition matches>>=
-my @may_parms_loc;
-my $parm_loc = 0;
-@
-
-<<Prepare for resolving ambiguity per match>>=
-$parm_loc++;
-@
-
-<<Store parameter [[$curp]] in [[$mayp]]>>=
-push @may_parms_loc, $parm_loc;
-@
-
-<<[[next PCHUNK]] if [[$may]] is not best>>=
-if($len == $best_len) {
-  $ambig[0] = $best if $#ambig == 0;
-  push @ambig, $may;
-  my $i;
-  for($i = 0; $i <= $#may_parms_loc; $i++) {
-    next PCHUNK if $may_parms_loc[$i] < $best_parms_loc[$i];
-    last if $may_parms_loc[$i] > $best_parms_loc[$i];
-  }
-  $bad_ambig = 1 if $i == $#may_parms_loc + 1;
-  if($bad_ambig) {
-    $best = undef;
-    next PCHUNK;
-  }
-} else {
-  @ambig = undef;
-  $bad_ambig = undef;
-}
-@
-
-<<Save additional best info about [[$may]]>>=
-@@best_parms_loc = (@may_parms_loc);
-@
-
-<<Finish up after finding best definition match>>=
-if($#ambig > 0) {
-  print STDERR $loc;
-  print STDERR "fatal: unresolvable " if $bad_ambig;
-  print STDERR "ambiguous expansion of @<<$curchunk@>>:\n";
-  foreach my $may (@ambig) {
-    print STDERR "  @<<$may@>>";
-    print STDERR " (chosen)" if $may eq $best;
-    print STDERR "\n";
-  }
-  exit 1 if $bad_ambig;
-}
-@
-
-Parameter substitution supports parameter references in values, as
-well.  Rather than deal with this at every expansion time, the
-parameters are substituted immediately.  As mentioned above, the
-[[%chunks]] table is used to store parameter values as well.  This
-could be expanded with a recursive call to full reference expansion,
-but since parameters are always nothing more than a single, simple
-text string, and I don't want to do [[#line]] processing on that
-string, it is expanded directly.  This needs to be done before the new
-symbol values are placed in [[%chunks]].
-
-In fact, it is possible that [[$basename]] is not yet the best choice
-for a chunk.  If a parameter substitution becomes literal text that
-matches a different chunk name, [[$basename]] may need to be switched.
-This check is only performed if any changes were made due to parameter
-substitution.
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my $changed_name;
-my $new_name = $name;
-foreach my $arg (keys %argv) {
-  my $v = '';
-  my $vrest = $argv{$arg};
-  while($vrest =~ /(.*?)@<<(@.*?)(?<!@)@>>(.*)/) {
-    my $pv = $chunks{$2};
-    $v .= $1 . ${$$pv[0]}{'text'};
-    $vrest = $3;
-  }
-  $v .= $vrest;
-  if($v ne $argv{$arg}) {
-    # $argv{$arg} = $v; # reset by find_best_def anyway
-    $new_name =~ s/(?<!@)\[\[\Q$argv{$arg}\E\]\]/[[$v]]/;
-    $changed_name = 1;
-  }
-}
-if($changed_name) {
-  # find better match if var replacements were made
-  ($basename, %argv) = find_best_def("$file:$lineno: ", $new_name);
-  $chunk = $chunks{$basename} if $basename;
-  if($in_progress{$basename}) {
-    print STDERR "$file:$lineno: cyclic expansion $basename\n";
-      exit 1;
-  }
-}
-@
-
-Now that there is a valid chunk name and parameter list, formal
-parameters can be assigned values.  Since the values need to be
-restored after this chunk has been expanded, the old values are
-retained in [[%revert]].
-
-<<Expand chunk [[$name]] and indent it by [[$indent]]>>=
-my %revert;
-foreach my $arg (keys %argv) {
-  $revert{$arg} = $chunks{$arg};
-  my %v = (file => $file, line => $lineno, text => $argv{$arg});
-  $chunks{$arg} = [\%v];
-}
-<<Perform chunk reference expansion using new parameter values>>
-my ($v, $old);
-$chunks{$v} = $old while(($v, $old) = each %revert);
-@
-
-Next, the text is written to the output, and any references are
-recursively expanded.  Before printing any non-blannk text, a line
-directive is printed, if enabled.  The end of any chunk piece is
-indicated by the lack of a reference (there is always at least a
-trailing newline, even if the last text in the piece was a reference).
-These ends are the places to honor the no-newline flag.  The very last
-one must be detected using an index loop (there doesn't appear to be a
-way to detect the last array element when using a [[foreach]]-style
-iterator); this last piece of text always has its trailing newline
-stripped.
-
-Indentation is performed by finding the current column at expansion:
-take the text of the line to date and convert non-space characters to
-spaces.  This is suppressed when line directives are generated, just
-like notangle.  Ramsey states that when line directives are generated,
-column numbers match the original code.  In order for the first line
-after a reference expansion to meet this requirement, it has to be
-indented to the column after the chunk reference text.  This
-indentation is built into [[$tindent]], which is always reset to
-empty after indenting.
-
-<<Perform chunk reference expansion using new parameter values>>=
-$in_progress{$basename} = 1;
-my $tindent = '';
-my $l = $line;
-my $was_parmref;
-for(my $i = 0; $i <= $#$chunk; $i++) {
-  my $piece = $$chunk[$i];
-  my $text = $$piece{'text'};
-  if($line and $text ne '') {
-    <<Print notangle line directive>>
-  }
-  $line = $l;
-  my $ref = $$piece{'ref'};
-  if($ref) {
-    my $rindent = $indent;
-    unless($line) {
-      my $lastnl = rindex($text, "\n");
-      if($lastnl >= 0) {
-        $rindent .= substr($text, $lastnl + 1);
-      } else {
-        $rindent .= $text;
-      }
-      $rindent =~ s/\S/ /g;
-    }
-    <<Adjust chunk indentation and print [[$text]]>>
-    # assume @x is short, and avoid #line mangling
-    $was_parmref = (substr($ref, 0, 1) eq '@');
-    $line = undef if $was_parmref;
-    print "\n" if($line and $text ne "" and substr($text, 1) ne "\n");
-    $file = $$piece{'file'};
-    $lineno = $$piece{'refline'};
-    expand_chunk($ref, $rindent);
-    if($line) {
-      $tindent .= ' ' x (length($ref) + 4);
-      print "\n";
-    }
-  } else {
-    $nonl = $$piece{'nonl'};
-    # last chunk always has trailing NL suppressed
-    $text =~ s/\n\Z// if($nonl or $i == $#$chunk);
-    <<Adjust chunk indentation and print [[$text]]>>
-    $tindent = '';
-  }
-}
-$in_progress{$basename} = undef;
-@
-
-<<Adjust chunk indentation and print [[$text]]>>=
-$text =~ s/\n/\n$indent/gm;
-$text = $tindent . $text unless $was_parmref;
-if($tab > 0) {
-  if($indent ne "" or ($tindent ne "" and not $was_parmref)) {
-    while($text =~ s/^(\t*) {$tab}/$1\t/) {}
-  }
-  while($text =~ s/(\n\t*) {$tab}/$1\t/gm) {}
-}
-print $text;
-@
-
-Ramsey puts a lot more effort into managing whitespace and line
-directives, but really, this is generated code, not meant to be read
-or used directly by anyone.  As long as the line numbers are correct,
-who cares?  The main issue with not doing it exactly the same way is
-that it becomes more difficult to verify identical operation when the
-enhancements are unused.
-
-<<Print notangle line directive>>=
-my $lp; my $lt = $line;
-while($lt =~ /(.*?)%(([+-])([0-9]+)L|[%FLN])(.*)/) {
-  $lp .= $1;
-  $lt = $5;
-  if($2 eq '%') {
-    $lp .= '%';
-  } elsif($2 eq 'N') {
-    $lp .= "\n";
-  } elsif($2 eq 'F') {
-    $lp .= $$piece{'file'};
-  } else { # L
-    my $l = $$piece{'line'};
-    if($3 eq '+') {
-      $lp += $4;
-    } elsif($3 eq '-') {
-      $lp -= $4;
-    }
-    $lp .= $l;
-  }
-}
-print $lp . $lt;
-@
-
-To actually use this back end, a new wrapper script is provided.  It
-assumes that [[notangle]] is the noweb version, copies it, and
-replaces [[nt]] with [[nt-enh]].  This is not done because the wrapper
-is complex, but because there is no way to locate the noweb
-executables other than to copy them from the existing script.
-Retaining the ability to use other filter hooks seemed like a good
-idea.
-
-\lstset{language=make}
-<<Build Source>>=
-notangle-enh \
-@
-
-<<Clean temporary files>>=
-rm notangle-enh \
-@
-
-<<makefile.rules>>=
-notangle-enh: nt-enh
-	sed 's%$$LIB/nt%nt-enh%' < `which notangle` >notangle-enh
-	chmod +x notangle-enh
-@
-
-To use this with the build system everywhere except building the
+To use these with the build system everywhere except building the
 makefiles and tangling within scripts, [[$(NOTANGLE)]] should be set
 globally, except of course when building itself.  The current
 directory needs to be added first in the path in order to pick up
-[[nt-enh]].  Note that the [[nt-enh]] rule must be explicit;
+the filters.  Note that the [[nt-nonl]] rule must be explicit;
 per-target variables do not work on dependencies.
 
+\lstset{language=make}
 <<Build Source>>=
-nt-enh \
+nt-nonl <<Filters from [[parm.nw]]>> \
 @
 
-<<Clean temporary files>>=
-rm nt-enh \
+<<Filters from [[parm.nw]]>>=
+nt-parm \
 @
 
 <<makefile.vars>>=
-NOTANGLE:=PATH=".:$$PATH" ./notangle-enh
-NOTANGLE_DEP:=notangle-enh
-nt-enh: NOTANGLE:=notangle
-#nt-enh: NOTANGLE_DEP:=
-nt-enh: $(NOWEB)
+NOTANGLE:=PATH=".:$$PATH" notangle -filter nt-parm -filter nt-nonl
+NOTANGLE_DEP:=nt-parm nt-nonl
+nt-nonl nt-parm: NOTANGLE:=notangle
+#nt-nonl nt-parm: NOTANGLE_DEP:=
+PARM_NOWEB = $(if $(wildcard parm.nw),parm.nw,\
+               $(patsubst %/$(BUILD_NOWEB), %/parm.nw, \
+	          $(realpath $(BUILD_NOWEB))))
+PARM_EXEC = <<Filters from [[parm.nw]]>>
+
+PARM_CPP = $(patsubst %, %.cpp, $(PARM_EXEC))
+@
+
+<<Clean temporary files>>=
+rm nt-nonl $(PARM_EXEC) $(patsubst %, %.cpp, $(PARM_EXEC))
+@
+
+<<makefile.rules>>=
+nt-nonl: $(NOWEB)
 	$(call NOTANGLE_CHUNK,$@) >$@
-	chmod +x nt-enh
+	chmod +x $@
+$(PARM_CPP): %.cpp: $(PARM_NOWEB)
+	notangle -R$@ $< >$@
 @
 
 \subsection{Weaving}
 
-These enhancements also require changes to the weavers.  No particular
-effort will be made to typeset things nicely.  Parameter references
-should be typeset as chunk references, but without the links (where
-would they link to?).  To do that, they need to be hidden from the
-indexer, and unhidden after the indexer.  Likewise, to get cross
-references right, references to parameterized chunks with actual
-parameters need to be converted to the definition format for the
-indexer, and then changed back afterwards.  The star prefix
-requires stripping the star before indexing, and re-adding it
-afterwards.  These tasks can be accomplished by two filters: one for
-before indexing, and one for after.
+The star prefix requires stripping the star before indexing, and
+re-adding it afterwards.  These tasks can be accomplished by two
+filters: one for before indexing, and one for after.  It hides the
+star using a new keyword.  A similar set of filters is used for
+parameter processing.
+
+<<Filters from [[parm.nw]]>>=
+nw-parm-preidx nw-parm-postidx \
+@
 
 <<Build Script Executables>>=
-nw-enh-preidx nw-enh-postidx \
+nw-nonl-preidx nw-nonl-postidx \
 @
 
-\lstset{language=perl}
-<<nw-enh-preidx>>=
-<<Common Perl Prefix>>
-
+\lstset{language=sh}
+<<nw-nonl-preidx>>=
+#!/bin/sh
+<<Common noweb Warning>>
+sed -e '
+  /^@defn \*./ {
+    s/\*//
+    s/^/@nonlstar\n/
+  }'
 @
 
-<<nw-enh-postidx>>=
-<<Common Perl Prefix>>
-
-@
-
-The pre-index filter needs to know how to interpret chunk references
-with in-line code:  either as in-line code, or as macro parameters.
-The only way to do this is to know the names of all chunks.  Since
-weaving does not require all tangling inputs, but this particular task
-does require them, any inputs not included in the weaving process must
-be specified on the filter's command line.  While it might be nice to
-use the standard markup tool for this, it is not present in noweb 3.
-Instead, the file is parsed directly, with a very limited view of what
-constitutes the start of a chunk.  This probably needs improvement.
-
-Much like the tangler's reader, each definition is placed into two
-arrays:  one indexed by its real name, and one indexed by its name
-with all parameter definitions and references stripped out.  That way,
-finding the actual chunk to use for a macro reference is easier.
-
-<<nw-enh-preidx>>=
-<<[[strip_chunkname]]>>
-
-my (%chunks, %parmchunks);
-
-foreach my $a (@ARGV) {
-#  open(my $fh, "markup $a|");
-  open(my $fh, "$a");
-  while(<$fh>) {
-#    next unless(m/^\@defn (\*)?(.*)$/);
-    next unless(m/^@<<(\*)?(.*)@>>=$/);
-    # note: don't care if '*' gets flagged correctly or not
-    $chunks{$2} = 1;
-    my $s = strip_chunkname($1);
-    $parmchunks{$s} = {} if not $parmchunks{$s};
-    ${$parmchunks{$s}}{$1} = 1;
-  }
-  close $fh;
-}
-@
-
-The filter process needs to scan the file more than once.  The first
-time, it gathers definitions just like it did for the command-line
-arguments.  For convenience, the file is just read into an array of
-plain text lines for processing.
-
-<<nw-enh-preidx>>=
-my @file = <STDIN>;
-foreach my $l (@file) {
-  next unless($l =~ m/^\@defn (\*)?(.*)$/);
-  $chunks{$2} = 1;
-  my $s = strip_chunkname($2);
-  $parmchunks{$s} = {} if not $parmchunks{$s};
-  ${$parmchunks{$s}}{$2} = 1;
-}
-@
-
-For the second pass, an attempt is made to match a chunk reference
-with a definition.  If it matches, and requires parameter expansion to
-do so, it will replace its name with the parameterized definition, and
-save its old name using [[@nwenhcall]].  The matching method is
-copied from the tangler, with minor differences.  File and line
-information are not tracked by this filter, so the location string is
-always blank.  Also, since a standalone chunk does not have parameter
-values, the specialization performed after parameter expansion in chunk
-names can't be done.  Unfortunately, there is also no special link
-between a parameterized chunk and all of its potential specializations.
-
-A leading star in an [[@defn]] is removed the same way.
-
-Parameter references are simply hidden by renaming them to
-[[@nwenhuse]].
-
-As a special hack, in order to highlight parameters better, an extra
-set of square brackets is placed around them.  This repeats some of
-the work that [[find_best_def]] does, but that's not too terrible.
-
-<<nw-enh-preidx>>=
-<<[[find_best_def]]>>
-
-foreach my $l (@file) {
-  if($l =~ /^\@use ([^@].*\[\[.*\]\].*)$/) {
-    my ($best,) = find_best_def('', $1);
-    if($best and $best ne $1) {
-      my $cur = '';
-      my ($b, $c) = ($best, $1);
-      while($b =~  /$parm_re(.*)/) {
-        my $bp = $1;
-        $b = $3;
-        $c =~ /^(.*?)$parm_re(.*)/;
-        my $cp = $2;
-        $c = $4;
-	$cur .= $1;
-	if($cp eq $bp) {
-	  $cur .= $cp;
-	} else {
-	  $cur .= '[[' . $cp . ']]';
-	}
-      }
-      $cur .= $c;
-      print "\@nwenhcall $cur\n\@use $best\n";
-    } else {
-      print $l;
-    }
-  } elsif($l =~ /^\@defn \*(.+)$/) {
-    print "\@nwenhcall *$1\n\@defn $1\n";
-  } else {
-    $l =~ s/^\@use \@/\@nwenhuse \@/;
-    print $l;
-  }
-}
-@
-
-For the third pass, done after the index, the above-added tags are
-reverted.
-
-<<nw-enh-postidx>>=
-my $nwenhcall;
-
-while(<STDIN>) {
-  if(/^\@nwenhcall (.*)$/) {
-    $nwenhcall = $1;
-  } elsif(/^\@(defn|use) / and $nwenhcall) {
-    print "\@$1 $nwenhcall\n";
-    $nwenhcall = undef;
-  } else {
-    s/^\@nwenhuse /\@use /;
-    print "$_";
-  }
-}
+<<nw-nonl-postidx>>=
+#!/bin/sh
+<<Common noweb Warning>>
+sed -e '
+  /^@nonlstar/ {
+    d
+    s/ / */
+  }'
 @
 
 \subsection{Other}
 
 This is not the end of it:  [[noroots]] (noweb-2 only) needs changes
-as well.  There is no reason to retain the pipeline for this tool, so
-it could be standalone and not depend on the markup parser.  However,
-keeping the parsing to the one official parser might be a good idea.
-The [[noroots]] script is not a simple pipeline, though:  it includes
-the entire ``backend'' in-line.  To make a replacement script, the
-library location is lifted using a trick filter in notangle.
+as well.  Rather than re-implement this from scratch, as I did in
+previous versions of this document, I simply copy the standard script
+and insert the tangling filters into the pipeline.
 
-The procedure is the same as standard [[noroots]], except that after
-collecting all usages, a pass is made over the usage array to add
-parameterized usages.
-
-<<Build Script Executables>>=
-noroots-enh \
+<<Build Source>>=
+notangle-enh \
 @
 
-<<noroots-enh>>=
-<<Common Perl Prefix>>
-
-my $LIB = `notangle -filter 'echo \$LIB >&3' /dev/null 2>/dev/null 3>&1`;
-chomp $LIB;
-
-my (%chunks, %parmchunks, %use);
-
-open(my $f, "-|", "$LIB/markup", @ARGV);
-
-<<[[strip_chunkname]]>>
-
-while(<$f>) {
-  if(/^\@quote$/) {
-    while(<$f>) {
-      last if(/\@endquote$/);
-    }
-  } elsif(/^\@defn (.*)$/) {
-    $chunks{$1} = 1;
-    my $s = strip_chunkname($1);
-    $parmchunks{$s} = {} if not $parmchunks{$s};
-    ${$parmchunks{$s}}{$1} = 1;
-  } elsif(/^\@use (.*)$/) {
-    $use{$1} = 1;
-  }
-}
-
-<<[[find_best_def]]>>
-
-for my $u (keys %use) {
-  if(substr($b, 0, 1) ne '@') {
-    my ($b,) = find_best_def('', $u);
-    $use{$b} = 1 if $b;
-  }
-}
-@
-
-One major problem is that finding a new match after parameter
-expansion is no longer done.  The only way to check for these is to
-check each root, expanding any parameter references, and marking any
-newly used definitions.  This would need to be done in two passes:
-first to cover unparameterized roots, and then to cover any remaining
-parameterized roots.  Thus the entire code above would need to be
-rewritten.  Instead, a simple hack is performed: for any usage of a
-parameterizable chunk with a passed-on parameter, all possible
-specializations of that parameter are marked used as well.  This
-(along with the previous loop) may end up marking more than necessary,
-but it's probably good enough for a program that isn't really
-officially supported, anyway.
-
-<<noroots-enh>>=
-for my $u (keys %use) {
-  next if rindex($u, '@<<@') < 2;  # needs at least one parm ref in code
-  my $pchunks = $parmchunks{strip_chunkname $u};
-  next if not $pchunks ||
-       (scalar keys %$pchunks) == 0 ; # needs possible resolutions
-  my ($b, %bp) = find_best_def('', $u);
-  next if $b eq $u; # needs to resolve without specialization
-  # find possible parameters with parameter expansion
-  my %vars;
-  foreach my $v (keys %bp) {
-    $vars{$v} = 1 if index($bp{$v}, '@<<@') >= 0;
-  }
-  next if (scalar keys %vars) == 0;
-  # map vars to var positions
-  my @vpos;
-  my $brest = $b;
-  while($brest =~ /$parm_re(.*)/) {
-    my $bp = $1;
-    $brest = $3;
-    push @vpos, substr($bp, 0, 1) eq '(' && $vars{substr($bp, 1, -1)};
-  }
-  # for each possible resolution, allow anything at $u's var positions
-  # also, allow mapping of any parm to any code text
-  foreach my $pc (keys %$pchunks) {
-    next if $pc eq $b;
-    my $i = 0;
-    my $urest = $u;
-    my $prest = $pc;
-    my $matched = 1;
-    while($prest =~ /$parm_re(.*)/) {
-      my $bp = $1;
-      $prest = $3;
-      $urest =~ /$parm_re(.*)/;
-      my $up = $1;
-      $urest = $3;
-      if(substr($bp, 0, 1) eq '[') {
-        $matched = $vpos[$i] || $bp eq $up;
-      } else {
-        $matched = substr($up, 0, 1) eq '[' || $bp eq $up;
-      }
-      last if not $matched;
-      $i++;
-    }
-    $use{$pc} = 1 if $matched;
-  }
-}
-@
-
-Once that's been taken care of, the roots can be printed.
-
-<<noroots-enh>>=
-for my $d (keys %chunks) {
-  print "@<<$d@>>\n" unless $use{$d};
-}
+<<makefile.rules>>=
+noroots-enh: $(BUILD_NOWEB) nt-parm nt-nonl
+	sed 's%| awk%| ./nt-parm | ./nt-nonl &%' <`which noroots` >./noroots-enh
+	chmod +x ./noroots-enh
 @
 
 The use of [[noroots]] within the build system is pretty much limited
@@ -2683,6 +1699,16 @@ used for this.  Like all noweb filters, it just sucks in the marked up form
 of the noweb source and spits out the same, with modifications.  The
 language is tracked so that the formatter can behave differently depending
 on language.
+
+<<Common Perl Prefix>>=
+#!/bin/sh
+#!perl
+<<Common noweb Warning>>
+eval 'exec perl -x -f "$0" "$@"'
+  if 0;
+
+use strict;
+@
 
 <<Build Script Executables>>=
 nwweavefilt \
@@ -3676,7 +2702,8 @@ nw2latex: <<[[nw2latex]] deps>>
 @
 
 <<[[nw2latex]] deps>>=
-latexhl nwweavefilt addlistings nw-enh-preidx nw-enh-postidx \
+latexhl nwweavefilt addlistings nw-nonl-preidx nw-nonl-postidx \
+nw-parm-preidx nw-parm-postidx \
 @
 
 \lstset{language=sh}
@@ -3711,8 +2738,9 @@ mkdir -p $HLDIR
 EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave -filter "./nw-enh-preidx $noweb_order | ./nwweavefilt $filt $noweb_order" \
-          -delay -indexfrom /dev/null -filter "./nw-enh-postidx" ${NW_UTF8:+-t} - | \
+  noweave -filter "./nw-parm-preidx $noweb_order | ./nw-nonl-preidx |
+                   ./nwweavefilt $filt $noweb_order" -delay -indexfrom /dev/null \
+	  -filter "./nw-nonl-postidx | ./nw-parm-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
 @
@@ -4725,7 +3753,8 @@ FIGS_PNG:=$(patsubst %, %.png, $(FIGS))
 @
 
 <<makefile.rules l2h>>=
-nw2html:  htmlhl nwweavefilt notangle-enh nw-enh-preidx nw-enh-postidx
+nw2html:  htmlhl nwweavefilt notangle-enh nw-nonl-preidx nw-nonl-postidx \
+          nw-parm-preidx nw-parm-postidx
 
 %.html: %.nw $(FIGS_PNG) nw2html
 	./nw2html $< $@ "$(call tree,$<)" "$(HL_THEME)" "$(HLPROG_TYPE)"
@@ -4854,10 +3883,13 @@ EOF
   <<Further l2h preamble>>
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
-  noweave ${NW_UTF8:+-t} -html -filter "./nw-enh-preidx $noweb_order" \
-          -filter "./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
-          -filter 'sed -n "<<Filter out noidx results>>"' -filter noidx \
-	  -filter ./nw-enh-postidx - | <<Post-process HTML after weave>>
+  noweave ${NW_UTF8:+-t} -html \
+          -filter "./nw-parm-preidx $noweb_order |
+	     ./nw-nonl-preidx $noweb_order |
+             ./nwweavefilt ./htmlhl $noweb_order | l2h" -indexfrom /dev/null \
+          -filter 'sed -n "<<Filter out noidx results>>" | noidx |
+	           ./nw-nonl-postidx | ./nw-parm-postidx' \
+	       | <<Post-process HTML after weave>>
          cat
 
 <<Print attachments as HTML comment>>
@@ -5411,24 +4443,25 @@ attached to the original electronic forms of this document:\\
 \verb!\input{Sources.tex} % txt!
 \end{quote}
 
-\item noweb extensions:  by default, an extended version of the noweb
-tools is used, collectively known as noweb-enhanced.  They consist of
-the following executables, which still depend on noweb 2.x being
-installed:
+\item noweb extensions:  by default, filters are used to enhance the
+noweb tools, collectively known as noweb-enhanced.  The parameter
+substitution filters are described and implemented in a separate
+document, [[parm.nw]].  The enhancements consist of the following
+executables, the last of which requires noweb 2.x:
 \begin{itemize}
-\item [[notangle-enh]] is a replacement for [[notangle]].  It is, in
-fact, a copy of [[notangle]] which replaces the back end with
-[[nt-enh]].
-\item [[nt-enh]] is a markup back end which tangles using the
-extensions.
+\item [[nt-parm]] and [[nt-monl]] are filters to be added to
+[[notangle]] using its [[-filter]] option.
+\item [[nw-parm-preidx]] and [[nw-nonl-preidx]] are filters to be
+added to [[noweave]] using its [[-filter]] option before indexing
+options.  They take an optional list of noweb files as their
+arguments; this should be the full list of files (optionally excluding
+the one being weaved) used for tangling.
+\item [[nw-parm-postidx]] and [[nw-nonl-postidx]] are filters to be
+added to [[noweave]] using its [[-filter]] option after indexing options.
 \item [[noroots-enh]] is a replacement for [[noroots]] which supports
-the extensions.
-\item [[nw-enh-preidx]] is a filter to be added to [[noweave]] using
-its [[-filter]] option before indexing options.  It takes an optional
-list of noweb files as its argument; this should be the full list of
-files (optionally excluding the one being weaved) used for tangling.
-\item [[nw-enh-postidx]] is a filter to be added to [[noweave]] using
-its [[-filter]] option after indexing options.
+the extensions.  This requires noweb 2.x, as it is a copy of that
+version's [[noroots]] which simply inserts the [[nt-parm]] and
+[[nt-nonl]] filters into the pipeline.
 \end{itemize}
 
 These provide the following extensions:

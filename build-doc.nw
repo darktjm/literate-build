@@ -12,6 +12,7 @@
 \input{build-rcs.tex} %%% doc
 
 %%% requires build
+%%% requires parm
 %%% no-ext-ref
 
 \begin{document}

@@ -26,6 +26,11 @@ literate programming build system which support the Ada programming
 language.  In particular, this includes yet another API documentation system
 to document Ada from comments.
 
+\vspace{0.75in}
+
+This document, its prior versions by the same author and its products
+are granted to the Public Domain by Thomas J. Moore in 2021.
+
 \vspace{0.5in}
 
 This document was generated from the following sources, all of which are

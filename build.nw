@@ -1433,7 +1433,7 @@ PARM_CPP = $(patsubst %, %.cpp, $(PARM_EXEC))
 @
 
 <<Clean temporary files>>=
-rm nt-nonl $(PARM_EXEC) $(patsubst %, %.cpp, $(PARM_EXEC))
+rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.cpp, $(PARM_EXEC))
 @
 
 <<makefile.rules>>=

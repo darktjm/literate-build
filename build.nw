@@ -1493,7 +1493,7 @@ noroots-enh \
 
 <<makefile.rules>>=
 noroots-enh: $(BUILD_NOWEB) nt-parm nt-nonl
-	sed 's%| awk%| ./nt-nonl|./nt-parm &%' <`which noroots` >./noroots-enh
+	sed 's%| awk%| ./nt-nonl|./nt-parm -r &%' <`which noroots` >./noroots-enh
 	chmod +x ./noroots-enh
 @
 

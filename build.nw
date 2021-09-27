@@ -16,7 +16,7 @@
 \title{Syntax Highlighting Modular Build System for noweb}
 \author{Thomas J. Moore}
 % Begin-doc build-ver
-\date{Version 3.16.\RCSRevision\\\RCSDate}
+\date{Version 3.17.\RCSRevision\\\RCSDate}
 % End-doc build-ver
 \maketitle
 
@@ -1405,10 +1405,9 @@ sed -e '
 
 To use these with the build system everywhere except building the
 makefiles and tangling within scripts, [[$(NOTANGLE)]] should be set
-globally, except of course when building itself.  The current
-directory needs to be added first in the path in order to pick up
-the filters.  Note that the [[nt-nonl]] rule must be explicit;
-per-target variables do not work on dependencies.
+globally, except of course when building itself.  Note that the
+[[nt-nonl]] rule must be explicit; per-target variables do not work on
+dependencies.
 
 \lstset{language=make}
 <<Build Source>>=
@@ -1420,7 +1419,7 @@ nt-parm \
 @
 
 <<makefile.vars>>=
-NOTANGLE:=PATH=".:$$PATH" notangle -filter nt-parm -filter nt-nonl
+NOTANGLE:=notangle -filter "./nt-nonl|./nt-parm"
 NOTANGLE_DEP:=nt-parm nt-nonl
 nt-nonl nt-parm: NOTANGLE:=notangle
 #nt-nonl nt-parm: NOTANGLE_DEP:=
@@ -1494,8 +1493,12 @@ noroots-enh \
 
 <<makefile.rules>>=
 noroots-enh: $(BUILD_NOWEB) nt-parm nt-nonl
-	sed 's%| awk%| ./nt-parm | ./nt-nonl &%' <`which noroots` >./noroots-enh
+	sed 's%| awk%| ./nt-nonl|./nt-parm -r &%' <`which noroots` >./noroots-enh
 	chmod +x ./noroots-enh
+@
+
+<<Clean temporary files>>=
+rm -f noroots-enh
 @
 
 The use of [[noroots]] within the build system is pretty much limited
@@ -3309,7 +3312,7 @@ export HEADERS
 @
 
 <<Extract and format a C prototype from [[cproto.h]]>>=
-notangle -filter "./nt-parm | ./nt-nonl" -R"C Prototypes" $noweb_order 2>/dev/null | \
+notangle -filter "./nt-nonl|./nt-parm" -R"C Prototypes" $noweb_order 2>/dev/null | \
   eval "cat - cproto.h $HEADERS"  | grep -v '^#line' | \
      sed -n -r -e "/<<C Prototype Pattern>>/{<<Extract multi-line prototype>>;q;}" | \
      sed -n -e '<<Format a prototype from [[cproto.h]]>>'

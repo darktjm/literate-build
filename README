@@ -29,7 +29,7 @@ users' manual:
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
-NoWeb source to find out those prerequisites, I have provided the PDF
+noweb source to find out those prerequisites, I have provided the PDF
 and HTML output as well.  One of these is all you need, since they have
 the source attached (and have instructions for detaching).  These are
 available in the downloads section:
@@ -56,7 +56,7 @@ above for that.
 
 In addition, the build system has a mechanism to create a tarball of
 the extracted sources, which should no longer depend on the presence
-of NoWeb.  This tarball is most useful if you actually want to compile
+of noweb.  This tarball is most useful if you actually want to compile
 the tjm-ext library without using the build system from scratch:
 
    https://bitbucket.org/darktjm/literate-build/downloads/build-src.tar.gz

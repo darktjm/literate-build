@@ -1000,6 +1000,8 @@ parameters for recursion will be [[best_parms]].
 <<Resolve non-parm [[use]] into [[gd.puse_val[text]]]>>=
 strmap best_parms;
 string best = find_best_def(i, use, best_parms);
+if(best.empty())
+  continue;
 @
 
 The recursive call's global parameters are the current globals, merged

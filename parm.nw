@@ -974,7 +974,7 @@ while(find_parm(use, pstart, pafter)) {
     }
     if(val == globals.end()) {
       // generate an undefined reference error; prefixed to use
-      use_err += var + "\n@use ";
+      use_err += "@use " + var + '\n';
       use_changed = true;
       continue;
     }
@@ -988,7 +988,7 @@ while(find_parm(use, pstart, pafter)) {
   }
 }
 if(!use_err.empty()) {
-  gd.puse_val[text] = use_err + use;
+  gd.puse_val[text] = use_err + text;
   continue;
 }
 @

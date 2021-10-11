@@ -1057,7 +1057,7 @@ if(refs.size()) {
   append_str(use, new_globals, refs);
   use_changed = true;
   for(strset::const_iterator it = refs.begin(); it != refs.end(); it++)
-    if(locals.find(*it) != locals.end())
+    if(locals.find(*it) == locals.end())
       global_refs.insert(*it);
 }
 if(use_changed)
@@ -1065,6 +1065,7 @@ if(use_changed)
 if(gendefs.find(use) == gendefs.end() &&
    defs.find(use) == defs.end())
   gendefs[use] = ngd;
+processing->erase(rkey);
 @
 
 Now that the generated chunks have been defined, it's time to trim the

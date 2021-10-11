@@ -61,11 +61,6 @@ the tjm-ext library without using the build system from scratch:
 
    https://bitbucket.org/darktjm/literate-build/downloads/build-src.tar.gz
 
-For all of the downloads listed above, I may upload less frequently
-than I update the git.  Updating the git from my personal sources is
-scriptable, but as far as I can tell, uploads are not.  It's too much
-trouble to keep 7 files up-to-date all the time.
-
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,
 but is mostly a non-functional repository for my old version 1 and 2

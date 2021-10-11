@@ -365,7 +365,8 @@ makefile: $(BUILD_NOWEB)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -R$@ $(BUILD_NOWEB) 2>/dev/null | \
-	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | \
+	      env -i PATH="$${PATH}" $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(BUILD_NOWEB) > $@
 @
@@ -508,7 +509,8 @@ makefile.config: $(NOWEB_ORDER)
 	notangle -t8 -R$@ $^ 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -R$@ $^ 2>/dev/null | \
-	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | \
+	      env -i PATH="$${PATH}" $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $^ > $@
 
@@ -516,7 +518,8 @@ makefile.vars: makefile.config
 	notangle -t8 -R$@ $(NOWEB_ORDER) 2>/dev/null | grep -v '^$$' >/dev/null
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -R$@ $(NOWEB_ORDER) 2>/dev/null | \
-	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | \
+	      env -i PATH="$${PATH}" $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 
@@ -525,7 +528,8 @@ makefile.rules: makefile.vars
 ifeq ($(MAKEPP_VERSION),)
 	notangle -t8 -Rmakefile.config -Rmakefile.vars -R$@ \
 	                                     $(NOWEB_ORDER) 2>/dev/null | \
-	    grep -v '^-include' | env -i $(MAKE) -n -f- /dev/null >/dev/null
+	    grep -v '^-include' | \
+	      env -i PATH="$${PATH}" $(MAKE) -n -f- /dev/null >/dev/null
 endif
 	-notangle -t8 -R$@ $(NOWEB_ORDER) > $@
 @

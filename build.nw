@@ -730,22 +730,24 @@ check: $(NOWEB) $(NOTANGLE_DEP)
 
 \section{Binaries}
 
-Building the binaries is pretty simple, using automatic rules.  Support is
-provided here for plain text executable scripts and C executables.  In order
-to ensure a consistent build rule for all C files, the default
-C-to-executable rule is blanked out.  Executables are assumed to have one
-mainline source, named the same as the executable but with a \texttt{.c}
-extenstion.  All local libraries built from local sources are linked into
-every executable.
+Building the binaries is pretty simple, using automatic rules. 
+Support is provided here for plain text executable scripts and C and
+C++ executables.  In order to ensure a consistent build rule for all C
+and C++ files, the default C/C++-to-executable rules are blanked out.
+Executables are assumed to have one mainline source, named the same as
+the executable but with a \texttt{.c} extension for C and
+\texttt{.c++} for C++.  All local libraries built from local sources
+are linked into every executable.
 
-C files share the ability to have per-file post-processing using
-[[NOTANGLE_POSTPROC]].  Previous versions of this build system only
-supported per-file post-processing for C files, using the
+All source files share the ability to have per-file post-processing
+using [[NOTANGLE_POSTPROC]].  Previous versions of this build system
+only supported per-file post-processing for C files, using the
 [[C_POSTPROCESS]] hook.  The C-specific hook was a function call
 rather than a plain variable expansion; i.e., instead of using [[$@]]
 to refer to the target, it was expected that [[$1]] would be used.
 Using [[NOTANGLE_POSTPROC]] is more consistent, but some old documents
-still use the old method.  The old method is supported, but deprecated.
+still use the old method.  The old method is supported, but
+deprecated.
 
 <<Executables>>=
 $(C_EXEC) $(SCRIPT_EXEC) \
@@ -759,18 +761,33 @@ C_EXEC=<<C Executables>>
 NOWEB_CFILES:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.c>>/{s/@<<//;s/@>>//;p;}')
 CFILES=<<C Files>>
 
+NOWEB_RAWCXXFILES:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.c++>>/{s/@<<//;s/@>>//;p;}')
+<<Adjust [[NOWEB_CXXFILES]]>>
+CXXFILES=<<C++ Files>>
+
 NOWEB_HEADERS:=$(shell $(NOROOTS) $(NOWEB) | sed -n '/\.h>>/{s/@<<//;s/@>>//;p;}')
-HEADERS=<<C Headers>>
+CHEADERS=<<C Headers>>
+
+CXXHEADERS=<<C++ Headers>>
 
 COFILES=$(patsubst %.c, %.o, $(CFILES))
+CXXOFILES=$(patsubst %.c++, %.o, $(CXXFILES))
 @
 
 <<C Files>>=
 $(NOWEB_CFILES) \
 @
 
+<<C++ Files>>=
+$(NOWEB_CXXFILES) \
+@
+
 <<C Headers>>=
-$(NOWEB_HEADERS) \
+$(filter-out $(CXXHEADERS),$(NOWEB_HEADERS)) \
+@
+
+<<C++ Headers>>=
+\
 @
 
 <<Build Source>>=
@@ -778,13 +795,13 @@ $(SCRIPT_EXEC) \
 @
 
 <<makefile.config>>=
-# Set to -L for #line in C files, but lose code indentation
+# Set to -L for #line in C/C++ files, but lose code indentation
 USE_LINE:=-L
 
 @
 
 <<makefile.vars>>=
-$(NOWEB_HEADERS) $(NOWEB_CFILES): NOTANGLE_OPTS += $(USE_LINE)
+$(NOWEB_HEADERS) $(NOWEB_CFILES) $(NOWEB_CXXFILES): NOTANGLE_OPTS += $(USE_LINE)
 $(NOWEB_HEADERS) $(NOWEB_CFILES): NOTANGLE_POSTPROC += $(call C_POSTPROCESS,$@)
 @
 
@@ -793,29 +810,32 @@ $(SCRIPT_EXEC): $(NOWEB) $(NOTANGLE_DEP)
 	-$(call NOTANGLE_CHUNK,$@) >$@
 	chmod +x $@
 
-$(NOWEB_HEADERS) $(NOWEB_CFILES): $(NOWEB) $(NOTANGLE_DEP)
+$(NOWEB_HEADERS) $(NOWEB_CFILES) $(NOWEB_CXXFILES): $(NOWEB) $(NOTANGLE_DEP)
 	-$(call NOTANGLE_CHUNK,$@) >$@
 
-# disable gmake built-in .c->exe rule
+# disable gmake built-in .c/.c++->exe rules
 ifeq ($(MAKEPP_VERSION),)
 %: %.c
+%: %.c++
 endif
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -c -o $@ $<
 
+%.o: %.c++
+	$(CXX) $(CXXFLAGS) $(EXTRA_CXXFLAGS) -c -o $@ $<
+
 %: %.o
-	$(CC) -o $@ $< $(LDFLAGS) -L. $(LOCAL_LIBS) $(EXTRA_LDFLAGS)
+	$(CXX) -o $@ $< $(LDFLAGS) -L. $(LOCAL_LIBS) $(EXTRA_LDFLAGS)
 @
 
 <<Files to Count>>=
-$(CFILES) $(HEADERS) \
+$(CFILES) $(CXXFILES) $(CHEADERS) $(CXXHEADERS) \
 @
 
 <<Clean temporary files>>=
-rm -f ${CFILES}
-rm -f $(HEADERS)
-rm -f $(COFILES)
+rm -f $(CFILES) $(CXXFILES) $(CHEADERS) $(CXXHEADERS)
+rm -f $(COFILES) $(CXXOFILES)
 @
 
 <<Clean built files>>=
@@ -831,10 +851,10 @@ rm -f $(EXEC_FILES)
 @
 
 <<Build Source>>=
-$(CFILES) $(HEADERS) \
+$(CFILES) $(CXXFILES) $(CHEADERS) $(CXXHEADERS) \
 @
 
-Scripts and C programs may also be generated as part of the build
+Scripts and C/C++ programs may also be generated as part of the build
 process, for example to create machine-generated code.
 
 <<makefile.vars>>=
@@ -953,7 +973,7 @@ makefile.libs: makefile.rules
 	   printf '\n\trm -f $$@\n'; \
 	   printf '\t$$(AR) cr$$(AR_EXTRA) $$@ $$^\n'; \
 	   printf '\t$$(RANLIB) $$@\n'; \
-	   printf 'LIB_OBJ += $$(filter-out $$(COFILES),'; \
+	   printf 'LIB_OBJ += $$(filter-out $$(COFILES) $$(CXXOFILES),'; \
 	   notangle -R"Library [[$$x]] Members" $(NOWEB_ORDER) | tr '\n' ' '; \
 	   printf ')\n'; \
 	done > $@
@@ -1109,8 +1129,34 @@ $(TEST_SCRIPT_EXEC) $(TEST_SCRIPT_EXEC_SUPPORT): $(NOWEB) $(NOTANGLE_DEP)
 @
 
 <<Clean temporary files>>=
-rm -f $(TEST_EXEC) $(TEST_C_EXEC:%=%.c) $(TEST_EXEC_SUPPORT) \
-        $(TEST_C_EXEC_SUPPORT:%=%.c)
+rm -f $(TEST_EXEC) $(TEST_C_EXEC:%=%.c{,++}) $(TEST_EXEC_SUPPORT) \
+        $(TEST_C_EXEC_SUPPORT:%=%.c{,++})
+@
+
+Note that the above rule, as well as many others from here on in,
+assume that the shell being used by [[make]] expands curly brace
+expressions.  If it doesn't (e.g. Debian's [[dash]] or many other UNIX
+systems' Bourne Shell), invoke make with an additional
+\texttt{SHELL=}\textit{/path/to/better/shell} argument.  Or, set it in
+[[makefile.config.local]]:
+
+<<makefile.config>>=
+# The shell to use.  This cannot be overridden in the enviornment, and
+# is inconvenient to remember specifying every time you do a "make".
+# This shell must support POSIX shell variable expansion.
+# This shell must support curly brace expansion
+# Examples:
+#   /bin/ksh (default POSIX shell on most commercial UNIX systems)
+#     (some systems, like AIX, make this the default /bin/sh as well)
+#   /bin/bash (default /bin/sh on most free UNIX systems)
+#   /bin/zsh (my preferred shell for interactive use)
+# Counterexamples:
+#   Bourne Shell - used as /bin/sh on many commercial UNIX systems
+#   busybox - used as /bin/sh on many embedded systems
+#   dash - used as /bin/sh on Debian systems by default
+# GNU make selects /bin/sh by default.
+#SHELL:=/bin/sh
+
 @
 
 \subsection{Support Files}
@@ -1140,6 +1186,13 @@ decided to add a rule dependency on the temporary file's name, which
 could not be removed or overridden.  Now it just makes sure it got
 deleted on errors.
 
+An issue with using [[cproto]] is that it does not support C++.  I was
+originally not going to support C++ here, anyway, but now that I have,
+I use ``universal'' [[ctags]]%
+\footnote{\url{https://ctags.io}}
+for C++.  It seems to work for a few samples, but it is unreliable
+enough that I will continue using [[cproto]] for C.
+
 Of course there are times when blind prototype creation is
 undesirable.  For example, libraries tend to place prototypes in
 headers.  Some of them may use datatypes which are not defined in
@@ -1148,17 +1201,17 @@ the exact same syntax as automatically generated, up to the arguments'
 opening parenthesis, is removed from [[cproto.h]].  One which tends to
 vary from mainline to mainline is [[main]], so it is always removed.
 
-This uses the GNU [[-i]] extension, which may not be supported on all
-UNIX systems.  If it doesn't, obtaining and using GNU sed is free and
-relatively painless.  GNU sed also does not have a hidden line length
-limit or other misfeatures of other sed implementations, so I
-recommend using it all the time.
+This uses the GNU [[-i]] extension for [[sed]], which may not be
+supported on all UNIX systems.  If it doesn't, obtaining and using GNU
+[[sed]] is free and relatively painless.  GNU [[sed]] also does not
+have a hidden line length limit or other misfeatures of other [[sed]]
+implementations, so I recommend using it all the time.
 
 \lstset{language=make}
 <<makefile.rules>>=
-$(COFILES): $(HEADERS) cproto.h
+$(COFILES): cproto.h
 
-cproto.h: $(CFILES) $(HEADERS)
+cproto.h: $(CFILES) $(CHEADERS)
 	echo >$@
 	test -z "$(strip $(CFILES))" || ( \
 	   if cproto -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPROTO_CFLAGS) -E" \
@@ -1169,7 +1222,7 @@ cproto.h: $(CFILES) $(HEADERS)
 	      sed -e '<<Strip down C prototype>>' | \
 	        while IFS=: read -r l p; do \
 		  test -z "$$p" && continue; \
-		  fgrep "$$p" $(HEADERS) | fgrep ":$$p" >/dev/null && \
+		  fgrep "$$p" $(CHEADERS) | fgrep ":$$p" >/dev/null && \
 		    sed -i -e "$${l}d" $@.$$$$.h; \
 		done; \
 	    mv $@.$$$$.h $@; \
@@ -1178,8 +1231,9 @@ cproto.h: $(CFILES) $(HEADERS)
 	  fi )
 
 ifeq ($(MAKEPP_VERSION),)
-static_proto_rule=$1: $(1:%.o=%.c.static_proto)
-$(foreach f,$(COFILES),$(eval $(call static_proto_rule,$f)))
+static_proto_rule=$1: $(1:%.o=%.$2.static_proto)
+$(foreach f,$(COFILES),$(eval $(call static_proto_rule,$f,c)))
+$(foreach f,$(CXXOFILES),$(eval $(call static_proto_rule,$f,c++)))
 else
 sub f_adddep {
   my ($targ, $dep) = &args;
@@ -1189,15 +1243,33 @@ sub f_adddep {
   return '';
 }
 $(foreach f,$(COFILES),$(adddep $f,$(f:%.o=%.c.static_proto)))
+$(foreach f,$(CXXOFILES),$(adddep $f,$(f:%.o=%.c++.static_proto)))
 endif
-$(COFILES:%.o=%.c.static_proto): $(HEADERS)
+$(COFILES:%.o=%.c.static_proto): $(CHEADERS)
 cproto.h: $(CFILES:%=%.static_proto)
+$(CXXOFILES:%.o=%.c++.static_proto): $(CXXHEADERS) $(CHEADERS)
 %.c.static_proto: %.c
 	( \
 	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
 	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
 	  cproto -S -E "$(CC) $(CFLAGS) $(EXTRA_CFLAGS) $(CPROTO_CFLAGS) -Icp.$$$$ -E" $<; \
 	) >$@ || (rm -f $@; false)
+%.c++.static_proto: %.c++
+	( \
+	  notangle -R$<.static_proto $(NOWEB_ORDER) 2>/dev/null || :; \
+	  mkdir cp.$$$$; touch cp.$$$$/cproto.h; trap "rm -rf cp.$$$$" 0; \
+	  $(CXX) $(CXXFLAGS) $(EXTRA_CXXFLAGS) $(CPROTO_CXXFLAGS) -Icp.$$$$ \
+	     -E $< >cp.$$$$/$*.c++; \
+	    ctags -x --kinds-C++=f --language-force=C++ --line-directives=yes \
+	          --_xformat='%F %N%S~ %{C++.properties} %t %N%S;' cp.$$$$/$*.c++ | \
+	      sed -n "s%^cp\\.$$$$/[^ ]* %%;T;/ static /{s/typename://g;p;}" | \
+	        while read -r p; do \
+		  fgrep "$${p%%\~*}" $(CHEADERS) $(CXXHEADERS) >/dev/null || echo "$$p"; \
+		done | sed 's/.*~ *//' \
+	) >$@ || (rm -f $@; false)
+@
+
+<<Generate static proto>>=
 @
 
 <<Remove protos from cproto.h>>=
@@ -1209,7 +1281,7 @@ cproto.h \
 @
 
 <<Clean temporary files>>=
-rm -f cproto.h{,.*.h} $(CFILES:%=%.static_proto)
+rm -f cproto.h{,.*.h} $(CFILES:%=%.static_proto) $(CXXFILES:%=%.static_proto)
 @
 
 <<Build Source>>=
@@ -1220,8 +1292,9 @@ Also, local prototypes tend to rely on locally defined data types.  To
 support this, the entire include of the static prototype file can be
 moved down to a location specified by a line containing only the
 comment [[// static_proto]].  This is done by adding a tangle
-post-processing filter to automatically generated C files.  Care must
-be taken when overriding [[NOTANGLE_POSTPROC]] to not clobber this.
+post-processing filter to automatically generated C and C++ files.
+Care must be taken when overriding [[NOTANGLE_POSTPROC]] to not
+clobber this.
 
 An old hook was to insert the chunk named after the generated header
 file at the top, but that is deprecated and undocumented.  That is why
@@ -1238,11 +1311,7 @@ CFILE_POSTPROC = | \
      p='^\#include "cproto.h"'; \
    fi; \
    sed -e "s%$$p%"'&\n\#include "$@.static_proto"%' $$tf)
-# stupid GNU make always gives "missing separator" for this.  Why?
-# however, apparently that's safe enough; if blank, nothing happens
-#ifneq($(NOWEB_CFILES),)
-$(NOWEB_CFILES): NOTANGLE_POSTPROC += $(CFILE_POSTPROC)
-#endif
+$(NOWEB_CXXFILES) $(NOWEB_CFILES): NOTANGLE_POSTPROC += $(CFILE_POSTPROC)
 @
 
 Stripping down the C prototype requires proper handling of nested
@@ -1260,10 +1329,13 @@ substitution to succeed.
 
 \subsection{Support Chunks}
 
-In addition, C files can all take advantage of the fact that most headers
-are harmless to include, so it's easier to just include everything
-everywhere.  The prototypes cannot be included in this list, because they
-really need to come last.
+In addition, C and C++ files can all take advantage of the fact that
+most headers are harmless to include, so it's easier to just include
+everything everywhere.  Note that some C++ headers take inordinately
+long to include, though, due to extensive use of templates.  Some sort
+of precompiled header strategy may help with that.  The prototypes
+cannot be included in this list, because they really need to come
+last.
 
 \lstset{language=C}
 <<Common C Includes>>=
@@ -1276,6 +1348,30 @@ really need to come last.
 #include <errno.h>
 @
 
+\lstset{language=C++}
+<<Common C++ Includes>>=
+#include <algorithm>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <map>
+#include <set>
+using namespace std;
+extern "C" {
+<<Common C Includes>>
+}
+#if __cplusplus < 201100L
+#define unordered_map map
+#define unordered_set set
+#else
+#include <unordered_map>
+#include <unordered_set>
+#endif
+typedef unordered_map<string, string> string_map;
+@
+
+\lstset{language=C}
 <<Common C Warning>>=
 /*
   <<Common noweb Warning>>
@@ -1288,12 +1384,19 @@ really need to come last.
 #include "cproto.h"
 @
 
+<<Common C++ Header>>=
+<<Common C Warning>>
+<<Common C++ Includes>>
+@
+
 Some of those prototypes are hard to enable, but here are a few extra flags
 to help.
 
 \lstset{language=make}
 <<makefile.vars>>=
 EXTRA_CFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
+                -D_XOPEN_SOURCE_EXTENDED=1
+EXTRA_CXXFLAGS += -D_LARGEFILE_SOURCE -D_XOPEN_SOURCE=600 \
                 -D_XOPEN_SOURCE_EXTENDED=1
 @
 
@@ -1329,7 +1432,7 @@ pointers will be emitted, without generating an error or warning, but
 all static strings should still be present.
 
 \lstset{language=C}
-<<Common C Header>>=
+<<Static C Version ID>>=
 static const char version_id[]
 #if defined(__GNUC__) && defined(__linux__)
   __attribute__(( section(".note.id"), used ))
@@ -1340,6 +1443,14 @@ __declspec(selectany) const char *global_version_id_string = version_id;
 #endif
 @
 
+<<Common C Header>>=
+<<Static C Version ID>>
+@
+
+<<Common C++ Header>>=
+<<Static C Version ID>>
+@
+
 <<Version Strings>>=
 "$Id$\n"
 @
@@ -1347,7 +1458,7 @@ __declspec(selectany) const char *global_version_id_string = version_id;
 \section{noweb Enhancements}
 
 noweb's tangler has a simple syntax and usage, but suffers from the
-lack of a few features.  Sometimes, files should not end in a newline,
+lack of a few features.  Sometimes, file should not end in a newline,
 but notangle always adds one.  Also, sometimes, consecutive chunks
 should not be separated by newlines, but again, notangle always adds
 one.
@@ -1359,10 +1470,11 @@ is significantly faster.  The subroutines cannot even be used when
 doing something like defining a large number of similar symbols, or
 providing a more convenient way to define data tables.  The
 preprocessor can usually accomplish what I need, but the price is that
-the debugger cannot debug code defined by the preprocessor.  In
-addition, there are some languages which lack a preprocessor.  As
-such, the original Web system had macros with arguments, and I would
-like something similar.
+the debugger cannot debug code defined by the preprocessor (although
+gdb tries very hard to support it more recently).  In addition, there
+are some languages which lack a preprocessor.  As such, the original
+Web system had macros with arguments, and I would like something
+similar.
 
 I used to provide both enhancements here, in the form of a tangler, a
 weaving filter, and a [[noroots]] replacement.  I then adapted the
@@ -1415,11 +1527,16 @@ dependencies.
 
 \lstset{language=make}
 <<Build Source>>=
-nt-nonl <<Filters from [[parm.nw]]>>
+nt-nonl <<Filters from [[parm.nw]]>> \
 @
 
 <<Filters from [[parm.nw]]>>=
 nt-parm \
+@
+
+<<Adjust [[NOWEB_CXXFILES]]>>=
+NOWEB_CXXFILES:=$(filter-out $(patsubst %,%.c++,<<Filters from [[parm.nw]]>>
+),$(NOWEB_RAWCXXFILES))
 @
 
 <<makefile.vars>>=
@@ -1432,18 +1549,18 @@ PARM_NOWEB = $(if $(wildcard parm.nw),parm.nw,\
 	          $(realpath $(BUILD_NOWEB))))
 PARM_EXEC = <<Filters from [[parm.nw]]>>
 
-PARM_CPP = $(patsubst %, %.cpp, $(PARM_EXEC))
+PARM_CXX = $(patsubst %, %.c++, $(PARM_EXEC))
 @
 
 <<Clean temporary files>>=
-rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.cpp, $(PARM_EXEC))
+rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.c++, $(PARM_EXEC))
 @
 
 <<makefile.rules>>=
 nt-nonl: $(NOWEB)
 	$(call NOTANGLE_CHUNK,$@) >$@
 	chmod +x $@
-$(PARM_CPP): %.cpp: $(PARM_NOWEB)
+$(PARM_CXX): %.c++: $(PARM_NOWEB)
 	notangle -R$@ $< >$@
 @
 
@@ -1707,30 +1824,32 @@ of the noweb source and spits out the same, with modifications.  The
 language is tracked so that the formatter can behave differently depending
 on language.
 
-<<Common Perl Prefix>>=
-#!/bin/sh
-#!perl
-<<Common noweb Warning>>
-eval 'exec perl -x -f "$0" "$@"'
-  if 0;
+This used to be perl, but then perl, as I should probably have
+expected, decided to declare all my code illegal.  I have switched to
+C++, reusing some of the code from \texttt{parm.nw}.  I suppose one of
+these days, I should switch all of the sed code as well.  There really
+isn't any advantage to using scripting languages.
 
-use strict;
-@
-
-<<Build Script Executables>>=
+<<C Build Executables>>=
 nwweavefilt \
 @
 
-\lstset{language=perl}
-<<nwweavefilt>>=
-<<Common Perl Prefix>>
+\lstset{language=C++}
+<<nwweavefilt.c++>>=
+<<Common C++ Header>>
+<<Extra [[nwweavefilt]] Includes>>
 
-<<Initialize [[nwweavefilt]]>>
+int main(int argc, char **argv)
+{
+  string line;
+  <<Initialize [[nwweavefilt]]>>
 
-while(<STDIN>) {
-  <<Filter lines from noweb token stream>>
-  print $_; # print most lines
-  <<Process lines from noweb token stream>>
+  while(getline(cin, line).good() || line.size()) {
+    <<Filter lines from noweb token stream>>
+    cout @<< line @<< '\n'; // print most lines
+    <<Process lines from noweb token stream>>
+  }
+  return 0;
 }
 @
 
@@ -1738,14 +1857,36 @@ Language is determined by scanning for language settings from the listings
 package, which may be commented out if the listings package isn't currently
 being used.
 
+<<Common C Includes>>=
+#include <regex.h>
+@
+
 <<Initialize [[nwweavefilt]]>>=
-my $lang = 'txt';
+string lang = "txt";
+int re_err;
+regex_t lang_re;
+regmatch_t lang_rem[3];
+// [^{] is to prevent self-match
+re_err = regcomp(&lang_re, "lstset\\{language=(.*\\])?([^}]*)[^{]*", REG_EXTENDED);
+<<[[re_err]] for [[lang_re]] fatal>>
+#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
 @
 
 <<Process lines from noweb token stream>>=
-# [^{] is to prevent self-match
-if(/lstset\{language=(?:.*\])?([^}]*)[^{]*/) {
-  $lang = lc $1;
+if(!regexec(&lang_re, line.c_str(), 3, lang_rem, 0)) {
+  lang = line_match(lang_rem[2]);
+  for(auto c = lang.begin(); c != lang.end(); c++)
+    if(isupper(*c)) // will not work on Unicode, even with <locale>
+      *c = tolower(*c);
+}
+@
+
+<<[[re_err]] for (@re) fatal>>=
+if(re_err) {
+  char ebuf[80];
+  regerror(re_err, &<<@re>>, ebuf, sizeof(ebuf));
+  perror(ebuf);
+  exit(1);
 }
 @
 
@@ -1753,13 +1894,14 @@ A code chunk begins with the chunk name, which can be ignored.  After that,
 all lines are sucked in as part of the code, until the end of the chunk.
 
 <<Process lines from noweb token stream>>=
-if(/^\@defn/) {
-  # skip @nl
-  $_ = <STDIN> or last;
+if(!line.compare(0, 5, "@defn")) {
+  // skip @nl
+  if(!getline(cin, line).good())
+    break;
   <<Filter lines from noweb token stream>>
-  print $_;
-  # accumulate code in $code
-  my $code = '';
+  cout @<< line @<< '\n';
+  // accumulate code here
+  string code;
   <<Accumulate code for highlighting>>
   <<Highlight accumulated code>>
 }
@@ -1776,37 +1918,49 @@ backticks ([[`]]).  Index definitions are moved to the bottom of the chunk
 rather than being marked and replaced like [[@use]]; this removes the
 immediate context, but also eliminates highlighter confusion.
 
+<<Accumulate code for highlighting>>=
+vector<string> use; // accumulate @use here
+string end; // accumulate index defns here
+while(getline(cin, line).good() || line.size()) {
+  <<Filter lines from noweb token stream>>
+  if(!line.compare(0, 6, "@text "))
+    code += line.substr(6);
+  else if(line == "@nl")
+    code += '\n';
+@
+
 <<Initialize [[nwweavefilt]]>>=
-my $marker = '^'.'^^';
+regex_t index_re;
+re_err = regcomp(&index_re, "^@index ((local|)defn|nl)", REG_EXTENDED|REG_NOSUB);
+<<[[re_err]] for [[index_re]] fatal>>
 @
 
 <<Accumulate code for highlighting>>=
-# accumulate @use in @use
-my @use;
-# accumulate index defns in $end
-my $end = '';
-while(<STDIN>) {
-  <<Filter lines from noweb token stream>>
-  if(/^\@text/) {
-    s/^\@text //;
-    s/\n//;
-    $code .= $_;
-  } elsif($_ eq "\@nl\n") {
-    $code .= "\n";
-  } elsif(/^\@index ((local|)defn|nl)/) {
-    $end .= $_;
-  } elsif(/^\@((nwenh|)use|index|xref)/) {
-    $code .= $marker;
-    push @use, $_;
-  } elsif(/^\@end/) {
-    push @use, $end . $_;
-    last;
-  } elsif(/^\@nwenhcall/) {
-    $code .= $marker;
-    push @use, $_ . <STDIN>; # next line is always @use
-  } else {
-    print STDERR " ????? " . $_ . " ?????\n";
-  }
+  else if(!regexec(&index_re, line.c_str(), 0, NULL, 0))
+    end += line + '\n';
+@
+
+<<Initialize [[nwweavefilt]]>>=
+const char marker[] = "^""^^";
+regex_t ref_re;
+re_err = regcomp(&ref_re, "^@((nwparm|)use|index|xref) ", REG_EXTENDED|REG_NOSUB);
+<<[[re_err]] for [[ref_re]] fatal>>
+@
+
+<<Accumulate code for highlighting>>=
+  else if(!regexec(&ref_re, line.c_str(), 0, NULL, 0)) {
+    code += marker;
+    use.push_back(line);
+  } else if(!line.compare(0, 4, "@end")) {
+    use.push_back(end + line);
+    break;
+  } else if(!line.compare(0, 12, "@nwparmcall ")) {
+    code += marker;
+    string line2; // next line is always @use
+    getline(cin, line2);
+    use.push_back(line + '\n' + line2);
+  } else
+    cerr << " ????? " << line << " ??????\n";
 }
 @
 
@@ -1820,72 +1974,110 @@ lines%
 and has deprecated the [[@literal]] directive for this reason. 
 Writing an entire back end just to reformat the code chunks a bit
 seems extreme, though.  As of 2.11b, the directive still works.}%
-; markers are replaced by the appropriate [[@use]] line from [[$use]].
+; markers are replaced by the appropriate [[@use]] line from [[use]].
 
-The whole reason this was written in perl, rather than shell or awk, was to
-get speed (which awk already gave over the shell) and bidirectional pipes.
-This requires the [[open2()]] function.  In addition, the command is passed
-as individual arguments, gaining a little more speed by not calling the
-shell to parse the command at every invocation.
+Bidirectional pipes are not supported natively by C++ (unlike perl),
+but it's not that hard to implement (non-portably, but I don't care
+right now).
+
+<<Initialize [[nwweavefilt]]>>=
+// first arg is name of highlighting helper
+if(argc-- < 2)
+  exit(1);
+const char *filt = *++argv;
+@
+
+<<Highlight accumulated code>>=
+int pfdi[2], pfdo[2];
+pid_t pid;
+if(pipe(pfdi) || pipe(pfdo) || (pid = fork()) < 0) {
+  perror("filter pipe");
+  exit(1);
+}
+if(!pid) {
+  close(pfdi[1]);
+  close(pfdo[0]);
+  dup2(pfdi[0], 0);
+  dup2(pfdo[1], 1);
+  execl(filt, filt, lang.c_str(), NULL);
+  perror("pipe exec");
+  exit(1);
+}
+close(pfdi[0]);
+close(pfdo[1]);
+<<Adjust accumulated code>>
+if(write(pfdi[1], code.data(), code.size()) != (int)code.size() || close(pfdi[1])) {
+  perror("highlighter pipe write");
+  exit(1);
+}
+// As if using POSIX file descriptors wasn't bad enough, there is no
+// portable way to use them in C++, even via fdopen().  Seems like a
+// major stupidity on the part of the C++ language designers.
+// Since I don't want to pull in my long_fgets(), this has to work for
+// your C++ environment.  Currently, I only support GNU libstdc++.
+__gnu_cxx::stdio_filebuf<char> fbuf(pfdo[0], std::ios::in);
+istream reader(&fbuf);
+int useno = 0;
+while(getline(reader, line).good() || line.size()) {
+  unsigned off = 0, poff = 0;
+  while((off = line.find(marker, poff)) < line.size()) {
+    if(poff < off)
+      cout << "@literal " << line.substr(poff, off - poff) << '\n';
+    cout << use[useno++] << '\n';
+    poff = off + sizeof(marker) - 1;
+  }
+  if(line.size() - poff > 0)
+    cout << "@literal " << line.substr(poff) << '\n';
+  cout << "@nl\n";
+}
+fbuf.close();
+cout << use[useno] << '\n'; // the end
+waitpid(pid, NULL, 0);
+@
+
+<<Extra [[nwweavefilt]] Includes>>=
+#include <ext/stdio_filebuf.h>
+extern "C" {
+#include <sys/wait.h>
+}
+@
 
 For UTF-8 input, tabs are once again stripped (incorrectly) by the
 final weave stage.  In order to prevent this, at least for code
 chunks, they are stripped here, instead.  The main text cannot be
 processed this way without reconstructing the text from the pipeline
 as above, so verbatim text in the documentation will have to be
-changed manually.
+changed manually.  Note that correction here only means cosideration
+of UTF-8 code points as single characters (rather than up to 3), and
+does not take grapheme clusters or double width characters into
+consideration.   Doing the latter would require full Unicode table
+integration.
 
 <<Initialize [[nwweavefilt]]>>=
-use FileHandle;
-use IPC::Open2;
-# first arg is name of highlighting helper
-my $filt = shift @ARGV;
-# UTF-8 encode stdin and all output files in UTF-8 mode
-my $utf8_mode = $ENV{'NW_UTF8'};
-chomp $utf8_mode;
-$utf8_mode = $utf8_mode && $utf8_mode ne '';
-# ?? needs to reference $utf8_mode or it will always be false
-use if \$utf8_mode, open => ':std', ':encoding(utf8)';
+const char *utf8_mode = getenv("NW_UTF8");
+if(utf8_mode && !*utf8_mode)
+  utf8_mode = NULL;
 @
 
-<<Highlight accumulated code>>=
-my ($pid, $reader, $writer);
-$pid = open2($reader, $writer, $filt, $lang);
-
-# fix utf-8 tabs
-# length function is UTF-8 length
-# proper Unicode support would use grapheme cluster length instead
-# and take into account width of characters, but that's too complex
-if($utf8_mode) {
-  # avoid warnings
-  binmode $writer, ":encoding(utf8)";
-  # allow UTF-8 on input
-  binmode $reader, ":encoding(utf8)";
-  # maybe switch to index/rindex some day
-  while($code =~ /((?:.|\n)*?)^([^\t\n]*)\t((?:.|\n)*)/m) {
-    $code = $1 . $2 . (' ' x (8 - (length($2) % 8))) . $3;
-  }
-}
-
-print $writer $code;
-close $writer;
-
-while(<$reader>) {
-  while((my $m = index($_, $marker)) >= 0) {
-    if($m > 0) {
-      print '@literal ' . substr($_, 0, $m) . "\n";
+<<Adjust accumulated code>>=
+if(utf8_mode) {
+  unsigned off = 0, last_cr = 0;
+  while((off = code.find_first_of("\n\t", off)) < line.size()) {
+    if(line[off] == '\n')
+      last_cr = off + 1;
+    else {
+      unsigned len;
+      for(len = 0, off = last_cr; line[off] != '\t'; off++)
+        len += (uint8_t)line[off] < 0x80 || (uint8_t)line[off] >= 0xc0;
+      line[off] = ' ';
+      if((len + 1) % 8) {
+        line.insert(off + 1, "       ", 8 - (len + 1) % 8);
+	off += (len + 1) % 8;
+      }
     }
-    print shift @use;
-    $_ = substr($_, $m + length($marker));
+    off++;
   }
-  if(length($_) > 1) { # 1 == just \n
-    print '@literal ' . $_;
-  }
-  print "\@nl\n";
 }
-print shift @use; # the end
-close $reader;
-waitpid $pid, 0;
 @
 
 \subsection{Pretty Printing with a highlighter and [[framed]]}
@@ -2581,13 +2773,15 @@ Now that code chunks can be pretty-printed, a few more adjustments need to
 be made.  Underscores in chunk names (such as when the chunk name is a file
 name) need to be escaped.  The easiest place to do this is in a
 filter, which has the chunk names separated out already.  For maximum
-flexibility, this is done in a perl script.
+flexibility, this is done in C++.
 
-\lstset{language=perl}
+\lstset{language=C++}
 <<Filter lines from noweb token stream>>=
-if(/^\@use / or /^\@defn / or /^\@nwenh/) {
-  s/_/\\_/g unless /\[\[/;
-}
+if(!line.compare(0, 5, "@use ") || !line.compare(0, 6, "@defn ") ||
+   !line.compare(0, 6, "@nwenh"))
+  if(line.find("[[") < line.size())
+    for(unsigned pos = 0; (pos = line.find('_', pos)) < line.size(); pos++)
+      line.insert(pos++, 1, '\\');
 @
 
 Chunk names referring to chunks in other files should be indicated as
@@ -2607,40 +2801,61 @@ the commment:
 % End-doc extref-dis
 
 <<Initialize [[nwweavefilt]]>>=
-my %ch;
-# final args are $noweb_order
-my %feqv;
-my $disext;
-# find included files
-for my $a (@ARGV) {
-  open(A, $a);
-  while(<A>) {
-    $disext = /^%%% no-ext-ref$/;
-    last if $disext;
-    /^\\input\{(.*\.nw)\}$/ or next;
-    $feqv{$1} = $a;
+regex_t input_re;
+regmatch_t irm[2];
+re_err = regcomp(&input_re, "^\\\\input\\{(.*\\.nw)\\}$", REG_EXTENDED);
+<<[[re_err]] for [[input_re]] fatal>>
+regex_t bdef_re;
+regmatch_t brm[2];
+re_err = regcomp(&bdef_re, "^@<<(.*)@>>$", REG_EXTENDED);
+<<[[re_err]] for [[bdef_re]] fatal>>
+
+string_map ch;
+// final args are noweb_order
+string_map feqv;
+bool disext = false;
+// find included files
+for(int a = 1; a < argc; a++) {
+  ifstream A(argv[a]);
+  while(getline(A, line).good() || line.size()) {
+    if((disext = line == "%%% no-ext-refs"))
+      break;
+    if(!regexec(&input_re, line.c_str(), 2, irm, 0))
+      feqv[line_match(irm[1])] = argv[a];
   }
 }
-unless($disext) {
-  my $myf = pop @ARGV; # my name is always last; skip it
-  # now loop over files, making included files look like includer
-  for my $a (@ARGV) {
-    my $f = $a;
-    while($feqv{$f}) { $f = $feqv{$f}; }
-    next if($f eq $myf);
-    open(A, $a);
-    while(<A>) {
-      if(/^@<<(.*)@>>=$/) {
-        $ch{$1} = $f unless $ch{$1};
-      }
+if(!disext) {
+  const char *myf = argv[--argc]; // my name is always last; skip it
+  // now loop over files, making included files look like includer
+  while(argc-- > 1) {
+    const char *a = *++argv;
+    const char *f = a;
+    while(1) {
+      auto ff = feqv.find(f);
+      if(ff == feqv.end())
+        break;
+      f = ff->second.c_str();
     }
+    if(!strcmp(f, myf))
+      continue;
+    ifstream A(a);
+    while(getline(A, line).good() || line.size())
+      if(!regexec(&bdef_re, line.c_str(), 2, brm, 0))
+        ch[line_match(brm[1])] = f;
   }
 }
+regex_t xref_re;
+regmatch_t xrm[3];
+re_err = regcomp(&xref_re, "^(@use |@defn )(.*)", REG_EXTENDED);
+<<[[re_err]] for [[xref_re]] fatal>>
 @
 
 <<Filter lines from noweb token stream>>=
-if(!$disext and (/^(\@use )(.*)/ or /^(\@defn )(.*)/) and $ch{$2}) {
-  $_ = "$1($ch{$2}) $2\n";
+if(!disext && !regexec(&xref_re, line.c_str(), 3, xrm, 0)) {
+  auto chf = ch.find(line_match(xrm[2]));
+  if(chf != ch.end())
+    line = line_match(xrm[1]) + '(' + chf->second + ") " +
+           line_match(xrm[2]);
 }
 @
 
@@ -2755,7 +2970,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-parm-preidx $noweb_order | ./nw-nonl-preidx |
-                   ./nwweavefilt $filt $noweb_order" -delay -indexfrom /dev/null \
+                   tee /tmp/nwwi.$$ | ./nwweavefilt $filt $noweb_order | tee /tmp/nwwo.$$" -delay -indexfrom /dev/null \
 	  -filter "./nw-nonl-postidx | ./nw-parm-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
@@ -3245,7 +3460,7 @@ prototype, reference it using a specially formatted comment:
 }\end{quote}
 
 This is done by gently extracting the prototype from [[cproto.h]]
-using sed.  Since prototypes which appear in [[$(HEADERS)]] are
+using sed.  Since prototypes which appear in [[$(CHEADERS)]] are
 removed from [[cproto.h]], they are allowed here as well. For
 prototypes which do not appear in either place, the chunk
 [[<<C Prototypes>>]] may be expanded as well.  Since the C preprocessor
@@ -3287,8 +3502,9 @@ ba;
 \lstset{language=make}
 <<makefile.rules>>=
 ifneq ($(CFILES),)
-nw2latex: cproto.h $(HEADERS)
+nw2latex: cproto.h $(CHEADERS)
 endif
+nw2latex: $(CXXHEADERS)
 @
 
 \lstset{language=sh}
@@ -3560,7 +3776,7 @@ for x in *.html; do
     "$outf") is_outf=y ;;
     *) is_outf=n ;;
   esac
-  perl -e '<<Post-process TeX4ht output using perl>>' "$base" $is_outf <"$x" >"$tdir/$x"
+  tex4ht_postproc "$base" $is_outf <"$x" >"$tdir/$x"
 done
 
 (
@@ -3579,38 +3795,49 @@ eval tar chf - $noweb_order $at | gzip | \
 echo "-->"
 @
 
-The HTML cleanup is done using a perl script, once again because awk and sed
-are too slow for at least one of the tasks.
+The HTML cleanup is done using a C++ program, once again because awk
+and sed are too slow for at least one of the tasks.
 
-\lstset{language=perl}
-<<Post-process TeX4ht output using perl>>=
-use strict;
+<<C Build Executables>>=
+tex4ht_postproc \
+@
 
-<<Initialize TeX4ht post-processor>>
+\lstset{language=C++}
+<<tex4ht_postproc.c++>>=
+<<Common C++ Header>>
 
-while(<STDIN>) {
-  <<Post-process TeX4ht line>>
-  print;
+int main(int argc, char **argv)
+{
+  <<Initialize TeX4ht post-processor>>
+
+  string line;
+  while(getline(cin, line).good() || line.size()) {
+    <<Post-process TeX4ht line>>
+    cout << line << '\n';
+  }
+  return 0;
 }
 @
 
 <<Initialize TeX4ht post-processor>>=
-my $is_outf = $ARGV[1] eq "y";
+if(argc != 3)
+  exit(1);
+const char *base = argv[1];
+bool is_outf = !strcmp(argv[2], "y");
 @
 
 <<Post-process TeX4ht line>>=
-if(?^<html ?) {
-  print "<!--\n";
-  print "Generated using noweb+tex4ht;" .
-        " original .nw source attached in comment at end\n";
-  if($is_outf) {
-    print "\n";
-    print "Extract with uudecode, or, if uudecode chokes, use:\n";
-    print "   tr '\''|~m\`'\'' '\''<>- '\'' | uudecode -o '\''$base.nw.gz'\''\n";
-    print "-->\n";
-  } else {
-    print "of top-level HTML (see that for details on how to extract). -->\n";
-  }
+if(!line.compare(0, 6, "<html ")) {
+  puts("<!--\n"
+       "Generated using noweb+tex4ht;"
+       " original .nw source attached in comment at end");
+  if(is_outf)
+    printf("\n"
+	   "Extract with uudecode, or, if uudecode chokes, use:\n"
+	   "   tr '|~m`' '<>- ' | uudecode -o '%s.nw.gz'\n"
+	   "-->\n", base);
+  else
+    puts(" of top-level HTML (see that for details on how to extract). -->");
 }
 @
 
@@ -3621,42 +3848,53 @@ the CSS file, and a hash array is built to associate each with the first
 style of the same color.  Then, all duplicates are filtered from the CSS
 file and converted to the first version in the HTML.
 
+<<Initialize TeX4ht post-processor>>=
+regex_t col_re;
+regmatch_t col_rem[3];
+int re_err = regcomp(&col_re, "^span#textcolor([0-9]+)(\\{.*\\})", REG_EXTENDED);
+<<[[re_err]] for [[col_re]] fatal>>
+#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+string_map textcolor, rootcolor;
+@
+
 <<Copy TeX4ht CSS to stdout>>=
-# way too many color styles are generated: merge them
-open CSS,"<$base.css";
-
-while(<CSS>) {
-  if(/^span#textcolor(\d+)(\{.*\})/) {
-    my ($colorno, $colordef) = ($1, $2);
-
-    $textcolor[$colorno] = $rootcolor{$colordef} || $colorno;
-
-    if($textcolor[$colorno] == $colorno) {
-      $rootcolor{$colordef} = $colorno;
-      print;
+// way too many color styles are generated: merge them
+ifstream CSS(string(base) + ".css");
+while(getline(CSS, line).good() || line.size()) {
+  if(!regexec(&col_re, line.c_str(), 3, col_rem, 0)) {
+    string colorno = line_match(col_rem[1]),
+           colordef = line_match(col_rem[2]);
+    auto rcolor = rootcolor.find(colordef);
+    if(rcolor != rootcolor.end())
+      textcolor[colorno] = rcolor->second;
+    else {
+      rootcolor[colordef] = textcolor[colorno] = colorno;
+      cout << line << '\n';
     }
-  } else {
-    print;
-  }
+  } else
+    cout << line << '\n';
 }
-
-close CSS;
+CSS.close();
 @
 
 <<Initialize TeX4ht post-processor>>=
-my $base = $ARGV[0];
-
-my @textcolor;
-my %rootcolor;
-@
-
-<<Initialize TeX4ht post-processor>>=
-my $spn = "<span id=\"textcolor";
+const char spn[] = "<span id=\"textcolor";
 @
 
 <<Post-process TeX4ht line>>=
-foreach my $x(/$spn(\d+)/g) {
-  s/$spn$x"/$spn$textcolor[$x]"/g;
+for(unsigned x = 0; (x = line.find(spn, x)) < line.size(); ) {
+  x += sizeof(spn) - 1;
+  unsigned xe;
+  for(xe = x; xe < line.size() && isdigit(line[xe]); xe++);
+  if(xe == x)
+    break;
+  string ox = line.substr(x, xe - x);
+  string &nx = textcolor[ox];
+  if(nx != ox) {
+    line.replace(x, xe - x, nx);
+    x += nx.size() + 1;
+  } else
+    x = xe + 1;
 }
 @
 
@@ -3667,53 +3905,90 @@ times.  Instead, it is just generated directly into the output file during
 hash table generation.
 
 <<Post-process TeX4ht line>>=
-if(?<meta name=\"date?) {
-  print;
-  print "<style type=\"text/css\">\n<!--\n";
+if(line.find("<meta name=\"date") < line.size()) {
+  cout << line << "\n<style type=\"text/css\">\n<!--\n";
   <<Copy TeX4ht CSS to stdout>>
-  print "//-->\n</style>\n";
-  next;
+  cout << "//-->\n</style>\n";
+  continue;
 }
 @
 
 The remainder of the adjustments are minor tweaks to the HTML output.
 
 <<Post-process TeX4ht line>>=
-# tex4ht inserts a newline before each chunk
-# no easy way to deal right now, so leave it
+// tex4ht inserts a newline before each chunk
+// no easy way to deal right now, so leave it
 @
 
 <<Post-process TeX4ht line>>=
-# tex4ht splits lines mid-tag; rejoin at least the span tags
-while(/<span $/) {
-  s/\n//;
-  $_ .= <STDIN>;
+// tex4ht splits lines mid-tag; rejoin at least the span tags
+while(line.size() > 6 && line.substr(line.size() - 6) == "<span ") {
+  string line2;
+  getline(cin, line2);
+  line += line2;
 }
 @
 
 <<Post-process TeX4ht line>>=
-# Merge consecutive spans on same line w/ same class into one span
-while(s%(<span class="[^"]*">)([^<]*)</span>\1%\1\2%) {};
+// Merge consecutive spans on same line w/ same class into one span
+for(unsigned off = 0; (off = line.find("<span class\"", off)) < line.size(); ) {
+  unsigned name = off, ename;
+  for(ename = off; ename < line.size() && line[ename] != '"'; ename++);
+  unsigned espan = line.find("</span>", ename);
+  if(espan >= line.size())
+    break;
+  if(line.compare(espan + 7, 13, "<span class=\"") ||
+     line.compare(espan + 20, ename - name, line.substr(name)) ||
+     line[espan + 20 + ename - name] != '"') {
+    off = espan + 7;
+    continue;
+  }
+  off = espan;
+  line.erase(espan, 22 + ename - name);
+}
 @
 
 <<Post-process TeX4ht line>>=
-# Remove plain text spans
-s%<span class="ecrm-0900">([^<]*)</span>%\1%g;
+// Remove plain text spans
+for(unsigned off = 0; (off = line.find("<span class\"ecrm-0900\">", off)) < line.size(); ) {
+  unsigned eoff = line.find("</span>", off + 23);
+  if(eoff < line.size()) {
+    line.erase(eoff, 7);
+    line.erase(off, 23);
+  }
+}
 @
 
 <<Post-process TeX4ht line>>=
-# I prefer mostly plain text for the web, so:
-# remove ligatures
-s/&#xFB01;/fi/g;s/&#xFB02;/fl/g;
-# remove hex nbsp
-s/&#x00A0;/\&nbsp;/g;
-# remove unicode quotes
-s/&#8217;/'\''/g;s/&#8216;/`/g;
+// I prefer mostly plain text for the web, so:
+// remove ligatures
+for(unsigned off = 0; (off = line.find("&#xFB0", off)) < line.size() - 7; ) {
+  if(line[off + 7] != ';' || (line[off + 6] != '0' && line[off + 6] != '1')) {
+    off += 6;
+    continue;
+  }
+  line[off] = 'f';
+  line[off + 1] = line[off + 6] == '0' ? 'i' : 'l';
+  line.erase(off += 2, 6);
+}
+// remove hex nbsp
+for(unsigned off = 0; (off = line.find("&#x00A0;", off)) < line.size(); )
+  line.replace(off, 8, "&nbsp;");
+// remove unicode quotes
+for(unsigned off = 0; (off = line.find("&#x821", off)) < line.size() - 7; ) {
+  if(line[off + 7] != ';' || (line[off + 6] != '7' && line[off + 6] != '6')) {
+    off += 6;
+    continue;
+  }
+  line[off] = line[off + 6] == '7' ? '\'' : '`';
+  line.erase(++off, 7);
+}
 @
 
 <<Post-process TeX4ht line>>=
-# remove trailing space
-s/ *$//;
+// remove trailing space
+while(line.size() > 0 && line[line.size() - 1] == ' ')
+  line.erase(line.size() - 1, 1);
 @
 
 \subsection{HTML from [[l2h]]}
@@ -4213,7 +4488,7 @@ sed -i -f /tmp/latexhl.fmt.$$ "$outf"  # -i is GNU sed only
 
 \lstset{language=make}
 <<makefile.rules>>=
-nw2html: cproto.h $(HEADERS)
+nw2html: cproto.h $(CHEADERS) $(CXXHEADERS)
 @
 
 Since the sed scripts and simplicity of [[l2h]] can cause the HTML to not be
@@ -4772,9 +5047,6 @@ automatically generated prototypes.  Prototypes for static functions
 for the file are included as well, unless a comment of the form
 [[// static_proto]] is found on a line by itself; in that case, the
 static prototypes will be included there instead.
-\item [[<<Common Perl Prefix>>]]: stuff to insert at the top of perl
-executables.  This includes the noweb warning, a portable hash-bang
-prefix, and [[use strict]].
 \end{itemize}
 \paragraph{Highlighting Assistance}
 \begin{itemize}

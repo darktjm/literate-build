@@ -227,7 +227,7 @@ using namespace std;
 typedef unordered_map<string, string> strmap;
 @
 
-<<nt-parm.cpp>>=
+<<nt-parm.c++>>=
 <<Common Parm Filter Prefix>>
 
 <<[[nt-parm]] local definitions>>
@@ -1052,11 +1052,11 @@ if(processing->find(rkey) != processing->end())
 processing->insert(rkey);
 gendef ngd;
 ngd.best = defs.find(best);
-strset refs = set_gendef_vals(ngd, best_parms, new_globals, processing);
-if(refs.size()) {
-  append_str(use, new_globals, refs);
+strset prefs = set_gendef_vals(ngd, best_parms, new_globals, processing);
+if(prefs.size()) {
+  append_str(use, new_globals, prefs);
   use_changed = true;
-  for(strset::const_iterator it = refs.begin(); it != refs.end(); it++)
+  for(strset::const_iterator it = prefs.begin(); it != prefs.end(); it++)
     if(locals.find(*it) == locals.end())
       global_refs.insert(*it);
 }
@@ -1240,12 +1240,12 @@ indexer, and then changed back afterwards.  These tasks can be
 accomplished by two filters:  one for before indexing, and one for
 after.
 
-<<nw-parm-preidx.cpp>>=
+<<nw-parm-preidx.c++>>=
 <<Common Parm Filter Prefix>>
 
 @
 
-<<nw-parm-postidx.cpp>>=
+<<nw-parm-postidx.c++>>=
 <<Common Parm Filter Prefix>>
 
 @
@@ -1265,7 +1265,7 @@ arrays:  one indexed by its real name, and one indexed by its name
 with all parameter definitions and references stripped out.  That way,
 finding the actual chunk to use for a macro reference is easier.
 
-<<nw-parm-preidx.cpp>>=
+<<nw-parm-preidx.c++>>=
 <<[[nw-parm-preidx]] locals>>
 
 int main(int argc, const char **argv)
@@ -1397,7 +1397,7 @@ vector<int> textline;
 For the third pass, done after the index, the above-added tags are
 reverted.
 
-<<nw-parm-postidx.cpp>>=
+<<nw-parm-postidx.c++>>=
 int main(void)
 {
   string nwparmcall;
@@ -1441,13 +1441,13 @@ following three code roots from this document, compile them with your C++
 compiler into an executable, and use as described:
 
 \begin{itemize}
-\item [[nt-parm.cpp]] --- always use this as a filter when tangling.
+\item [[nt-parm.c++]] --- always use this as a filter when tangling.
 Add [[-r]] to suppress parameterized chunks that are only indirectly
 referenced.  Add [[-d]] to include the preceeding documentation chunk
 with generated code chunks.
-\item [[nw-parm-preidx.cpp]] --- always use this as a filter when weaving,
+\item [[nw-parm-preidx.c++]] --- always use this as a filter when weaving,
 before indexing (or implicit indexing, such [[-x]], [[-index]], etc.).
-\item [[nw-parm-postidx.cpp]] --- always use this as a filter when
+\item [[nw-parm-postidx.c++]] --- always use this as a filter when
 weaving, after indexing (or implicit indexing).  If no indexing is
 done at all, use both of these filters with nothing in between.
 \end{itemize}
@@ -1457,8 +1457,8 @@ For example:
 To compile on UNIX:
 \begin{verbatim}
 for x in nt-prm nw-parm-{pre,post}idx; do
-  notangle -L -R${x}.cpp parm.nw > ${x}.cpp
-  c++ -O -o ${x} ${x.cpp}
+  notangle -L -R${x}.c++ parm.nw > ${x}.c++
+  c++ -O -o ${x} ${x.c++}
 done
 \end{verbatim}
 

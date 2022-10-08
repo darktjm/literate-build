@@ -1527,7 +1527,7 @@ dependencies.
 
 \lstset{language=make}
 <<Build Source>>=
-nt-nonl <<Filters from [[parm.nw]]>> \
+nt-nonl <<Filters from [[parm.nw]]>>
 @
 
 <<Filters from [[parm.nw]]>>=
@@ -1861,15 +1861,26 @@ being used.
 #include <regex.h>
 @
 
+<<nwbuild Regex Macros>>=
+#define ec_regcomp(re, pat, flag) do { \
+  int re_err = regcomp(&re, pat, flag|REG_EXTENDED); \
+  if(re_err) { \
+    char ebuf[80]; \
+    regerror(re_err, &re, ebuf, sizeof(ebuf)); \
+    perror(ebuf); \
+    exit(1); \
+  } \
+} while(0)
+#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+@
+
 <<Initialize [[nwweavefilt]]>>=
 string lang = "txt";
-int re_err;
 regex_t lang_re;
 regmatch_t lang_rem[3];
+<<nwbuild Regex Macros>>
 // [^{] is to prevent self-match
-re_err = regcomp(&lang_re, "lstset\\{language=(.*\\])?([^}]*)[^{]*", REG_EXTENDED);
-<<[[re_err]] for [[lang_re]] fatal>>
-#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+ec_regcomp(lang_re, "lstset\\{language=(.*\\])?([^}]*)[^{]*", 0);
 @
 
 <<Process lines from noweb token stream>>=
@@ -1878,15 +1889,6 @@ if(!regexec(&lang_re, line.c_str(), 3, lang_rem, 0)) {
   for(auto c = lang.begin(); c != lang.end(); c++)
     if(isupper(*c)) // will not work on Unicode, even with <locale>
       *c = tolower(*c);
-}
-@
-
-<<[[re_err]] for (@re) fatal>>=
-if(re_err) {
-  char ebuf[80];
-  regerror(re_err, &<<@re>>, ebuf, sizeof(ebuf));
-  perror(ebuf);
-  exit(1);
 }
 @
 
@@ -1931,8 +1933,7 @@ while(getline(cin, line).good() || line.size()) {
 
 <<Initialize [[nwweavefilt]]>>=
 regex_t index_re;
-re_err = regcomp(&index_re, "^@index ((local|)defn|nl)", REG_EXTENDED|REG_NOSUB);
-<<[[re_err]] for [[index_re]] fatal>>
+ec_regcomp(index_re, "^@index ((local|)defn|nl)", REG_NOSUB);
 @
 
 <<Accumulate code for highlighting>>=
@@ -1943,8 +1944,7 @@ re_err = regcomp(&index_re, "^@index ((local|)defn|nl)", REG_EXTENDED|REG_NOSUB)
 <<Initialize [[nwweavefilt]]>>=
 const char marker[] = "^""^^";
 regex_t ref_re;
-re_err = regcomp(&ref_re, "^@((nwparm|)use|index|xref) ", REG_EXTENDED|REG_NOSUB);
-<<[[re_err]] for [[ref_re]] fatal>>
+ec_regcomp(ref_re, "^@((nwparm|)use|index|xref) ", REG_NOSUB);
 @
 
 <<Accumulate code for highlighting>>=
@@ -2013,7 +2013,7 @@ if(write(pfdi[1], code.data(), code.size()) != (int)code.size() || close(pfdi[1]
 // As if using POSIX file descriptors wasn't bad enough, there is no
 // portable way to use them in C++, even via fdopen().  Seems like a
 // major stupidity on the part of the C++ language designers.
-// Since I don't want to pull in my long_fgets(), this has to work for
+// Since I don't want to pull in my mfgets(), this has to work for
 // your C++ environment.  Currently, I only support GNU libstdc++.
 __gnu_cxx::stdio_filebuf<char> fbuf(pfdo[0], std::ios::in);
 istream reader(&fbuf);
@@ -2779,7 +2779,7 @@ flexibility, this is done in C++.
 <<Filter lines from noweb token stream>>=
 if(!line.compare(0, 5, "@use ") || !line.compare(0, 6, "@defn ") ||
    !line.compare(0, 6, "@nwenh"))
-  if(line.find("[[") < line.size())
+  if(line.find("[[") >= line.size())
     for(unsigned pos = 0; (pos = line.find('_', pos)) < line.size(); pos++)
       line.insert(pos++, 1, '\\');
 @
@@ -2803,12 +2803,10 @@ the commment:
 <<Initialize [[nwweavefilt]]>>=
 regex_t input_re;
 regmatch_t irm[2];
-re_err = regcomp(&input_re, "^\\\\input\\{(.*\\.nw)\\}$", REG_EXTENDED);
-<<[[re_err]] for [[input_re]] fatal>>
+ec_regcomp(input_re, "^\\\\input\\{(.*\\.nw)\\}$", 0);
 regex_t bdef_re;
 regmatch_t brm[2];
-re_err = regcomp(&bdef_re, "^@<<(.*)@>>$", REG_EXTENDED);
-<<[[re_err]] for [[bdef_re]] fatal>>
+ec_regcomp(bdef_re, "^@<<(.*)@>>=$", 0);
 
 string_map ch;
 // final args are noweb_order
@@ -2846,8 +2844,7 @@ if(!disext) {
 }
 regex_t xref_re;
 regmatch_t xrm[3];
-re_err = regcomp(&xref_re, "^(@use |@defn )(.*)", REG_EXTENDED);
-<<[[re_err]] for [[xref_re]] fatal>>
+ec_regcomp(xref_re, "^(@use |@defn )(.*)", 0);
 @
 
 <<Filter lines from noweb token stream>>=
@@ -2970,7 +2967,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-parm-preidx $noweb_order | ./nw-nonl-preidx |
-                   tee /tmp/nwwi.$$ | ./nwweavefilt $filt $noweb_order | tee /tmp/nwwo.$$" -delay -indexfrom /dev/null \
+                   ./nwweavefilt $filt $noweb_order" -delay -indexfrom /dev/null \
 	  -filter "./nw-nonl-postidx | ./nw-parm-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
@@ -3851,9 +3848,8 @@ file and converted to the first version in the HTML.
 <<Initialize TeX4ht post-processor>>=
 regex_t col_re;
 regmatch_t col_rem[3];
-int re_err = regcomp(&col_re, "^span#textcolor([0-9]+)(\\{.*\\})", REG_EXTENDED);
-<<[[re_err]] for [[col_re]] fatal>>
-#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+<<nwbuild Regex Macros>>
+ec_regcomp(col_re, "^span#textcolor([0-9]+)(\\{.*\\})", 0);
 string_map textcolor, rootcolor;
 @
 

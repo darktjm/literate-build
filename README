@@ -24,18 +24,18 @@ For details, read the source.  It's meant to be read, anyway.  On the
 other hand, instead of reading the source code, you can just read the
 users' manual:
 
-   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.pdf
-   https://bitbucket.org/darktjm/literate-build/downloads/build-doc.html
+   https://github.com/darktjm/literate-build/releases/download/v3.17/build-doc.pdf
+   https://github.com/darktjm/literate-build/releases/download/v3.17/build-doc.html
 
 Producing the PDF and HTML output from scratch is trivial if all of
 the prerequisites are met, but rather than forcing you to read the
 noweb source to find out those prerequisites, I have provided the PDF
 and HTML output as well.  One of these is all you need, since they have
 the source attached (and have instructions for detaching).  These are
-available in the downloads section:
+available in the releases section:
 
-   https://bitbucket.org/darktjm/literate-build/downloads/build.pdf
-   https://bitbucket.org/darktjm/literate-build/downloads/build.html
+   https://github.com/darktjm/literate-build/releases/download/v3.17/build.pdf
+   https://github.com/darktjm/literate-build/releases/download/v3.17/build.html
 
 The documentation referenced above is mostly the Usage section of the
 code, split out into its own file using the documentation reinsertion
@@ -51,15 +51,15 @@ source attached, as well as the source for the build system.  However,
 they do not have instructions on how to extract and build; see the
 above for that.
 
-   https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.pdf
-   https://bitbucket.org/darktjm/literate-build/downloads/tjm-ext.html
+   https://github.com/darktjm/literate-build/releases/download/v3.17/tjm-ext.pdf
+   https://github.com/darktjm/literate-build/releases/download/v3.17/tjm-ext.html
 
 In addition, the build system has a mechanism to create a tarball of
 the extracted sources, which should no longer depend on the presence
 of noweb.  This tarball is most useful if you actually want to compile
 the tjm-ext library without using the build system from scratch:
 
-   https://bitbucket.org/darktjm/literate-build/downloads/build-src.tar.gz
+   https://github.com/darktjm/literate-build/releases/download/v3.17/build-src.tar.gz
 
 Don't bother with ada-build.nw, since it is a work in progress
 abandoned years ago.  It does work with some of my old Ada sources,
@@ -87,7 +87,7 @@ that properly (not checkout -f, that's for sure), but this works:
 
   for x in *.nw; do /bin/rm $x; git checkout $x; done
 
-The same is true for all of my other bitbucket-posted literate
+The same is true for all of my other github-posted literate
 projects.
 
 * see https://github.com/darktjm/git-rcs-keywords

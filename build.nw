@@ -1553,7 +1553,8 @@ PARM_CXX = $(patsubst %, %.c++, $(PARM_EXEC))
 @
 
 <<Clean temporary files>>=
-rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.c++, $(PARM_EXEC))
+rm -f $(patsubst %,%.o,$(PARM_EXEC))
+rm -f nt-nonl $(PARM_EXEC) $(patsubst %,%.c++,$(PARM_EXEC))
 @
 
 <<makefile.rules>>=

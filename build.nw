@@ -3739,10 +3739,6 @@ nwtex2html: tex4ht_postproc
 	$(run_latex)
 @
 
-<<Source Code Documentation Files>>=
-$(patsubst %.nw,%_img,$(NOWEB_NINCL)) \
-@
-
 \lstset{language=sh}
 <<Build Script Executables>>=
 nwtex2html \
@@ -3852,6 +3848,10 @@ echo begin 644 ${noweb%.*}.tar.gz
 eval tar chf - $noweb_order $at | gzip | \
   uuencode "${noweb%.*}".tar.gz | tail -n +2 | tr '<>-' '|~m'
 echo "-->"
+@
+
+<<Clean built files>>=
+rm -rf $(patsubst %.nw,%_img,$(NOWEB_NINCL))
 @
 
 The HTML cleanup is done using a C++ program, once again because awk

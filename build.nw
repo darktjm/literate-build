@@ -1697,6 +1697,7 @@ NOWEB_NINCL:=$(shell \
   done)
 latexcmd = $(if $(and $(NW_UTF8),$(findstring pdflatex,$(LATEXCMD))), \
                 $(UTF8LATEXCMD),$(LATEXCMD))
+latexargs=
 @
 
 <<Source Code Documentation Files>>=
@@ -1730,26 +1731,32 @@ LMSCMD = /xparse\/.*define-command/b; \
          s/\(.\)\n\1/\1/;T; \
 	 p;g;ba;
 
+define run_latex
+  set -x; \
+  f='$<'; d=.; case '$<' in */*) d="$${f%/*}";; esac; f="$${f##*/}"; \
+  cd "$$d"; \
+  while $(latexcmd) -interaction batchmode $(latexargs) "$$f" >/dev/null; do \
+    rerun=; \
+    <<Mangle aux files>>
+    test -n "$$rerun" && continue; \
+    egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+  done
+  @sed -n -e '$(call LMSCMD,info)' $*.log
+  @fgrep -i overfull $*.log || :
+  @fgrep -i underfull $*.log | fgrep -v vbox || :
+  @sed -n -e '$(call LMSCMD,warning)' $*.log
+  @# maybe removing output file is too drastic, but manual run of
+  @# pdflatex is not that hard
+  @if sed -n -e '/^!.*Error/,/^l./p' $*.log | grep .; then \
+    rm -f $@; \
+    false; \
+  else \
+    :; \
+  fi
+endef
+
 %.pdf: %.tex
-	set -x; \
-	while $(latexcmd) -interaction batchmode $< >/dev/null; do \
-	  rerun=; \
-	  <<Mangle aux files>>
-	  test -n "$$rerun" && continue; \
-          egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
-        done
-	@sed -n -e '$(call LMSCMD,info)' $*.log
-	@fgrep -i overfull $*.log || :
-	@fgrep -i underfull $*.log | fgrep -v vbox || :
-	@sed -n -e '$(call LMSCMD,warning)' $*.log
-	@# maybe removing output file is too drastic, but manual run of
-	@# pdflatex is not that hard
-	@if sed -n -e '/^!.*Error/,/^l./p' $*.log | grep .; then \
-	  rm -f $@; \
-	  false; \
-	else \
-	  :; \
-	fi
+	$(run_latex)
 @
 
 <<makefile.vars>>=
@@ -3638,7 +3645,7 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(call tree,$<)"
+	./nwtex2html '$(latexcmd)' $< $@ '$(call tree,$*.nw)'
 @
 
 A configuration file is needed to set extended options.  In particular, the
@@ -3728,6 +3735,8 @@ easily broken.  Configuring TeX4ht is beyond the scope of this document.
 \lstset{language=make}
 <<makefile.rules>>=
 nwtex2html: tex4ht_postproc
+%.dvi: %.tex
+	$(run_latex)
 @
 
 <<Source Code Documentation Files>>=
@@ -3743,11 +3752,12 @@ nwtex2html \
 #!/bin/sh
 <<Common noweb Warning>>
 
-tex="$1"
-base="${1%.tex}"
+tcmd="$1"
+tex="$2"
+base="${2%.tex}"
 noweb="$base.nw"
-outf="$2"
-noweb_order="$3"
+outf="$3"
+noweb_order="$4"
 HL_THEME="${HL_THEME#*:}"
 
 <<Check highlighter>>
@@ -3776,10 +3786,43 @@ cat <<EOF > myhtml.cfg
 <<myhtml.cfg>>
 EOF
 
+# convert pdflatex/xelatex to htlatex/htxelatex
+type -p "ht${tcmd}" >/dev/null && tcmd="ht${tcmd}"
+type -p "ht${tcmd#pdf}" >/dev/null && tcmd="ht${tcmd#pdf}"
+case "$tcmd" in
+  ht*) tcmd="$(which "$tcmd")" ;;
+  *)   echo "LATEXCMD $tmd not supported for tex4ht"; exit 1
+esac
+
 # runs latex 3x, regardless
-htlatex $1 myhtml >&2
+#$tcmd "$tex" myhtml >&2
+# so use my own re-running code, instead
+# by extracting the rather complex latex command from the shell script:
+fcmd() {
+  local res="$(egrep " $1" "$tcmd" | head -n 1)"
+  res="${res//\$1/$tex}"
+  res="${res//\$2/myhtml}"
+  res="${res//\$[345]}"
+  printf %s "$res"
+}
+lcmd="$(fcmd "${tcmd##*/ht} .*\\\$1")"
+lcmd="${lcmd//$tex}"
+largs="${lcmd#*[^ ] }"
+lcmd="$(echo "$lcmd" | while read -r a b; do echo "$a"; done)"
+tex4htcmd="$(fcmd 'tex4ht -f')"
+t4htcmd="$(fcmd 't4ht -f')"
+if [ -z "$lcmd" -o -z "$tex4htcmd" -o -z "$t4htcmd" ]; then
+  echo "Unable to extract commands from $tcmd"
+  exit 1
+fi
+# And running make:
+# I don't pass down $(MAKE).  Sorry.
+make -C"$tdir" latexcmd="$lcmd" latexargs="$largs" "$dir/${tex%.tex}.dvi"
+# and the rest:
+eval "$tex4htcmd"; eval "$t4htcmd"
 
 imgs=
+rm -rf "$tdir/${1%.tex}_img"
 for x in *.png *.svg; do
   imgs="s~src=\"$x\"~src=\"${1%.tex}_img/$x\"~g;$imgs"
   mkdir -p "$tdir/${1%.tex}_img"

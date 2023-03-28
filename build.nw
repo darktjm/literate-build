@@ -329,7 +329,7 @@ MISC_FILES = <<Plain Files>>
 @
 
 <<Clean built files>>=
-rm -f $(DOC_FILES)
+rm -rf $(DOC_FILES)
 @
 
 The makefile can make itself, as well.  This is dependent only on its
@@ -1527,7 +1527,7 @@ dependencies.
 
 \lstset{language=make}
 <<Build Source>>=
-nt-nonl <<Filters from [[parm.nw]]>> \
+nt-nonl <<Filters from [[parm.nw]]>>
 @
 
 <<Filters from [[parm.nw]]>>=
@@ -1553,7 +1553,8 @@ PARM_CXX = $(patsubst %, %.c++, $(PARM_EXEC))
 @
 
 <<Clean temporary files>>=
-rm -f nt-nonl $(PARM_EXEC) $(patsubst %, %.c++, $(PARM_EXEC))
+rm -f $(patsubst %,%.o,$(PARM_EXEC))
+rm -f nt-nonl $(PARM_EXEC) $(patsubst %,%.c++,$(PARM_EXEC))
 @
 
 <<makefile.rules>>=
@@ -1696,6 +1697,7 @@ NOWEB_NINCL:=$(shell \
   done)
 latexcmd = $(if $(and $(NW_UTF8),$(findstring pdflatex,$(LATEXCMD))), \
                 $(UTF8LATEXCMD),$(LATEXCMD))
+latexargs=
 @
 
 <<Source Code Documentation Files>>=
@@ -1729,26 +1731,32 @@ LMSCMD = /xparse\/.*define-command/b; \
          s/\(.\)\n\1/\1/;T; \
 	 p;g;ba;
 
+define run_latex
+  set -x; \
+  f='$<'; d=.; case '$<' in */*) d="$${f%/*}";; esac; f="$${f##*/}"; \
+  cd "$$d"; \
+  while $(latexcmd) -interaction batchmode $(latexargs) "$$f" >/dev/null; do \
+    rerun=; \
+    <<Mangle aux files>>
+    test -n "$$rerun" && continue; \
+    egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
+  done
+  @sed -n -e '$(call LMSCMD,info)' $*.log
+  @fgrep -i overfull $*.log || :
+  @fgrep -i underfull $*.log | fgrep -v vbox || :
+  @sed -n -e '$(call LMSCMD,warning)' $*.log
+  @# maybe removing output file is too drastic, but manual run of
+  @# pdflatex is not that hard
+  @if sed -n -e '/^!.*Error/,/^l./p' $*.log | grep .; then \
+    rm -f $@; \
+    false; \
+  else \
+    :; \
+  fi
+endef
+
 %.pdf: %.tex
-	set -x; \
-	while $(latexcmd) -interaction batchmode $< >/dev/null; do \
-	  rerun=; \
-	  <<Mangle aux files>>
-	  test -n "$$rerun" && continue; \
-          egrep $(LATEX_REDO_MSG) $*.log >/dev/null || break; \
-        done
-	@sed -n -e '$(call LMSCMD,info)' $*.log
-	@fgrep -i overfull $*.log || :
-	@fgrep -i underfull $*.log | fgrep -v vbox || :
-	@sed -n -e '$(call LMSCMD,warning)' $*.log
-	@# maybe removing output file is too drastic, but manual run of
-	@# pdflatex is not that hard
-	@if sed -n -e '/^!.*Error/,/^l./p' $*.log | grep .; then \
-	  rm -f $@; \
-	  false; \
-	else \
-	  :; \
-	fi
+	$(run_latex)
 @
 
 <<makefile.vars>>=
@@ -1861,15 +1869,26 @@ being used.
 #include <regex.h>
 @
 
+<<nwbuild Regex Macros>>=
+#define ec_regcomp(re, pat, flag) do { \
+  int re_err = regcomp(&re, pat, flag|REG_EXTENDED); \
+  if(re_err) { \
+    char ebuf[80]; \
+    regerror(re_err, &re, ebuf, sizeof(ebuf)); \
+    perror(ebuf); \
+    exit(1); \
+  } \
+} while(0)
+#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+@
+
 <<Initialize [[nwweavefilt]]>>=
 string lang = "txt";
-int re_err;
 regex_t lang_re;
 regmatch_t lang_rem[3];
+<<nwbuild Regex Macros>>
 // [^{] is to prevent self-match
-re_err = regcomp(&lang_re, "lstset\\{language=(.*\\])?([^}]*)[^{]*", REG_EXTENDED);
-<<[[re_err]] for [[lang_re]] fatal>>
-#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+ec_regcomp(lang_re, "lstset\\{language=(.*\\])?([^}]*)[^{]*", 0);
 @
 
 <<Process lines from noweb token stream>>=
@@ -1878,15 +1897,6 @@ if(!regexec(&lang_re, line.c_str(), 3, lang_rem, 0)) {
   for(auto c = lang.begin(); c != lang.end(); c++)
     if(isupper(*c)) // will not work on Unicode, even with <locale>
       *c = tolower(*c);
-}
-@
-
-<<[[re_err]] for (@re) fatal>>=
-if(re_err) {
-  char ebuf[80];
-  regerror(re_err, &<<@re>>, ebuf, sizeof(ebuf));
-  perror(ebuf);
-  exit(1);
 }
 @
 
@@ -1931,8 +1941,7 @@ while(getline(cin, line).good() || line.size()) {
 
 <<Initialize [[nwweavefilt]]>>=
 regex_t index_re;
-re_err = regcomp(&index_re, "^@index ((local|)defn|nl)", REG_EXTENDED|REG_NOSUB);
-<<[[re_err]] for [[index_re]] fatal>>
+ec_regcomp(index_re, "^@index ((local|)defn|nl)", REG_NOSUB);
 @
 
 <<Accumulate code for highlighting>>=
@@ -1943,8 +1952,7 @@ re_err = regcomp(&index_re, "^@index ((local|)defn|nl)", REG_EXTENDED|REG_NOSUB)
 <<Initialize [[nwweavefilt]]>>=
 const char marker[] = "^""^^";
 regex_t ref_re;
-re_err = regcomp(&ref_re, "^@((nwparm|)use|index|xref) ", REG_EXTENDED|REG_NOSUB);
-<<[[re_err]] for [[ref_re]] fatal>>
+ec_regcomp(ref_re, "^@((nwparm|)use|index|xref) ", REG_NOSUB);
 @
 
 <<Accumulate code for highlighting>>=
@@ -2013,7 +2021,7 @@ if(write(pfdi[1], code.data(), code.size()) != (int)code.size() || close(pfdi[1]
 // As if using POSIX file descriptors wasn't bad enough, there is no
 // portable way to use them in C++, even via fdopen().  Seems like a
 // major stupidity on the part of the C++ language designers.
-// Since I don't want to pull in my long_fgets(), this has to work for
+// Since I don't want to pull in my mfgets(), this has to work for
 // your C++ environment.  Currently, I only support GNU libstdc++.
 __gnu_cxx::stdio_filebuf<char> fbuf(pfdo[0], std::ios::in);
 istream reader(&fbuf);
@@ -2026,7 +2034,7 @@ while(getline(reader, line).good() || line.size()) {
     cout << use[useno++] << '\n';
     poff = off + sizeof(marker) - 1;
   }
-  if(line.size() - poff > 0)
+  if(line.size() > poff)
     cout << "@literal " << line.substr(poff) << '\n';
   cout << "@nl\n";
 }
@@ -2779,7 +2787,7 @@ flexibility, this is done in C++.
 <<Filter lines from noweb token stream>>=
 if(!line.compare(0, 5, "@use ") || !line.compare(0, 6, "@defn ") ||
    !line.compare(0, 6, "@nwenh"))
-  if(line.find("[[") < line.size())
+  if(line.find("[[") >= line.size())
     for(unsigned pos = 0; (pos = line.find('_', pos)) < line.size(); pos++)
       line.insert(pos++, 1, '\\');
 @
@@ -2803,12 +2811,10 @@ the commment:
 <<Initialize [[nwweavefilt]]>>=
 regex_t input_re;
 regmatch_t irm[2];
-re_err = regcomp(&input_re, "^\\\\input\\{(.*\\.nw)\\}$", REG_EXTENDED);
-<<[[re_err]] for [[input_re]] fatal>>
+ec_regcomp(input_re, "^\\\\input\\{(.*\\.nw)\\}$", 0);
 regex_t bdef_re;
 regmatch_t brm[2];
-re_err = regcomp(&bdef_re, "^@<<(.*)@>>$", REG_EXTENDED);
-<<[[re_err]] for [[bdef_re]] fatal>>
+ec_regcomp(bdef_re, "^@<<(.*)@>>=$", 0);
 
 string_map ch;
 // final args are noweb_order
@@ -2846,8 +2852,7 @@ if(!disext) {
 }
 regex_t xref_re;
 regmatch_t xrm[3];
-re_err = regcomp(&xref_re, "^(@use |@defn )(.*)", REG_EXTENDED);
-<<[[re_err]] for [[xref_re]] fatal>>
+ec_regcomp(xref_re, "^(@use |@defn )(.*)", 0);
 @
 
 <<Filter lines from noweb token stream>>=
@@ -2970,7 +2975,7 @@ EOF
   tail -n +$((ln+1)) "$noweb"
 ) | <<Pre-process before weave>>
   noweave -filter "./nw-parm-preidx $noweb_order | ./nw-nonl-preidx |
-                   tee /tmp/nwwi.$$ | ./nwweavefilt $filt $noweb_order | tee /tmp/nwwo.$$" -delay -indexfrom /dev/null \
+                   ./nwweavefilt $filt $noweb_order" -delay -indexfrom /dev/null \
 	  -filter "./nw-nonl-postidx | ./nw-parm-postidx" ${NW_UTF8:+-t} - | \
 	    <<Post-process latex after weave>>
             sed -e '<<Reduce interchunk whitespace>>' -e "$postproc" >"$outf"
@@ -3640,7 +3645,7 @@ $(patsubst %.nw,%.html,$(NOWEB_NINCL)) \
 
 <<makefile.rules tex4ht>>=
 %.html: %.tex $(FIGS_EPS) nwtex2html
-	./nwtex2html $< $@ "$(call tree,$<)"
+	./nwtex2html '$(latexcmd)' $< $@ '$(call tree,$*.nw)'
 @
 
 A configuration file is needed to set extended options.  In particular, the
@@ -3652,6 +3657,8 @@ doing some other fine tuning for TeX4ht is done in the preamble.
 
 \lstset{language=TeX}
 <<myhtml.cfg>>=
+%doesn't produce a nice index as is; I probably need to support xindy
+%\RequirePackage{indexing4ht}
 \Preamble{xhtml,uni-html4,css-in,$splitstyle,graphics-,Gin-dim+}
 % attempted bug fix for tex4ht color
 \HAssign\textcolornest=0
@@ -3725,6 +3732,13 @@ tacks on the noweb source in compressed, uuencoded form.  It depends on a
 working TeX4ht configuration, which is unfortunately mostly undocumented and
 easily broken.  Configuring TeX4ht is beyond the scope of this document.
 
+\lstset{language=make}
+<<makefile.rules>>=
+nwtex2html: tex4ht_postproc
+%.dvi: %.tex
+	$(run_latex)
+@
+
 \lstset{language=sh}
 <<Build Script Executables>>=
 nwtex2html \
@@ -3734,11 +3748,12 @@ nwtex2html \
 #!/bin/sh
 <<Common noweb Warning>>
 
-tex="$1"
-base="${1%.tex}"
+tcmd="$1"
+tex="$2"
+base="${2%.tex}"
 noweb="$base.nw"
-outf="$2"
-noweb_order="$3"
+outf="$3"
+noweb_order="$4"
 HL_THEME="${HL_THEME#*:}"
 
 <<Check highlighter>>
@@ -3754,8 +3769,8 @@ dir=/tmp/html.$$
 rm -rf $dir
 trap "rm -rf $dir" 0
 mkdir -p $dir
-for x in $noweb $tex $figs $texi *.sty; do ln -s "$tdir/$x" $dir; done
 tdir="`pwd`"
+for x in $noweb $tex ${tex%.tex}.ind $figs $texi *.sty; do ln -s "$tdir/$x" $dir; done
 cd $dir
 
 if [ y = "$HTML_SPLIT" ]; then
@@ -3767,16 +3782,56 @@ cat <<EOF > myhtml.cfg
 <<myhtml.cfg>>
 EOF
 
-# runs latex 3x, regardless
-htlatex $1 myhtml >&2
+# convert pdflatex/xelatex to htlatex/htxelatex
+type -p "ht${tcmd}" >/dev/null && tcmd="ht${tcmd}"
+type -p "ht${tcmd#pdf}" >/dev/null && tcmd="ht${tcmd#pdf}"
+case "$tcmd" in
+  ht*) tcmd="$(which "$tcmd")" ;;
+  *)   echo "LATEXCMD $tmd not supported for tex4ht"; exit 1
+esac
 
-mv *.png "$tdir" 2>/dev/null || :
+# runs latex 3x, regardless
+#$tcmd "$tex" myhtml >&2
+# so use my own re-running code, instead
+# by extracting the rather complex latex command from the shell script:
+fcmd() {
+  local res="$(egrep " $1" "$tcmd" | head -n 1)"
+  res="${res//\$1/$tex}"
+  res="${res//\$2/myhtml}"
+  res="${res//\$[345]}"
+  printf %s "$res"
+}
+lcmd="$(fcmd "${tcmd##*/ht} .*\\\$1")"
+lcmd="${lcmd//$tex}"
+largs="${lcmd#*[^ ] }"
+lcmd="$(echo "$lcmd" | while read -r a b; do echo "$a"; done)"
+tex4htcmd="$(fcmd 'tex4ht -f')"
+t4htcmd="$(fcmd 't4ht -f')"
+if [ -z "$lcmd" -o -z "$tex4htcmd" -o -z "$t4htcmd" ]; then
+  echo "Unable to extract commands from $tcmd"
+  exit 1
+fi
+# And running make:
+# I don't pass down $(MAKE).  Sorry.
+make -C"$tdir" latexcmd="$lcmd" latexargs="$largs" "$dir/${tex%.tex}.dvi"
+# and the rest:
+eval "$tex4htcmd"; eval "$t4htcmd"
+
+imgs=
+rm -rf "$tdir/${1%.tex}_img"
+for x in *.png *.svg; do
+  imgs="s~src=\"$x\"~src=\"${1%.tex}_img/$x\"~g;$imgs"
+  mkdir -p "$tdir/${1%.tex}_img"
+  mv -f "$x" "$tdir/${1%.tex}_img" 2>/dev/null || :
+done
 for x in *.html; do
   case "$x" in
     "$outf") is_outf=y ;;
     *) is_outf=n ;;
   esac
-  tex4ht_postproc "$base" $is_outf <"$x" >"$tdir/$x"
+  "$tdir"/tex4ht_postproc "$base" $is_outf <"$x" | \
+    sed -e "$imgs" >"$tdir/$x"
+  
 done
 
 (
@@ -3793,6 +3848,10 @@ echo begin 644 ${noweb%.*}.tar.gz
 eval tar chf - $noweb_order $at | gzip | \
   uuencode "${noweb%.*}".tar.gz | tail -n +2 | tr '<>-' '|~m'
 echo "-->"
+@
+
+<<Clean built files>>=
+rm -rf $(patsubst %.nw,%_img,$(NOWEB_NINCL))
 @
 
 The HTML cleanup is done using a C++ program, once again because awk
@@ -3851,9 +3910,8 @@ file and converted to the first version in the HTML.
 <<Initialize TeX4ht post-processor>>=
 regex_t col_re;
 regmatch_t col_rem[3];
-int re_err = regcomp(&col_re, "^span#textcolor([0-9]+)(\\{.*\\})", REG_EXTENDED);
-<<[[re_err]] for [[col_re]] fatal>>
-#define line_match(rm) line.substr(rm.rm_so, rm.rm_eo - rm.rm_so)
+<<nwbuild Regex Macros>>
+ec_regcomp(col_re, "^span#textcolor([0-9]+)(\\{.*\\})", 0);
 string_map textcolor, rootcolor;
 @
 
@@ -3962,8 +4020,9 @@ for(unsigned off = 0; (off = line.find("<span class\"ecrm-0900\">", off)) < line
 <<Post-process TeX4ht line>>=
 // I prefer mostly plain text for the web, so:
 // remove ligatures
-for(unsigned off = 0; (off = line.find("&#xFB0", off)) < line.size() - 7; ) {
-  if(line[off + 7] != ';' || (line[off + 6] != '0' && line[off + 6] != '1')) {
+for(unsigned off = 0; (off = line.find("&#xFB0", off)) < line.size(); ) {
+  if(off + 7 >= line.size() || line[off + 7] != ';' ||
+     (line[off + 6] != '0' && line[off + 6] != '1')) {
     off += 6;
     continue;
   }
@@ -3975,8 +4034,9 @@ for(unsigned off = 0; (off = line.find("&#xFB0", off)) < line.size() - 7; ) {
 for(unsigned off = 0; (off = line.find("&#x00A0;", off)) < line.size(); )
   line.replace(off, 8, "&nbsp;");
 // remove unicode quotes
-for(unsigned off = 0; (off = line.find("&#x821", off)) < line.size() - 7; ) {
-  if(line[off + 7] != ';' || (line[off + 6] != '7' && line[off + 6] != '6')) {
+for(unsigned off = 0; (off = line.find("&#x821", off)) < line.size(); ) {
+  if(off + 7 >= line.size() || line[off + 7] != ';' ||
+     (line[off + 6] != '7' && line[off + 6] != '6')) {
     off += 6;
     continue;
   }
@@ -3989,6 +4049,22 @@ for(unsigned off = 0; (off = line.find("&#x821", off)) < line.size() - 7; ) {
 // remove trailing space
 while(line.size() > 0 && line[line.size() - 1] == ' ')
   line.erase(line.size() - 1, 1);
+@
+
+<<Post-process TeX4ht line>>=
+// bytefield images need <br> between lines
+if(!regexec(&img_re1, line.c_str(), 0, NULL, 0))
+  line.append("<br>");
+// got a timing diagram with unescaped <.."..> in alt text
+if(!regexec(&img_re2, line.c_str(), 2, img_rem, 0))
+  line = line_match(img_rem[1]);
+@
+
+<<Initialize TeX4ht post-processor>>=
+regex_t img_re1, img_re2;
+regmatch_t img_rem[2];
+ec_regcomp(img_re1, "src=\"[^>]*alt=\"PICT\"[^>]*>$", REG_NOSUB);
+ec_regcomp(img_re2, "(src=\"[^>]*alt=\"[^<>\"]*)<", 0);
 @
 
 \subsection{HTML from [[l2h]]}
